@@ -164,5 +164,7 @@ Future<CoreSettings> loadCoreSettings(DataDir dir) async {
 Future<void> saveCoreSettings(DataDir dir, CoreSettings settings) async {
   final file = dir.settingsJson;
   await file.parent.create(recursive: true);
-  await file.writeAsString(jsonEncode(settings.toJson()), flush: true);
+  final tmp = File('${file.path}.$pid.tmp');
+  await tmp.writeAsString(jsonEncode(settings.toJson()), flush: true);
+  await tmp.rename(file.path);
 }

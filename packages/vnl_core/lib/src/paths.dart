@@ -32,6 +32,4 @@ class DataDir {
   Directory get trash => Directory(p.join(root, 'trash'));
 
   Directory get logs => Directory(p.join(root, 'logs'));
-
-  String thumbDir(int width) => p.join(root, 'covers', 'thumb', 'v1', '$width');
 }
