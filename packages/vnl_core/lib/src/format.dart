@@ -1,0 +1,12 @@
+// Copyright (c) 2026 Aaron Bamblett
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+String formatPlaytime(int seconds) => seconds < 3600
+    ? '${seconds ~/ 60} min'
+    : '${(seconds / 3600).toStringAsFixed(1)} hrs';
+
+String formatVndbRating(double rating) =>
+    'VNDB Rating ${(rating / 10).toStringAsFixed(1)}';

@@ -14,5 +14,5 @@ void main(List<String> arguments) {
     print('vnl $vnlVersion');
     return;
   }
-  print('vnl $vnlVersion');
+  print(parser.usage);
 }
