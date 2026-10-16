@@ -83,12 +83,15 @@ Future<String> storeOriginal(
     if (await stale.exists()) await stale.delete();
   }
   final name = '$gameId.$ext';
-  await File(p.join(dir.coversOriginal.path, name))
-      .writeAsBytes(bytes, flush: true);
+  final dest = File(p.join(dir.coversOriginal.path, name));
+  final tmp = File('${dest.path}.$pid.tmp');
+  await tmp.writeAsBytes(bytes, flush: true);
+  await tmp.rename(dest.path);
   return name;
 }
 
-void _renderThumbnails(String root, String gameId, Uint8List bytes) {
+void _renderThumbnails(String root, String gameId, Uint8List bytes,
+    {void Function(String finalPath, String tmpPath)? onBeforeRename}) {
   img.Image decoded;
   try {
     final candidate = img.decodeImage(bytes);
@@ -110,15 +113,20 @@ void _renderThumbnails(String root, String gameId, Uint8List bytes) {
             width: target, interpolation: img.Interpolation.average);
     final out = File(_thumbPath(root, gameId, width));
     out.parent.createSync(recursive: true);
-    out.writeAsBytesSync(encoder.encode(resized), flush: true);
+    final tmp = File('${out.path}.$pid.tmp');
+    tmp.writeAsBytesSync(encoder.encode(resized), flush: true);
+    onBeforeRename?.call(out.path, tmp.path);
+    tmp.renameSync(out.path);
   }
 }
 
 Future<void> writeThumbnails(
-    DataDir dir, String gameId, String original) async {
+    DataDir dir, String gameId, String original,
+    {void Function(String finalPath, String tmpPath)? onBeforeRename}) async {
   final bytes = await File(p.join(dir.coversOriginal.path, original))
       .readAsBytes();
-  _renderThumbnails(dir.root, gameId, bytes);
+  _renderThumbnails(dir.root, gameId, bytes,
+      onBeforeRename: onBeforeRename);
 }
 
 Future<ThumbReport> generateThumbnails(
@@ -131,10 +139,16 @@ Future<ThumbReport> generateThumbnails(
   final cap = max(1, concurrency ?? min(Platform.numberOfProcessors, 8));
   final report = ThumbReport();
   var done = 0;
-  for (var i = 0; i < total; i += cap) {
-    final chunk = jobs.sublist(i, min(i + cap, total));
-    final outcomes = await Future.wait(chunk.map((job) =>
-        Isolate.run<(String, String?)?>(() {
+  var next = 0;
+  // One isolate job per worker keeps at most cap jobs in flight.
+  Future<void> worker() async {
+    while (true) {
+      final i = next++;
+      if (i >= total) return;
+      final job = jobs[i];
+      (String, String?)? outcome;
+      try {
+        outcome = await Isolate.run<(String, String?)?>(() {
           try {
             final bytes =
                 File(p.join(dir.root, 'covers', 'original', job.$2))
@@ -144,8 +158,10 @@ Future<ThumbReport> generateThumbnails(
           } catch (e) {
             return (job.$1, '$e');
           }
-        })));
-    for (final outcome in outcomes) {
+        });
+      } catch (e) {
+        outcome = (job.$1, '$e');
+      }
       done++;
       if (outcome == null) {
         report.generated++;
@@ -155,6 +171,7 @@ Future<ThumbReport> generateThumbnails(
       onProgress?.call(done, total);
     }
   }
+  await Future.wait(List.generate(min(cap, total), (_) => worker()));
   return report;
 }
 

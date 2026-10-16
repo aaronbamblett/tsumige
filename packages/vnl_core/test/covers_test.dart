@@ -5,6 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
@@ -89,6 +90,30 @@ void main() {
       }
     });
 
+    test('no partial thumbnail at final path', () async {
+      final dir = freshDir();
+      final id = const Uuid().v4();
+      final original = await storeFixture(dir, id, 'tall.jpg');
+      final renamed = <String>[];
+      await writeThumbnails(dir, id, original,
+          onBeforeRename: (finalPath, tmpPath) {
+        expect(File(finalPath).existsSync(), isFalse);
+        expect(File(tmpPath).existsSync(), isTrue);
+        expect(tmpPath, endsWith('.tmp'));
+        renamed.add(tmpPath);
+      });
+      expect(renamed, hasLength(thumbWidths.length));
+      for (final width in thumbWidths) {
+        expect(File(thumbPath(dir, id, width)).existsSync(), isTrue);
+      }
+      final leftovers = Directory(
+              '${dir.root}/covers/thumb/v$thumbPipelineVersion')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.tmp'));
+      expect(leftovers, isEmpty);
+    });
+
     test('no upscale', () async {
       final dir = freshDir();
       final id = const Uuid().v4();
@@ -160,7 +185,64 @@ void main() {
     });
   });
 
+  group('ensureThumbnails tmp debris', () {
+    test('leftover tmp file is ignored and final is regenerated', () async {
+      final dir = freshDir();
+      final id = const Uuid().v4();
+      final library = Library(
+          games: [gameWithCover(id, await storeFixture(dir, id, 'tall.jpg'))]);
+      await ensureThumbnails(dir, library);
+      File(thumbPath(dir, id, 512)).deleteSync();
+      File('${thumbPath(dir, id, 512)}.$pid.tmp')
+          .writeAsBytesSync([1, 2, 3]);
+      final report = await ensureThumbnails(dir, library);
+      expect(report.generated, 1);
+      expect(report.failed, isEmpty);
+      final thumb = img.decodeImage(
+          File(thumbPath(dir, id, 512)).readAsBytesSync())!;
+      expect(thumb.width, 512);
+    });
+  });
+
   group('generateThumbnails', () {
+    test('pool keeps workers busy', () async {
+      final dir = freshDir();
+      final noisy = img.Image(width: 1600, height: 1600);
+      final rng = Random(1234);
+      for (var y = 0; y < noisy.height; y++) {
+        for (var x = 0; x < noisy.width; x++) {
+          noisy.setPixelRgb(
+              x, y, rng.nextInt(256), rng.nextInt(256), rng.nextInt(256));
+        }
+      }
+      final slowId = const Uuid().v4();
+      final slowName =
+          await storeOriginal(dir, slowId, Uint8List.fromList(img.encodeJpg(noisy)));
+      expect(slowName, '$slowId.jpg');
+      final jobs = <(String, String)>[(slowId, slowName)];
+      for (var i = 0; i < 3; i++) {
+        final id = const Uuid().v4();
+        jobs.add((id, await storeFixture(dir, id, 'small.webp')));
+      }
+      final seen = <(int, int)>[];
+      var slowCompleteAtDone3 = true;
+      final report = await generateThumbnails(dir, jobs,
+          concurrency: 2, onProgress: (done, total) {
+        seen.add((done, total));
+        if (done == 3) {
+          slowCompleteAtDone3 =
+              File(thumbPath(dir, slowId, 256)).existsSync() &&
+                  File(thumbPath(dir, slowId, 512)).existsSync();
+        }
+      });
+      expect(report.generated, 4);
+      expect(report.failed, isEmpty);
+      expect(seen, hasLength(4));
+      expect(seen.last, (4, 4));
+      expect(slowCompleteAtDone3, isFalse,
+          reason: 'slow job still running while 3 small jobs finished');
+    });
+
     test('pool reports progress', () async {
       final dir = freshDir();
       final jobs = <(String, String)>[];
