@@ -1,0 +1,9 @@
+{
+  "@@locale": "en",
+  "appTitle": "vn-launcher",
+  "library": "Library",
+  "settings": "Settings",
+  "search": "Search",
+  "errorTitle": "Could not open library",
+  "retry": "Retry"
+}
