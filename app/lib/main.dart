@@ -14,6 +14,7 @@ import 'src/l10n/generated/app_localizations.dart';
 import 'src/routes/router.dart';
 import 'src/utils/desktop/desktop_window.dart';
 import 'src/utils/prefs/prefs_mixin.dart';
+import 'src/utils/startup_time.dart';
 import 'src/utils/theme/app_theme_builder.dart';
 import 'src/widgets/app_error_app.dart';
 
@@ -21,6 +22,7 @@ import 'src/widgets/app_error_app.dart';
 /// [libraryProvider] so startup always lands on a loading, error, or library
 /// screen instead of failing before the first frame.
 Future<void> main() async {
+  appMainEntry = DateTime.now();
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
   await initDesktopWindow(prefs);

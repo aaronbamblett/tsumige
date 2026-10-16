@@ -1,0 +1,69 @@
+// Copyright (c) 2026 Aaron Bamblett
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+
+import '../../../utils/startup_time.dart';
+import '../data/library_repository.dart';
+import '../domain/cover_source.dart';
+import 'widgets/library_grid.dart';
+import 'widgets/library_toolbar.dart';
+import 'widgets/skipped_banner.dart';
+
+/// The library view: toolbar above a lazy cover grid. After the first frame
+/// with data it prints `startup_ms` and fills in missing thumbnails in the
+/// background, rebuilding tiles only when thumbnails were generated.
+class LibraryScreen extends HookConsumerWidget {
+  const LibraryScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final libraryAsync = ref.watch(libraryProvider);
+    final games = ref.watch(visibleGamesProvider);
+    final kicked = useState(false);
+    useEffect(() {
+      if (kicked.value || !libraryAsync.hasValue) return null;
+      kicked.value = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final entry = appMainEntry;
+        if (entry != null && !startupReported) {
+          startupReported = true;
+          stderr.writeln(
+              'startup_ms=${DateTime.now().difference(entry).inMilliseconds}');
+        }
+        final loaded = ref.read(libraryProvider).value;
+        if (loaded == null) return;
+        final report = await ref
+            .read(libraryRepositoryProvider)
+            .ensureThumbnails(loaded.library);
+        if (report.generated > 0) {
+          ref.invalidate(coverExistsProvider);
+        }
+      });
+      return null;
+    }, [libraryAsync.hasValue]);
+    final total =
+        libraryAsync.value?.library.games.length ?? games.length;
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            LibraryToolbar(shown: games.length, total: total),
+            SkippedBanner(
+              skipped:
+                  libraryAsync.value?.skipped ?? const [],
+            ),
+            Expanded(child: LibraryGrid(games: games)),
+          ],
+        ),
+      ),
+    );
+  }
+}

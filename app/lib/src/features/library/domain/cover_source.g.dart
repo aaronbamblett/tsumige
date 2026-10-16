@@ -1,0 +1,234 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND
+
+part of 'cover_source.dart';
+
+// **************************************************************************
+// RiverpodGenerator
+// **************************************************************************
+
+// GENERATED CODE - DO NOT MODIFY BY HAND
+// ignore_for_file: type=lint, type=warning
+/// Memoised cover-file existence check: each path hits the disk once, so
+/// scrolling and slider drags never re-stat files every frame.
+
+@ProviderFor(coverExists)
+final coverExistsProvider = CoverExistsProvider._();
+
+/// Memoised cover-file existence check: each path hits the disk once, so
+/// scrolling and slider drags never re-stat files every frame.
+
+final class CoverExistsProvider
+    extends
+        $FunctionalProvider<
+          bool Function(String path),
+          bool Function(String path),
+          bool Function(String path)
+        >
+    with $Provider<bool Function(String path)> {
+  /// Memoised cover-file existence check: each path hits the disk once, so
+  /// scrolling and slider drags never re-stat files every frame.
+  CoverExistsProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'coverExistsProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$coverExistsHash();
+
+  @$internal
+  @override
+  $ProviderElement<bool Function(String path)> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  bool Function(String path) create(Ref ref) {
+    return coverExists(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool Function(String path) value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool Function(String path)>(value),
+    );
+  }
+}
+
+String _$coverExistsHash() => r'64db10a28f6268e092315e223b08448c3e51baac';
+
+/// The cover width the grid decodes from. It follows [coverWidthProvider]
+/// 250 ms after the slider stops, so during a drag tiles keep their current
+/// image and scale it instead of re-decoding every step.
+
+@ProviderFor(SettledCoverWidth)
+final settledCoverWidthProvider = SettledCoverWidthProvider._();
+
+/// The cover width the grid decodes from. It follows [coverWidthProvider]
+/// 250 ms after the slider stops, so during a drag tiles keep their current
+/// image and scale it instead of re-decoding every step.
+final class SettledCoverWidthProvider
+    extends $NotifierProvider<SettledCoverWidth, int> {
+  /// The cover width the grid decodes from. It follows [coverWidthProvider]
+  /// 250 ms after the slider stops, so during a drag tiles keep their current
+  /// image and scale it instead of re-decoding every step.
+  SettledCoverWidthProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'settledCoverWidthProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$settledCoverWidthHash();
+
+  @$internal
+  @override
+  SettledCoverWidth create() => SettledCoverWidth();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(int value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<int>(value),
+    );
+  }
+}
+
+String _$settledCoverWidthHash() => r'bb96a516955cc1e2cf9c70e3ff413ef9a36b9a41';
+
+/// The cover width the grid decodes from. It follows [coverWidthProvider]
+/// 250 ms after the slider stops, so during a drag tiles keep their current
+/// image and scale it instead of re-decoding every step.
+
+abstract class _$SettledCoverWidth extends $Notifier<int> {
+  int build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<int, int>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<int, int>,
+              int,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
+/// Search text for the library grid. Local state, not persisted.
+
+@ProviderFor(LibrarySearch)
+final librarySearchProvider = LibrarySearchProvider._();
+
+/// Search text for the library grid. Local state, not persisted.
+final class LibrarySearchProvider
+    extends $NotifierProvider<LibrarySearch, String> {
+  /// Search text for the library grid. Local state, not persisted.
+  LibrarySearchProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'librarySearchProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$librarySearchHash();
+
+  @$internal
+  @override
+  LibrarySearch create() => LibrarySearch();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(String value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<String>(value),
+    );
+  }
+}
+
+String _$librarySearchHash() => r'67281fc80b74b09d8dc9f6fe16fa94dd9bdaf55b';
+
+/// Search text for the library grid. Local state, not persisted.
+
+abstract class _$LibrarySearch extends $Notifier<String> {
+  String build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<String, String>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<String, String>,
+              String,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
+/// `applyQuery` over the loaded library and every toolbar preference.
+
+@ProviderFor(visibleGames)
+final visibleGamesProvider = VisibleGamesProvider._();
+
+/// `applyQuery` over the loaded library and every toolbar preference.
+
+final class VisibleGamesProvider
+    extends $FunctionalProvider<List<Game>, List<Game>, List<Game>>
+    with $Provider<List<Game>> {
+  /// `applyQuery` over the loaded library and every toolbar preference.
+  VisibleGamesProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'visibleGamesProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$visibleGamesHash();
+
+  @$internal
+  @override
+  $ProviderElement<List<Game>> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  List<Game> create(Ref ref) {
+    return visibleGames(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(List<Game> value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<List<Game>>(value),
+    );
+  }
+}
+
+String _$visibleGamesHash() => r'65c8fb4db68dc2e6b605c793b4bef25b3b941c02';

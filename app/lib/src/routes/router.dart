@@ -8,16 +8,15 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
-import '../features/library/data/library_repository.dart';
+import '../features/library/presentation/library_screen.dart';
 import '../utils/extensions/l10n.dart';
 
-/// App routes: `/` is the library, `/settings` the settings page. Both are
-/// placeholders showing the grid and settings tasks land on.
+/// App routes: `/` is the library, `/settings` the settings page.
 final routerProvider = Provider<GoRouter>((ref) => GoRouter(
       routes: [
         GoRoute(
           path: '/',
-          builder: (context, state) => const LibraryPlaceholderScreen(),
+          builder: (context, state) => const LibraryScreen(),
         ),
         GoRoute(
           path: '/settings',
@@ -25,34 +24,6 @@ final routerProvider = Provider<GoRouter>((ref) => GoRouter(
         ),
       ],
     ));
-
-/// Placeholder for the library grid (Task 8): shows the game count.
-class LibraryPlaceholderScreen extends ConsumerWidget {
-  const LibraryPlaceholderScreen({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final count = switch (ref.watch(libraryProvider)) {
-      AsyncData(:final value) => value.library.games.length,
-      _ => 0,
-    };
-    return Scaffold(
-      appBar: AppBar(title: Text(context.l10n.library)),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(count == 1 ? '1 game' : '$count games'),
-            FilledButton(
-              onPressed: () => context.go('/settings'),
-              child: Text(context.l10n.settings),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 /// Placeholder for the settings page (Task 10): a title with a back button.
 class SettingsPlaceholderScreen extends StatelessWidget {
