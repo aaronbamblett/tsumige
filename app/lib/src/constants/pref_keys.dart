@@ -22,6 +22,11 @@ enum PrefKey {
   sortAscending('library.sortAscending', true),
   favouritesOnly('library.favouritesOnly', false),
   tagFilter('library.tagFilter', null),
+  launchMode('launch.mode', 'proton'),
+  launchPrefix('launch.prefix', '~/Games/vnl/prefix'),
+  launchRunner('launch.runner', null),
+  launchLocale('launch.locale', 'ja_JP.UTF-8'),
+  launchUmuGameId('launch.umuGameId', 'umu-default'),
   windowWidth('window.width', null),
   windowHeight('window.height', null),
   windowMaximized('window.maximized', false);

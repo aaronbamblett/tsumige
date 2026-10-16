@@ -12,7 +12,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vnl/main.dart';
 import 'package:vnl/src/features/library/data/library_repository.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
-import 'package:vnl_core/vnl_core.dart' as core;
+import 'package:vnl/src/core/covers.dart' as core;
+import 'package:vnl/src/core/model.dart' as core;
+import 'package:vnl/src/core/paths.dart' as core;
+import 'package:vnl/src/core/store.dart' as core;
+import 'package:vnl/src/core/vndb.dart' as core;
 
 class ThrowingLibrary extends Library {
   ThrowingLibrary(this.error);
@@ -21,6 +25,30 @@ class ThrowingLibrary extends Library {
 
   @override
   Future<core.LoadedLibrary> build() async => throw error;
+}
+
+class ThrowingRepository implements LibraryRepository {
+  ThrowingRepository(this.error);
+
+  final core.StoreException error;
+  int loads = 0;
+
+  @override
+  Future<core.LoadedLibrary> load() async {
+    loads++;
+    throw error;
+  }
+
+  @override
+  Future<void> save(core.LoadedLibrary loaded) async {}
+
+  @override
+  Future<core.RatingReport> refreshRatings(core.LoadedLibrary loaded) async =>
+      const core.RatingReport();
+
+  @override
+  Future<core.ThumbReport> ensureThumbnails(core.Library library) async =>
+      core.ThumbReport();
 }
 
 class CountingRepository implements LibraryRepository {
@@ -71,6 +99,30 @@ void main() {
 
     expect(find.textContaining(dir.libraryJson.path), findsWidgets);
     expect(find.textContaining('backups'), findsWidgets);
+  });
+
+  testWidgets('failed library load is not retried', (tester) async {
+    final temp = Directory.systemTemp.createTempSync('vnl_startup_retry_test_');
+    addTearDown(() => temp.deleteSync(recursive: true));
+    final dir = core.DataDir(temp.path);
+    final repository = ThrowingRepository(
+      core.InvalidJson(dir.libraryJson.path, 'unexpected end of input'),
+    );
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        sharedPreferencesProvider
+            .overrideWithValue(await mockPrefs()),
+        dataDirProvider.overrideWithValue(dir),
+        libraryRepositoryProvider.overrideWithValue(repository),
+      ],
+      child: const VnlApp(),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 10));
+
+    expect(repository.loads, 1);
+    expect(find.textContaining(dir.libraryJson.path), findsWidgets);
   });
 
   testWidgets('library loads once', (tester) async {

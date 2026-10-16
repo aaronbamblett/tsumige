@@ -153,18 +153,3 @@ Future<void> saveLibrary(DataDir dir, LoadedLibrary loaded) async {
   loaded.stamp = await _stamp(file);
 }
 
-Future<CoreSettings> loadCoreSettings(DataDir dir) async {
-  final file = dir.settingsJson;
-  if (!await file.exists()) return CoreSettings();
-  final decoded = jsonDecode(await file.readAsString());
-  if (decoded is! Map) return CoreSettings();
-  return CoreSettings.fromJson(decoded);
-}
-
-Future<void> saveCoreSettings(DataDir dir, CoreSettings settings) async {
-  final file = dir.settingsJson;
-  await file.parent.create(recursive: true);
-  final tmp = File('${file.path}.$pid.tmp');
-  await tmp.writeAsString(jsonEncode(settings.toJson()), flush: true);
-  await tmp.rename(file.path);
-}

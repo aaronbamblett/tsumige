@@ -293,3 +293,297 @@ abstract class _$TagFilter extends $Notifier<String?> {
     return element.handleCreate(ref, build);
   }
 }
+
+/// Default launch mode for games. Stored by enum name; unknown values fall
+/// back to proton. Nothing reads it yet; launching is phase 2.
+
+@ProviderFor(LaunchMode)
+final launchModeProvider = LaunchModeProvider._();
+
+/// Default launch mode for games. Stored by enum name; unknown values fall
+/// back to proton. Nothing reads it yet; launching is phase 2.
+final class LaunchModeProvider
+    extends $NotifierProvider<LaunchMode, core.LaunchMode> {
+  /// Default launch mode for games. Stored by enum name; unknown values fall
+  /// back to proton. Nothing reads it yet; launching is phase 2.
+  LaunchModeProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'launchModeProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$launchModeHash();
+
+  @$internal
+  @override
+  LaunchMode create() => LaunchMode();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(core.LaunchMode value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<core.LaunchMode>(value),
+    );
+  }
+}
+
+String _$launchModeHash() => r'8dde9a8e4f85b57fe258637386371fee1724b8d7';
+
+/// Default launch mode for games. Stored by enum name; unknown values fall
+/// back to proton. Nothing reads it yet; launching is phase 2.
+
+abstract class _$LaunchMode extends $Notifier<core.LaunchMode> {
+  core.LaunchMode build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<core.LaunchMode, core.LaunchMode>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<core.LaunchMode, core.LaunchMode>,
+              core.LaunchMode,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
+/// Default Wine/Proton prefix for games. Nothing reads it yet.
+
+@ProviderFor(LaunchPrefix)
+final launchPrefixProvider = LaunchPrefixProvider._();
+
+/// Default Wine/Proton prefix for games. Nothing reads it yet.
+final class LaunchPrefixProvider
+    extends $NotifierProvider<LaunchPrefix, String> {
+  /// Default Wine/Proton prefix for games. Nothing reads it yet.
+  LaunchPrefixProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'launchPrefixProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$launchPrefixHash();
+
+  @$internal
+  @override
+  LaunchPrefix create() => LaunchPrefix();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(String value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<String>(value),
+    );
+  }
+}
+
+String _$launchPrefixHash() => r'8a7c03e64dbd282e1108a1c02e83cd58cdb6de30';
+
+/// Default Wine/Proton prefix for games. Nothing reads it yet.
+
+abstract class _$LaunchPrefix extends $Notifier<String> {
+  String build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<String, String>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<String, String>,
+              String,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
+/// Default runner override; null means umu's default. Nothing reads it yet.
+
+@ProviderFor(LaunchRunner)
+final launchRunnerProvider = LaunchRunnerProvider._();
+
+/// Default runner override; null means umu's default. Nothing reads it yet.
+final class LaunchRunnerProvider
+    extends $NotifierProvider<LaunchRunner, String?> {
+  /// Default runner override; null means umu's default. Nothing reads it yet.
+  LaunchRunnerProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'launchRunnerProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$launchRunnerHash();
+
+  @$internal
+  @override
+  LaunchRunner create() => LaunchRunner();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(String? value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<String?>(value),
+    );
+  }
+}
+
+String _$launchRunnerHash() => r'55cec9eef11589afbac25570a8c52ba6e4002c92';
+
+/// Default runner override; null means umu's default. Nothing reads it yet.
+
+abstract class _$LaunchRunner extends $Notifier<String?> {
+  String? build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<String?, String?>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<String?, String?>,
+              String?,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
+/// Default locale for launched games. Nothing reads it yet.
+
+@ProviderFor(LaunchLocale)
+final launchLocaleProvider = LaunchLocaleProvider._();
+
+/// Default locale for launched games. Nothing reads it yet.
+final class LaunchLocaleProvider
+    extends $NotifierProvider<LaunchLocale, String> {
+  /// Default locale for launched games. Nothing reads it yet.
+  LaunchLocaleProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'launchLocaleProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$launchLocaleHash();
+
+  @$internal
+  @override
+  LaunchLocale create() => LaunchLocale();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(String value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<String>(value),
+    );
+  }
+}
+
+String _$launchLocaleHash() => r'2a5a3e48beb99e36da04a33c1745211cd040b5fa';
+
+/// Default locale for launched games. Nothing reads it yet.
+
+abstract class _$LaunchLocale extends $Notifier<String> {
+  String build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<String, String>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<String, String>,
+              String,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
+/// Default UMU game id for launched games. Nothing reads it yet.
+
+@ProviderFor(LaunchUmuGameId)
+final launchUmuGameIdProvider = LaunchUmuGameIdProvider._();
+
+/// Default UMU game id for launched games. Nothing reads it yet.
+final class LaunchUmuGameIdProvider
+    extends $NotifierProvider<LaunchUmuGameId, String> {
+  /// Default UMU game id for launched games. Nothing reads it yet.
+  LaunchUmuGameIdProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'launchUmuGameIdProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$launchUmuGameIdHash();
+
+  @$internal
+  @override
+  LaunchUmuGameId create() => LaunchUmuGameId();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(String value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<String>(value),
+    );
+  }
+}
+
+String _$launchUmuGameIdHash() => r'97d5d0fad52354fdbcecc674b3dc0a327adb9234';
+
+/// Default UMU game id for launched games. Nothing reads it yet.
+
+abstract class _$LaunchUmuGameId extends $Notifier<String> {
+  String build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<String, String>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<String, String>,
+              String,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}

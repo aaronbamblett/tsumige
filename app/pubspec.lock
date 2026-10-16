@@ -310,7 +310,7 @@ packages:
     source: hosted
     version: "3.4.3"
   http:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: http
       sha256: "87721a4a50b19c7f1d49001e51409bddc46303966ce89a65af4f4e6004896412"
@@ -334,7 +334,7 @@ packages:
     source: hosted
     version: "4.1.2"
   image:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: image
       sha256: "89ed75b2f8231fe676808c5564f9590d728024ded7ac782a7ed8474f1c95b72a"
@@ -462,7 +462,7 @@ packages:
     source: hosted
     version: "3.0.0"
   path:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: path
       sha256: "75cca69d1490965be98c73ceaea117e8a04dd21217b37b292c9ddbec0d955bc5"
@@ -771,7 +771,7 @@ packages:
     source: hosted
     version: "1.4.0"
   uuid:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: uuid
       sha256: "9b129329f58692f6e6578329498a8fe9fbe98f090beb764ffbb8ee2eadd01dcd"
@@ -794,13 +794,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "15.4.0"
-  vnl_core:
-    dependency: "direct main"
-    description:
-      path: "../packages/vnl_core"
-      relative: true
-    source: path
-    version: "0.0.0"
   watcher:
     dependency: transitive
     description:

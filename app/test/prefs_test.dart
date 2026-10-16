@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vnl/src/constants/pref_keys.dart' as keys;
+import 'package:vnl/src/core/model.dart' as core;
 import 'package:vnl/src/utils/prefs/app_prefs.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
 
@@ -45,5 +46,18 @@ void main() {
     addTearDown(rebuilt.dispose);
     expect(rebuilt.read(sortFieldProvider), keys.SortField.title);
     expect(rebuilt.read(sortAscendingProvider), isFalse);
+  });
+
+  test('launch defaults read back', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final container = containerFor(prefs);
+    addTearDown(container.dispose);
+
+    expect(container.read(launchModeProvider), core.LaunchMode.proton);
+    expect(container.read(launchPrefixProvider), '~/Games/vnl/prefix');
+    expect(container.read(launchRunnerProvider), isNull);
+    expect(container.read(launchLocaleProvider), 'ja_JP.UTF-8');
+    expect(container.read(launchUmuGameIdProvider), 'umu-default');
   });
 }

@@ -232,42 +232,6 @@ class PlaySession {
       };
 }
 
-class CoreSettings {
-  LaunchMode defaultMode;
-  String defaultPrefix;
-  String? defaultRunner;
-  String defaultLocale;
-  String defaultUmuGameId;
-
-  CoreSettings({
-    this.defaultMode = LaunchMode.proton,
-    this.defaultPrefix = '~/Games/kakera/prefix',
-    this.defaultRunner,
-    this.defaultLocale = 'ja_JP.UTF-8',
-    this.defaultUmuGameId = 'umu-default',
-  });
-
-  factory CoreSettings.fromJson(Map m) => CoreSettings(
-        defaultMode:
-            parseLaunchMode(readStringOrNull(m, 'default_mode')) ??
-                LaunchMode.proton,
-        defaultPrefix:
-            readString(m, 'default_prefix', '~/Games/kakera/prefix'),
-        defaultRunner: readStringOrNull(m, 'default_runner'),
-        defaultLocale: readString(m, 'default_locale', 'ja_JP.UTF-8'),
-        defaultUmuGameId:
-            readString(m, 'default_umu_game_id', 'umu-default'),
-      );
-
-  Map<String, Object?> toJson() => {
-        'default_mode': defaultMode.name,
-        'default_prefix': defaultPrefix,
-        'default_runner': defaultRunner,
-        'default_locale': defaultLocale,
-        'default_umu_game_id': defaultUmuGameId,
-      };
-}
-
 class SkippedEntry {
   final int index;
   final String? title;

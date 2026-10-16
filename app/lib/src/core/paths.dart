@@ -23,8 +23,6 @@ class DataDir {
 
   File get libraryJson => File(p.join(root, 'library.json'));
 
-  File get settingsJson => File(p.join(root, 'settings.json'));
-
   Directory get backups => Directory(p.join(root, 'backups'));
 
   Directory get coversOriginal => Directory(p.join(root, 'covers', 'original'));

@@ -7,7 +7,11 @@
 import 'dart:io';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:vnl_core/vnl_core.dart' as core;
+import 'package:vnl/src/core/covers.dart' as core;
+import 'package:vnl/src/core/model.dart' as core;
+import 'package:vnl/src/core/paths.dart' as core;
+import 'package:vnl/src/core/store.dart' as core;
+import 'package:vnl/src/core/vndb.dart' as core;
 
 part 'library_repository.g.dart';
 
@@ -50,8 +54,13 @@ class IoLibraryRepository implements LibraryRepository {
 LibraryRepository libraryRepository(Ref ref) =>
     IoLibraryRepository(ref.watch(dataDirProvider));
 
+/// Never retry the library load on a timer: a corrupt library must show the
+/// error screen once instead of reloading on backoff. The error screen's
+/// Retry button calls [Library.reload] explicitly.
+Duration? _noLibraryRetry(int _, Object _) => null;
+
 /// The only code that loads the library, through [libraryRepositoryProvider].
-@Riverpod(keepAlive: true)
+@Riverpod(keepAlive: true, retry: _noLibraryRetry)
 class Library extends _$Library {
   @override
   Future<core.LoadedLibrary> build() =>

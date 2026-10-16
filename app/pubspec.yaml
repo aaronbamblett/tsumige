@@ -36,16 +36,18 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-  vnl_core:
-    path: ../packages/vnl_core
   flutter_hooks: ^0.21.0
   gap: ^3.0.1
   go_router: ^17.0.0
   hooks_riverpod: ^3.0.0
+  http: ^1.6.0
+  image: ^4.12.0
   intl: ^0.20.2
+  path: ^1.9.1
   riverpod_annotation: ^4.0.0
   shared_preferences: ^2.0.15
   fluttertoast: ^10.0.0
+  uuid: ^4.6.0
   window_manager: ^0.5.2
 
 dev_dependencies:

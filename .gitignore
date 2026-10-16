@@ -1,5 +1,3 @@
-/build/
-.dart_tool/
 /app/build/
 /app/.dart_tool/
 /app/.flutter-plugins-dependencies

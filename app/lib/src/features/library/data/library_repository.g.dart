@@ -117,7 +117,7 @@ final class LibraryProvider
     : super(
         from: null,
         argument: null,
-        retry: null,
+        retry: _noLibraryRetry,
         name: r'libraryProvider',
         isAutoDispose: false,
         dependencies: null,
@@ -132,7 +132,7 @@ final class LibraryProvider
   Library create() => Library();
 }
 
-String _$libraryHash() => r'506f4da98ac210416edc2643187328ab692c9647';
+String _$libraryHash() => r'1ae40f463bd72aab0d3a92e570cfdd907c1c02aa';
 
 /// The only code that loads the library, through [libraryRepositoryProvider].
 

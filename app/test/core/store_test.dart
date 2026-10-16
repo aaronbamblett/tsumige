@@ -7,9 +7,11 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vnl_core/vnl_core.dart';
+import 'package:vnl/src/core/model.dart';
+import 'package:vnl/src/core/paths.dart';
+import 'package:vnl/src/core/store.dart';
 
 Future<DataDir> freshDir() async {
   final tmp = await Directory.systemTemp.createTemp('vnl-store-');

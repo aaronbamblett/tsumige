@@ -10,11 +10,13 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vnl_core/vnl_core.dart';
+import 'package:vnl/src/core/covers.dart';
+import 'package:vnl/src/core/model.dart';
+import 'package:vnl/src/core/paths.dart';
 
-String fixture(String name) => 'test/fixtures/covers/$name';
+String fixture(String name) => 'test/core/fixtures/covers/$name';
 
 Uint8List fixtureBytes(String name) =>
     Uint8List.fromList(File(fixture(name)).readAsBytesSync());

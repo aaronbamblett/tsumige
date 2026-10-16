@@ -8,6 +8,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../constants/pref_keys.dart';
+import '../../core/model.dart' as core;
 
 part 'prefs_mixin.g.dart';
 
@@ -54,6 +55,12 @@ mixin PrefsMixin<T> {
     return prefs.getBool(key.key) ?? fallback;
   }
 
+  String initStringWithDefault(PrefKey key) {
+    final fallback = key.defaultValue as String;
+    persistOnChange((next) async => prefs.setString(key.key, next as String));
+    return prefs.getString(key.key) ?? fallback;
+  }
+
   String? initString(PrefKey key) {
     persistOnChange((next) async {
       final value = next as String?;
@@ -71,5 +78,12 @@ mixin PrefsMixin<T> {
       return SortField.values[stored];
     }
     return SortField.added;
+  }
+
+  core.LaunchMode initLaunchMode() {
+    persistOnChange((next) async =>
+        prefs.setString(PrefKey.launchMode.key, (next as core.LaunchMode).name));
+    return core.parseLaunchMode(prefs.getString(PrefKey.launchMode.key)) ??
+        core.LaunchMode.proton;
   }
 }

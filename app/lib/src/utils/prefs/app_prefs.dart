@@ -7,6 +7,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../constants/pref_keys.dart' as keys;
+import '../../core/model.dart' as core;
 import 'prefs_mixin.dart';
 
 part 'app_prefs.g.dart';
@@ -54,4 +55,50 @@ class TagFilter extends _$TagFilter with PrefsMixin<String?> {
   String? build() => initString(keys.PrefKey.tagFilter);
 
   void set(String? value) => state = value;
+}
+
+/// Default launch mode for games. Stored by enum name; unknown values fall
+/// back to proton. Nothing reads it yet; launching is phase 2.
+@riverpod
+class LaunchMode extends _$LaunchMode with PrefsMixin<core.LaunchMode> {
+  @override
+  core.LaunchMode build() => initLaunchMode();
+
+  void set(core.LaunchMode value) => state = value;
+}
+
+/// Default Wine/Proton prefix for games. Nothing reads it yet.
+@riverpod
+class LaunchPrefix extends _$LaunchPrefix with PrefsMixin<String> {
+  @override
+  String build() => initStringWithDefault(keys.PrefKey.launchPrefix);
+
+  void set(String value) => state = value;
+}
+
+/// Default runner override; null means umu's default. Nothing reads it yet.
+@riverpod
+class LaunchRunner extends _$LaunchRunner with PrefsMixin<String?> {
+  @override
+  String? build() => initString(keys.PrefKey.launchRunner);
+
+  void set(String? value) => state = value;
+}
+
+/// Default locale for launched games. Nothing reads it yet.
+@riverpod
+class LaunchLocale extends _$LaunchLocale with PrefsMixin<String> {
+  @override
+  String build() => initStringWithDefault(keys.PrefKey.launchLocale);
+
+  void set(String value) => state = value;
+}
+
+/// Default UMU game id for launched games. Nothing reads it yet.
+@riverpod
+class LaunchUmuGameId extends _$LaunchUmuGameId with PrefsMixin<String> {
+  @override
+  String build() => initStringWithDefault(keys.PrefKey.launchUmuGameId);
+
+  void set(String value) => state = value;
 }

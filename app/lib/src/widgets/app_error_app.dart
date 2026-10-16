@@ -7,7 +7,8 @@
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:vnl_core/vnl_core.dart' as core;
+import 'package:vnl/src/core/paths.dart' as core;
+import 'package:vnl/src/core/store.dart' as core;
 
 import '../constants/app_theme.dart';
 import '../features/library/data/library_repository.dart';
@@ -65,7 +66,8 @@ class AppErrorApp extends ConsumerWidget {
                     Text(libraryErrorMessage(error, dir)),
                     const Gap(16),
                     FilledButton(
-                      onPressed: () => ref.invalidate(libraryProvider),
+                      onPressed: () =>
+                          ref.read(libraryProvider.notifier).reload(),
                       child: Text(context.l10n.retry),
                     ),
                   ],

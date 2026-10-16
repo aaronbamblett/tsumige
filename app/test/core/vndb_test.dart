@@ -8,14 +8,15 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:flutter_test/flutter_test.dart';
 import 'package:http/testing.dart';
-import 'package:test/test.dart';
-import 'package:vnl_core/vnl_core.dart';
+import 'package:vnl/src/core/model.dart';
+import 'package:vnl/src/core/vndb.dart';
 
 final _now = DateTime.utc(2026, 10, 16, 12);
 
 String _fixture() =>
-    File('test/fixtures/vndb/ratings_page.json').readAsStringSync();
+    File('test/core/fixtures/vndb/ratings_page.json').readAsStringSync();
 
 LoadedLibrary _library(List<(String id, String? vndbId)> games) =>
     LoadedLibrary(
