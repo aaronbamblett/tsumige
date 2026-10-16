@@ -5,6 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -241,6 +242,27 @@ void main() {
       expect(seen.last, (4, 4));
       expect(slowCompleteAtDone3, isFalse,
           reason: 'slow job still running while 3 small jobs finished');
+    });
+
+    test('onProgress capturing an unsendable object works', () async {
+      final dir = freshDir();
+      final jobs = <(String, String)>[];
+      for (var i = 0; i < 2; i++) {
+        final id = const Uuid().v4();
+        jobs.add((id, await storeFixture(dir, id, 'tall.jpg')));
+      }
+      final port = ReceivePort();
+      final seen = <(int, int)>[];
+      final report = await generateThumbnails(dir, jobs,
+          concurrency: 2, onProgress: (done, total) {
+        port.sendPort.send(done);
+        seen.add((done, total));
+      });
+      expect(report.generated, 2);
+      expect(report.failed, isEmpty);
+      expect(seen, hasLength(2));
+      expect(seen.last, (2, 2));
+      port.close();
     });
 
     test('pool reports progress', () async {

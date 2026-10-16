@@ -129,6 +129,22 @@ Future<void> writeThumbnails(
       onBeforeRename: onBeforeRename);
 }
 
+(String, String?)? _renderJob(String root, String id, String original) {
+  try {
+    final bytes =
+        File(p.join(root, 'covers', 'original', original)).readAsBytesSync();
+    _renderThumbnails(root, id, bytes);
+    return null;
+  } catch (e) {
+    return (id, '$e');
+  }
+}
+
+// Top-level entry keeps the isolate message to three strings, so an
+// onProgress closure holding UI state is never sent to the isolate.
+Future<(String, String?)?> _runJob(String root, String id, String original) =>
+    Isolate.run(() => _renderJob(root, id, original));
+
 Future<ThumbReport> generateThumbnails(
   DataDir dir,
   List<(String id, String original)> jobs, {
@@ -148,17 +164,7 @@ Future<ThumbReport> generateThumbnails(
       final job = jobs[i];
       (String, String?)? outcome;
       try {
-        outcome = await Isolate.run<(String, String?)?>(() {
-          try {
-            final bytes =
-                File(p.join(dir.root, 'covers', 'original', job.$2))
-                    .readAsBytesSync();
-            _renderThumbnails(dir.root, job.$1, bytes);
-            return null;
-          } catch (e) {
-            return (job.$1, '$e');
-          }
-        });
+        outcome = await _runJob(dir.root, job.$1, job.$2);
       } catch (e) {
         outcome = (job.$1, '$e');
       }
