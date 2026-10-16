@@ -11,3 +11,4 @@ export 'src/model.dart';
 export 'src/paths.dart';
 export 'src/store.dart';
 export 'src/version.dart';
+export 'src/vndb.dart';

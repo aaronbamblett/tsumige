@@ -1,0 +1,23 @@
+{
+  "results": [
+    {
+      "id": "v900017",
+      "rating": 84.23,
+      "votecount": 1337,
+      "released": "2017-01-27"
+    },
+    {
+      "id": "v199",
+      "rating": null,
+      "votecount": 0,
+      "released": "TBA"
+    },
+    {
+      "id": "v947549",
+      "rating": 75,
+      "votecount": 42,
+      "released": "2024-06"
+    }
+  ],
+  "more": false
+}
