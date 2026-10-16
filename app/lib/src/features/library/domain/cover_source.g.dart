@@ -231,4 +231,4 @@ final class VisibleGamesProvider
   }
 }
 
-String _$visibleGamesHash() => r'65c8fb4db68dc2e6b605c793b4bef25b3b941c02';
+String _$visibleGamesHash() => r'71c14eb16c6da8c05412cc5a5edc891917727508';

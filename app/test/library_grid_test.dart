@@ -48,7 +48,17 @@ List<core.Game> fakeGames(int count) => List.generate(
       (i) => core.Game(id: 'game-$i', title: 'Game $i'),
     );
 
+void setSurface(WidgetTester tester, double width, double height) {
+  tester.view.physicalSize = Size(width, height);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+}
+
 Future<void> pumpLibrary(WidgetTester tester, List<core.Game> games) async {
+  setSurface(tester, 1280, 800);
   final temp = Directory.systemTemp.createTempSync('vnl_grid_test_');
   addTearDown(() => temp.deleteSync(recursive: true));
   SharedPreferences.setMockInitialValues({});
@@ -97,6 +107,37 @@ void main() {
     await tester.drag(find.byType(Slider), const Offset(500, 0));
     await tester.pump(const Duration(milliseconds: 300));
     expect(firstRowColumns(tester), lessThan(before));
+  });
+
+  testWidgets('toolbar is one row at 1280 wide', (tester) async {
+    await pumpLibrary(tester, fakeGames(20));
+    final items = [
+      find.byType(TextField),
+      find.text('Added'),
+      find.byTooltip('Ascending'),
+      find.byType(SegmentedButton<bool>),
+      find.text('Tags'),
+      find.byType(Slider),
+      find.text('20 games'),
+      find.byTooltip('Settings'),
+    ];
+    for (final item in items) {
+      expect(item, findsOneWidget);
+    }
+    final centres = [
+      for (final item in items) tester.getCenter(item).dy,
+    ];
+    final spread =
+        centres.reduce(max) - centres.reduce(min);
+    expect(spread, lessThanOrEqualTo(1.0));
+  });
+
+  testWidgets('slider hides below 900 wide', (tester) async {
+    await pumpLibrary(tester, fakeGames(20));
+    setSurface(tester, 860, 800);
+    await tester.pump();
+    expect(find.byType(Slider), findsNothing);
+    expect(find.text('20 games'), findsOneWidget);
   });
 
   testWidgets('cover source follows the settled width', (tester) async {
