@@ -1,0 +1,11 @@
+/target/
+/app/build/
+/app/.dart_tool/
+/app/.flutter-plugins-dependencies
+/app/.fvm/
+*.log
+
+# Local-only notes and agent instructions
+/docs/
+/AGENTS.md
+/CLAUDE.md
