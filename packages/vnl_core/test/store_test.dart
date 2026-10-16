@@ -29,7 +29,6 @@ Game fullGame(String id) => Game(
       tags: const ['mystery', 'denpa'],
       favourite: true,
       addedAt: DateTime.utc(2026, 10, 1, 12),
-      kakeraId: 42,
       vndbId: 'v947549',
       released: '2016-03-31',
       vndbRating: 84.23,

@@ -42,7 +42,6 @@ class Game {
   List<String> tags;
   bool favourite;
   DateTime addedAt;
-  int? kakeraId;
   String? vndbId;
   String? released;
   double? vndbRating;
@@ -63,7 +62,6 @@ class Game {
     List<String>? tags,
     this.favourite = false,
     DateTime? addedAt,
-    this.kakeraId,
     this.vndbId,
     this.released,
     this.vndbRating,
@@ -89,7 +87,6 @@ class Game {
         tags: readStringList(m, 'tags'),
         favourite: readBool(m, 'favourite'),
         addedAt: readDateOrNull(m, 'added_at'),
-        kakeraId: readIntOrNull(m, 'kakera_id'),
         vndbId: readStringOrNull(m, 'vndb_id'),
         released: readStringOrNull(m, 'released'),
         vndbRating: readDoubleOrNull(m, 'vndb_rating'),
@@ -114,7 +111,6 @@ class Game {
         'tags': tags,
         'favourite': favourite,
         'added_at': addedAt.toUtc().toIso8601String(),
-        'kakera_id': kakeraId,
         'vndb_id': vndbId,
         'released': released,
         'vndb_rating': vndbRating,
