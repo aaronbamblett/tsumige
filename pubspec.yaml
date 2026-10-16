@@ -1,0 +1,9 @@
+name: vnl_workspace
+publish_to: none
+
+environment:
+  sdk: ">=3.9.0 <4.0.0"
+
+workspace:
+  - packages/vnl_core
+  - packages/vnl_cli
