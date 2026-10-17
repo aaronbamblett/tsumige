@@ -179,6 +179,46 @@ void main() {
     expect(lateGame.vndbFetchedAt, isNull);
   });
 
+  test('fetchCoverUrl returns image.url', () async {
+    Map<String, Object?>? seen;
+    final client = VndbClient(
+      client: MockClient((request) async {
+        seen = jsonDecode(request.body) as Map<String, Object?>;
+        return http.Response(
+            _page([
+              {
+                'id': 'v900017',
+                'image': {'url': 'https://t.vndb.org/sf/12/1234.jpg'}
+              },
+            ]),
+            200);
+      }),
+      retryDelay: Duration.zero,
+    );
+    expect(await client.fetchCoverUrl('v900017'),
+        'https://t.vndb.org/sf/12/1234.jpg');
+    expect(seen!['filters'], ['id', '=', 'v900017']);
+    expect(seen!['fields'], 'id,image.url');
+  });
+
+  test('fetchCoverUrl is null without an image', () async {
+    final client = VndbClient(
+      client: MockClient((request) async =>
+          http.Response(_page([]), 200)),
+      retryDelay: Duration.zero,
+    );
+    expect(await client.fetchCoverUrl('v404'), isNull);
+    final noImage = VndbClient(
+      client: MockClient((request) async => http.Response(
+          _page([
+            {'id': 'v1'}
+          ]),
+          200)),
+      retryDelay: Duration.zero,
+    );
+    expect(await noImage.fetchCoverUrl('v1'), isNull);
+  });
+
   test('deduplicates ids and skips games without vndbId', () async {
     final seen = <Map<String, Object?>>[];
     final client = VndbClient(

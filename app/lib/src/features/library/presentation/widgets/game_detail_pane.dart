@@ -6,16 +6,23 @@
 
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:path/path.dart' as p;
 
+import 'package:http/http.dart' as http;
+
 import '../../../../core/covers.dart';
 import '../../../../core/model.dart';
+import '../../../../core/trash.dart';
+import '../../../../core/vndb.dart';
 import '../../../../utils/prefs/app_prefs.dart' hide LaunchMode;
+import '../../../../utils/toast.dart';
 import '../../data/library_repository.dart';
 import '../../domain/cover_source.dart';
+import '../../domain/game_editor.dart';
 import '../../domain/launch_actions.dart';
 import '../../domain/running_games.dart';
 import '../../domain/selection.dart';
@@ -74,7 +81,7 @@ class GameDetailPane extends ConsumerWidget {
                     Positioned(
                       top: 16,
                       left: 16,
-                      right: 68,
+                      right: 148,
                       child: Text(
                         game.title,
                         maxLines: 2,
@@ -97,21 +104,7 @@ class GameDetailPane extends ConsumerWidget {
                     Positioned(
                       top: 12,
                       right: 12,
-                      child: IconButton(
-                        tooltip: 'Close',
-                        icon: const Icon(Icons.close_rounded),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.black45,
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size(36, 36),
-                          padding: EdgeInsets.zero,
-                          tapTargetSize:
-                              MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        onPressed: () => ref
-                            .read(selectedGameIdProvider.notifier)
-                            .clear(),
-                      ),
+                      child: _HeroControls(game: game),
                     ),
                   ],
                 ),
@@ -182,6 +175,169 @@ class GameDetailPane extends ConsumerWidget {
       ],
     );
   }
+}
+
+ButtonStyle _heroButtonStyle() => IconButton.styleFrom(
+      backgroundColor: Colors.black45,
+      foregroundColor: Colors.white,
+      minimumSize: const Size(36, 36),
+      padding: EdgeInsets.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+
+class _HeroControls extends ConsumerWidget {
+  const _HeroControls({required this.game});
+
+  final Game game;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      spacing: 8,
+      children: [
+        IconButton(
+          tooltip: game.favourite ? 'Unfavourite' : 'Favourite',
+          icon: Icon(game.favourite
+              ? Icons.star_rounded
+              : Icons.star_outline_rounded),
+          style: _heroButtonStyle(),
+          onPressed: () => ref.read(gameEditorProvider).update(
+              game.id, (g) => g.favourite = !g.favourite,
+              context: context),
+        ),
+        PopupMenuButton<String>(
+          tooltip: 'More',
+          icon: const Icon(Icons.more_vert_rounded),
+          style: _heroButtonStyle(),
+          onSelected: (value) {
+            switch (value) {
+              case 'cover':
+                _changeCover(context, ref, game);
+              case 'refetch':
+                _refetchCover(context, ref, game);
+              case 'delete':
+                _deleteGame(context, ref, game);
+            }
+          },
+          itemBuilder: (context) => [
+            const PopupMenuItem(
+              value: 'cover',
+              child: Text('Change cover…'),
+            ),
+            if (game.vndbId != null)
+              const PopupMenuItem(
+                value: 'refetch',
+                child: Text('Re-fetch cover from VNDB'),
+              ),
+            const PopupMenuItem(
+              value: 'delete',
+              child: Text('Delete game…'),
+            ),
+          ],
+        ),
+        IconButton(
+          tooltip: 'Close',
+          icon: const Icon(Icons.close_rounded),
+          style: _heroButtonStyle(),
+          onPressed: () =>
+              ref.read(selectedGameIdProvider.notifier).clear(),
+        ),
+      ],
+    );
+  }
+}
+
+Future<void> _storeCoverBytes(
+    BuildContext context, WidgetRef ref, Game game, List<int> bytes) async {
+  final dir = ref.read(dataDirProvider);
+  final name =
+      await storeOriginal(dir, game.id, Uint8List.fromList(bytes));
+  if (!context.mounted) return;
+  await ref
+      .read(gameEditorProvider)
+      .update(game.id, (g) => g.cover = name, context: context);
+  await generateThumbnails(dir, [(game.id, name)]);
+  ref.invalidate(coverExistsProvider);
+  for (final width in thumbWidths) {
+    await FileImage(File(thumbPath(dir, game.id, width))).evict();
+  }
+  await FileImage(File(p.join(dir.coversOriginal.path, name))).evict();
+}
+
+Future<void> _changeCover(
+    BuildContext context, WidgetRef ref, Game game) async {
+  final picked = await ref.read(coverPickerProvider)();
+  if (picked == null || picked.isEmpty) return;
+  if (!context.mounted) return;
+  if (picked.startsWith('/run/user/')) {
+    Toast(context).show('That file came through the Flatpak portal. '
+        'Pick it from its real location.');
+    return;
+  }
+  try {
+    final bytes = await File(picked).readAsBytes();
+    if (!context.mounted) return;
+    await _storeCoverBytes(context, ref, game, bytes);
+  } catch (e) {
+    if (context.mounted) Toast(context).showError('Could not use cover: $e');
+  }
+}
+
+Future<void> _refetchCover(
+    BuildContext context, WidgetRef ref, Game game) async {
+  final vndbId = game.vndbId;
+  if (vndbId == null) return;
+  try {
+    final url = await VndbClient().fetchCoverUrl(vndbId);
+    if (url == null) {
+      if (context.mounted) {
+        Toast(context).showError('VNDB has no cover for this game.');
+      }
+      return;
+    }
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode != 200) {
+      throw VndbException('HTTP ${response.statusCode}');
+    }
+    if (!context.mounted) return;
+    await _storeCoverBytes(context, ref, game, response.bodyBytes);
+  } catch (e) {
+    if (context.mounted) {
+      Toast(context).showError('Cover re-fetch failed: $e');
+    }
+  }
+}
+
+Future<void> _deleteGame(
+    BuildContext context, WidgetRef ref, Game game) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text('Delete ${game.title}?'),
+      content: const Text("It moves to the trash folder in vnl's data "
+          'folder and can be restored by hand.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          style: TextButton.styleFrom(
+            foregroundColor: Theme.of(dialogContext).colorScheme.error,
+          ),
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) {
+    return;
+  }
+  await moveToTrash(ref.read(dataDirProvider), game);
+  if (!context.mounted) return;
+  await ref.read(gameEditorProvider).remove(game.id, context: context);
 }
 
 class _Footer extends ConsumerWidget {

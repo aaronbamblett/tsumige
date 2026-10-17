@@ -11,6 +11,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:image/image.dart' as img;
+import 'package:path/path.dart' as p;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vnl/main.dart';
@@ -20,6 +22,7 @@ import 'package:vnl/src/core/paths.dart' as core;
 import 'package:vnl/src/core/vndb.dart' as core;
 import 'package:vnl/src/features/library/data/library_repository.dart';
 import 'package:vnl/src/features/library/domain/cover_source.dart';
+import 'package:vnl/src/features/library/domain/game_editor.dart';
 import 'package:vnl/src/features/library/presentation/widgets/game_detail_pane.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
 
@@ -54,10 +57,19 @@ void setSurface(WidgetTester tester, double width, double height) {
 }
 
 Future<void> pumpLibrary(WidgetTester tester, List<core.Game> games,
-    {double width = 1280, double height = 800}) async {
+    {double width = 1280,
+    double height = 800,
+    void Function(Directory)? exposeTemp,
+    Future<String?> Function()? coverPicker}) async {
   setSurface(tester, width, height);
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(
+    const MethodChannel('window_manager'),
+    (call) async => call.method == 'isMaximized' ? false : null,
+  );
   final temp = Directory.systemTemp.createTempSync('vnl_detail_test_');
   addTearDown(() => temp.deleteSync(recursive: true));
+  exposeTemp?.call(temp);
   SharedPreferences.setMockInitialValues({});
   await tester.pumpWidget(ProviderScope(
     overrides: [
@@ -67,6 +79,8 @@ Future<void> pumpLibrary(WidgetTester tester, List<core.Game> games,
       libraryRepositoryProvider
           .overrideWithValue(DetailFakeRepository(games)),
       coverExistsProvider.overrideWithValue((_) => false),
+      if (coverPicker != null)
+        coverPickerProvider.overrideWithValue(coverPicker),
     ],
     child: const VnlApp(),
   ));
@@ -89,6 +103,21 @@ Finder tabLabel(String text) => find.descendant(
       of: find.byType(TabBar),
       matching: find.text(text),
     );
+
+/// Real file work never finishes inside the fake-async test zone, so flows
+/// that touch the filesystem run end to end inside `runAsync` (real async),
+/// polling for the file effect before returning for assertions.
+Future<void> runRealFlow(
+    WidgetTester tester, Future<void> Function() flow, bool Function() done) async {
+  await tester.runAsync(() async {
+    await flow();
+    for (var i = 0; i < 200 && !done(); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+    }
+  });
+  expect(done(), isTrue);
+  await tester.pumpAndSettle();
+}
 
 Finder richPaneText(WidgetTester tester, String text) => find.descendant(
       of: find.byType(GameDetailPane),
@@ -512,10 +541,14 @@ void main() {
     expect(find.text('2021-08-26'), findsOneWidget);
   });
 
-  testWidgets('empty game shows no info sections', (tester) async {
+  testWidgets('empty game shows description and notes placeholders',
+      (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
-    expect(find.text('DESCRIPTION'), findsNothing);
+    expect(paneText(tester, 'DESCRIPTION'), findsOneWidget);
+    expect(paneText(tester, 'No description'), findsOneWidget);
+    expect(paneText(tester, 'NOTES'), findsOneWidget);
+    expect(paneText(tester, 'No notes'), findsOneWidget);
     expect(find.text('TAGS'), findsNothing);
     expect(find.text('VNDB RATING'), findsNothing);
   });
@@ -526,5 +559,237 @@ void main() {
     ]);
     await openPane(tester, 'Alpha');
     expect(richPaneText(tester, '6.4'), findsOneWidget);
+  });
+
+  testWidgets('removing a tag through its close saves', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', tags: ['Action', 'Romance']),
+    ]);
+    await openPane(tester, 'Alpha');
+    await tester.tap(find.byTooltip('Remove Action'));
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Action'), findsNothing);
+    expect(paneText(tester, 'Romance'), findsOneWidget);
+  });
+
+  testWidgets('adding Mystery saves, adding mystery again does nothing',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', tags: ['Action']),
+    ]);
+    await openPane(tester, 'Alpha');
+    await tester.tap(paneText(tester, '+'));
+    await tester.pump();
+    final field = find.descendant(
+      of: find.byType(GameDetailPane),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(field, 'Mystery');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Mystery'), findsOneWidget);
+    expect(field, findsOneWidget);
+    await tester.enterText(field, 'mystery');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Mystery'), findsOneWidget);
+  });
+
+  testWidgets('Escape in the tag field adds nothing', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', tags: ['Action']),
+    ]);
+    await openPane(tester, 'Alpha');
+    await tester.tap(paneText(tester, '+'));
+    await tester.pump();
+    final field = find.descendant(
+      of: find.byType(GameDetailPane),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(field, 'Nope');
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(field, findsNothing);
+    expect(paneText(tester, 'Nope'), findsNothing);
+    expect(paneText(tester, 'Action'), findsOneWidget);
+  });
+
+  testWidgets('the description edit saves on blur', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', description: 'old words'),
+    ]);
+    await openPane(tester, 'Alpha');
+    await tester.tap(find.byTooltip('Edit description'));
+    await tester.pump();
+    await tester.enterText(
+        find.descendant(
+          of: find.byType(GameDetailPane),
+          matching: find.byType(TextField),
+        ),
+        'new words');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'new words'), findsOneWidget);
+  });
+
+  testWidgets('Escape in the description edit reverts', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', description: 'old words'),
+    ]);
+    await openPane(tester, 'Alpha');
+    await tester.tap(find.byTooltip('Edit description'));
+    await tester.pump();
+    await tester.enterText(
+        find.descendant(
+          of: find.byType(GameDetailPane),
+          matching: find.byType(TextField),
+        ),
+        'changed');
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(paneText(tester, 'old words'), findsOneWidget);
+  });
+
+  testWidgets('an empty description shows No description with edit',
+      (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openPane(tester, 'Alpha');
+    expect(paneText(tester, 'No description'), findsOneWidget);
+    expect(find.byTooltip('Edit description'), findsOneWidget);
+  });
+
+  testWidgets('notes edit the same way as the description', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', notes: 'old notes'),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(paneText(tester, 'NOTES'), findsOneWidget);
+    await tester.tap(find.byTooltip('Edit notes'));
+    await tester.pump();
+    await tester.enterText(
+        find.descendant(
+          of: find.byType(GameDetailPane),
+          matching: find.byType(TextField),
+        ),
+        'new notes');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'new notes'), findsOneWidget);
+  });
+
+  testWidgets('the favourite toggle saves', (tester) async {
+    final games = [core.Game(id: 'g1', title: 'Alpha')];
+    await pumpLibrary(tester, games);
+    await openPane(tester, 'Alpha');
+    expect(find.byTooltip('Favourite'), findsOneWidget);
+    await tester.tap(find.byTooltip('Favourite'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Unfavourite'), findsOneWidget);
+    expect(games.single.favourite, isTrue);
+  });
+
+  testWidgets('delete asks first: Cancel does nothing', (tester) async {
+    final games = [
+      core.Game(id: 'g1', title: 'Alpha'),
+      core.Game(id: 'g2', title: 'Beta'),
+    ];
+    await pumpLibrary(tester, games);
+    await openPane(tester, 'Alpha');
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete game…'));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete Alpha?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.byType(GameDetailPane), findsOneWidget);
+    expect(games, hasLength(2));
+  });
+
+  testWidgets('delete moves to trash and clears the selection',
+      (tester) async {
+    late Directory temp;
+    final games = [
+      core.Game(id: 'g1', title: 'Alpha'),
+      core.Game(id: 'g2', title: 'Beta'),
+    ];
+    await pumpLibrary(tester, games,
+        exposeTemp: (dir) => temp = dir);
+    await openPane(tester, 'Alpha');
+    await runRealFlow(tester, () async {
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete game…'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, 'Delete'));
+      await tester.pumpAndSettle();
+    }, () => Directory(p.join(temp.path, 'trash')).existsSync());
+    expect(find.byType(GameDetailPane), findsNothing);
+    expect(games, hasLength(1));
+    final trash = Directory(p.join(temp.path, 'trash'));
+    final folders =
+        trash.listSync().whereType<Directory>().toList();
+    expect(folders, hasLength(1));
+    expect(
+        File(p.join(folders.single.path, 'game.json')).existsSync(), isTrue);
+  });
+
+  testWidgets('re-fetch cover is hidden with no vndbId', (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openPane(tester, 'Alpha');
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    expect(find.text('Change cover…'), findsOneWidget);
+    expect(find.text('Re-fetch cover from VNDB'), findsNothing);
+  });
+
+  testWidgets('re-fetch cover shows with a vndbId', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', vndbId: 'v900017'),
+    ]);
+    await openPane(tester, 'Alpha');
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    expect(find.text('Re-fetch cover from VNDB'), findsOneWidget);
+  });
+
+  testWidgets('change cover stores the picked file and thumbnails',
+      (tester) async {
+    late Directory temp;
+    String? pickPath;
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')],
+        exposeTemp: (dir) => temp = dir,
+        coverPicker: () async => pickPath);
+    final bytes = Uint8List.fromList(
+        img.encodePng(img.Image(width: 16, height: 16)));
+    final coverFile = File(p.join(temp.path, 'picked.png'));
+    coverFile.writeAsBytesSync(bytes);
+    pickPath = coverFile.path;
+    await openPane(tester, 'Alpha');
+    final dir = core.DataDir(temp.path);
+    await runRealFlow(tester, () async {
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Change cover…'));
+      await tester.pumpAndSettle();
+    }, () => File(core.thumbPath(dir, 'g1', 512)).existsSync());
+    expect(File(p.join(dir.coversOriginal.path, 'g1.png')).existsSync(),
+        isTrue);
+    expect(File(core.thumbPath(dir, 'g1', 256)).existsSync(), isTrue);
+  });
+
+  testWidgets('a portal cover path is rejected with a toast', (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')],
+        coverPicker: () async => '/run/user/1000/docs/c.png');
+    await openPane(tester, 'Alpha');
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Change cover…'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('Flatpak portal'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 6));
   });
 }

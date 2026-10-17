@@ -45,6 +45,46 @@ class VndbClient {
       this.retryDelay = const Duration(seconds: 5)})
       : _client = client ?? http.Client();
 
+  /// VNDB `image.url` for one id, or null when the game has no image.
+  Future<String?> fetchCoverUrl(String vndbId) async {
+    final uri = Uri.parse('$baseUrl/vn');
+    final http.Response response;
+    try {
+      response = await _client.post(uri, headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'vn-launcher/$vnlVersion',
+      }, body: jsonEncode({
+        'filters': ['id', '=', vndbId],
+        'fields': 'id,image.url',
+        'results': 1,
+      }));
+    } catch (e) {
+      throw VndbException('request failed: $e');
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw VndbException('HTTP ${response.statusCode}');
+    }
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } catch (e) {
+      throw VndbException('invalid JSON: $e');
+    }
+    if (decoded is! Map || decoded['results'] is! List) {
+      throw const VndbException('unexpected VNDB response shape');
+    }
+    for (final raw in decoded['results'] as List) {
+      if (raw is! Map) continue;
+      final image = raw['image'];
+      if (image is Map) {
+        final url = image['url'];
+        if (url is String && url.startsWith('http')) return url;
+      }
+      return null;
+    }
+    return null;
+  }
+
   Future<List<VnRating>> fetchPage(Map<String, Object?> body) async {
     final uri = Uri.parse('$baseUrl/vn');
     Future<http.Response> post() => _client.post(uri, headers: {
