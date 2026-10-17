@@ -60,8 +60,8 @@ body:
     id: vndb-id
     attributes:
       label: Game's VNDB id (game-launch bugs only)
-      description: The id from the game's VNDB page address, for example v17.
-      placeholder: v17
+      description: The id from the game's VNDB page address, for example v900017.
+      placeholder: v900017
     validations:
       required: false
 
