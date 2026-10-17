@@ -384,11 +384,13 @@ class SettingsDropdown<T> extends StatelessWidget {
     required this.value,
     required this.items,
     required this.onChanged,
+    this.hint,
   });
 
-  final T value;
+  final T? value;
   final List<DropdownMenuItem<T>> items;
   final ValueChanged<T?> onChanged;
+  final Widget? hint;
 
   @override
   Widget build(BuildContext context) {
@@ -399,6 +401,7 @@ class SettingsDropdown<T> extends StatelessWidget {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
           value: value,
+          hint: hint,
           isExpanded: true,
           isDense: true,
           icon: const Icon(Icons.arrow_drop_down_rounded),
@@ -453,6 +456,39 @@ class _SettingsTextFieldState extends State<SettingsTextField> {
           hovered: _hovered,
         ),
         onSubmitted: widget.onSubmitted,
+      ),
+    );
+  }
+}
+
+/// Read-only value drawn over a 40 px control box, shortened from the middle.
+class MiddleEllipsisValue extends StatelessWidget {
+  const MiddleEllipsisValue({super.key, required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return IgnorePointer(
+      child: Padding(
+        padding: const EdgeInsets.all(1),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(9),
+          child: ColoredBox(
+            color: theme.colorScheme.surfaceContainer,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 12, right: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: MiddleEllipsisText(
+                  text: text,
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -579,30 +615,7 @@ class _PrefTextFieldState extends ConsumerState<PrefTextField> {
                   children: [
                     field,
                     if (!_focused && _controller.text.isNotEmpty)
-                      IgnorePointer(
-                        child: Padding(
-                          padding: const EdgeInsets.all(1),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(9),
-                            child: ColoredBox(
-                              color: theme.colorScheme.surfaceContainer,
-                              child: Padding(
-                                padding: const EdgeInsets.only(
-                                  left: 12,
-                                  right: 8,
-                                ),
-                                child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: MiddleEllipsisText(
-                                    text: _controller.text,
-                                    style: theme.textTheme.bodyMedium,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                      MiddleEllipsisValue(text: _controller.text),
                   ],
                 )
               : field,

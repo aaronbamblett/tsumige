@@ -14,169 +14,262 @@ import '../../../../../core/launch/detect.dart';
 import '../../../../../core/launch/env.dart';
 import '../../../../../core/model.dart';
 import '../../../../../utils/prefs/app_prefs.dart';
+import '../../../../../utils/theme/brand.dart';
 import '../../../../../utils/toast.dart';
+import '../../../../settings/presentation/sections/settings_widgets.dart';
 import '../../../domain/game_editor.dart';
 import '../../../domain/runner_detection.dart';
+import '../library_toolbar.dart';
 import 'info_tab.dart';
 
 String launchModeName(LaunchMode mode) => switch (mode) {
-      LaunchMode.proton => 'Proton',
-      LaunchMode.wine => 'Wine',
-      LaunchMode.native => 'Native',
-      LaunchMode.steam => 'Steam',
-    };
+  LaunchMode.proton => 'Proton',
+  LaunchMode.wine => 'Wine',
+  LaunchMode.native => 'Native',
+  LaunchMode.steam => 'Steam',
+};
 
-String localeDisplay(String locale) =>
-    locale.isEmpty ? 'System' : locale;
+/// Modes offered by the Mode control. Platform detection will narrow this.
+final availableLaunchModesProvider = Provider<List<LaunchMode>>(
+  (ref) => LaunchMode.values,
+);
+
+String localeDisplay(String locale) => locale.isEmpty ? 'System' : locale;
 
 Widget launchFieldLabel(BuildContext context, String label, bool isDefault) {
-  final theme = Theme.of(context);
+  final scheme = Theme.of(context).colorScheme;
+  final style = Theme.of(context).textTheme.labelSmall
+      ?.copyWith(fontSize: 11.5, color: scheme.onSurfaceVariant);
   return Row(
     children: [
-      Text(label, style: detailSectionLabelStyle(context)),
-      if (isDefault) ...[
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(4),
-            color: theme.colorScheme.surfaceContainerHigh,
-          ),
-          child: Text(
-            'default',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-      ],
+      Text(label, style: style),
+      const Spacer(),
+      if (isDefault)
+        Text('Default', style: style?.copyWith(color: scheme.outline)),
     ],
   );
 }
 
-class LaunchTab extends ConsumerWidget {
+List<Widget> _spaced(List<Widget> fields) => [
+  for (var i = 0; i < fields.length; i++) ...[
+    if (i > 0) const SizedBox(height: 14),
+    fields[i],
+  ],
+];
+
+class LaunchTab extends ConsumerStatefulWidget {
   const LaunchTab({super.key, required this.game});
 
   final Game game;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LaunchTab> createState() => _LaunchTabState();
+}
+
+class _LaunchTabState extends ConsumerState<LaunchTab> {
+  bool _advancedOpen = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final game = widget.game;
     final defaultPrefix = ref.watch(launchPrefixProvider);
     final defaultRunner = ref.watch(launchRunnerProvider);
     final defaultLocale = ref.watch(launchLocaleProvider);
     final defaultUmu = ref.watch(launchUmuGameIdProvider);
     final mode = game.launch.mode ?? LaunchMode.proton;
-    final wines =
-        ref.watch(wineRunnersProvider).value ?? const <WineRunner>[];
-    final protons = ref.watch(protonRunnersProvider).value ??
-        const <ProtonRunner>[];
-    final prefixes = ref.watch(steamPrefixesProvider).value ??
-        const <SteamPrefix>[];
-    final children = <Widget>[
-      launchFieldLabel(context, 'Mode', game.launch.mode == null),
-      const SizedBox(height: 4),
-      _ModeDropdown(game: game),
-    ];
-    void gap() {
-      children.add(const SizedBox(height: 12));
-    }
-
-    if (mode == LaunchMode.steam) {
-      gap();
-      children.add(_SteamAppIdField(gameId: game.id, initial: game.launch));
-    } else {
-      gap();
-      children.add(
-        _ExecutableField(
-          game: game,
-          defaultExecutable: null,
-        ),
-      );
-      if (mode == LaunchMode.wine || mode == LaunchMode.proton) {
-        gap();
-        if (mode == LaunchMode.wine) {
-          children.add(_WineRunnerField(
-            game: game,
-            runners: wines,
-            defaultRunner: defaultRunner,
-          ));
-        } else {
-          children.add(_ProtonRunnerField(
-            game: game,
-            runners: protons,
-            defaultRunner: defaultRunner,
-          ));
-        }
-        gap();
-        children.add(_PrefixField(
+    final wines = ref.watch(wineRunnersProvider).value ?? const <WineRunner>[];
+    final protons =
+        ref.watch(protonRunnersProvider).value ?? const <ProtonRunner>[];
+    final prefixes =
+        ref.watch(steamPrefixesProvider).value ?? const <SteamPrefix>[];
+    final steam = mode == LaunchMode.steam;
+    final runnerMode = mode == LaunchMode.wine || mode == LaunchMode.proton;
+    final modeFields = <Widget>[
+      if (runnerMode)
+        mode == LaunchMode.wine
+            ? _WineRunnerField(
+                game: game,
+                runners: wines,
+                defaultRunner: defaultRunner,
+              )
+            : _ProtonRunnerField(
+                game: game,
+                runners: protons,
+                defaultRunner: defaultRunner,
+              ),
+      if (runnerMode)
+        _PrefixField(
           game: game,
           prefixes: prefixes,
           defaultPrefix: defaultPrefix,
-        ));
-        gap();
-        children.add(_LocaleField(
-          game: game,
-          defaultLocale: defaultLocale,
-        ));
-        gap();
-        children.add(_UmuField(
-          game: game,
-          defaultUmu: defaultUmu,
-        ));
-      }
-      gap();
-      children.add(_ArgumentsField(game: game));
-      gap();
-      children.add(_EnvironmentField(game: game));
-    }
-    gap();
-    children.add(
-      Align(
-        alignment: Alignment.centerLeft,
-        child: TextButton(
-          key: const Key('launch-rescan'),
-          onPressed: () {
-            ref.invalidate(wineRunnersProvider);
-            ref.invalidate(protonRunnersProvider);
-            ref.invalidate(steamPrefixesProvider);
-          },
-          child: const Text('Rescan runners'),
         ),
-      ),
-    );
+      if (runnerMode) _LocaleField(game: game, defaultLocale: defaultLocale),
+    ];
+    final advancedFields = <Widget>[
+      if (runnerMode) _UmuField(game: game, defaultUmu: defaultUmu),
+      if (!steam) _ArgumentsField(game: game),
+      if (!steam) _EnvironmentField(game: game),
+    ];
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
+        children: [
+          ..._spaced([
+            _ModeField(game: game, mode: mode),
+            steam
+                ? _SteamAppIdField(gameId: game.id, initial: game.launch)
+                : _ExecutableField(game: game, defaultExecutable: null),
+          ]),
+          if (modeFields.isNotEmpty) ...[
+            detailSectionDivider(context),
+            DetailSection(
+              label: launchModeName(mode),
+              actions: [
+                _HeadingAction(
+                  key: const Key('launch-rescan'),
+                  leading: Icons.refresh_rounded,
+                  label: 'Rescan',
+                  onTap: () {
+                    ref.invalidate(wineRunnersProvider);
+                    ref.invalidate(protonRunnersProvider);
+                    ref.invalidate(steamPrefixesProvider);
+                  },
+                ),
+              ],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: _spaced(modeFields),
+              ),
+            ),
+          ],
+          if (advancedFields.isNotEmpty) ...[
+            detailSectionDivider(context),
+            DetailSection(
+              label: 'Advanced',
+              actions: [
+                _HeadingAction(
+                  key: const Key('launch-advanced-toggle'),
+                  label: _advancedOpen ? 'Hide' : 'Show',
+                  trailing: _advancedOpen
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
+                  onTap: () => setState(() => _advancedOpen = !_advancedOpen),
+                ),
+              ],
+              child: _advancedOpen
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: _spaced(advancedFields),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ],
       ),
     );
   }
 }
 
-class _ModeDropdown extends ConsumerWidget {
-  const _ModeDropdown({required this.game});
+class _ModeField extends ConsumerWidget {
+  const _ModeField({required this.game, required this.mode});
 
   final Game game;
+  final LaunchMode mode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return DropdownButton<LaunchMode>(
-      key: const Key('launch-mode'),
-      value: game.launch.mode,
-      hint: Text(launchModeName(LaunchMode.proton)),
-      isExpanded: true,
-      items: [
-        for (final mode in LaunchMode.values)
-          DropdownMenuItem(value: mode, child: Text(launchModeName(mode))),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        launchFieldLabel(context, 'Mode', game.launch.mode == null),
+        const SizedBox(height: 6),
+        LaunchModeSegment(
+          key: const Key('launch-mode'),
+          mode: mode,
+          onChanged: (picked) => ref
+              .read(gameEditorProvider)
+              .update(game.id, (g) => g.launch.mode = picked),
+        ),
       ],
-      onChanged: (mode) {
-        if (mode == null) return;
-        ref.read(gameEditorProvider).update(
-              game.id,
-              (g) => g.launch.mode = mode,
-            );
-      },
+    );
+  }
+}
+
+/// The launch modes as a segmented control. A mode outside the available
+/// list still shows, selected, so a stored value is never hidden.
+class LaunchModeSegment extends ConsumerWidget {
+  const LaunchModeSegment({
+    super.key,
+    required this.mode,
+    required this.onChanged,
+  });
+
+  final LaunchMode mode;
+  final ValueChanged<LaunchMode> onChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final modes = [...ref.watch(availableLaunchModesProvider)];
+    if (!modes.contains(mode)) modes.add(mode);
+    return ToolbarBox(
+      key: key,
+      child: Padding(
+        padding: const EdgeInsets.all(3),
+        child: Row(
+          children: [
+            for (final option in modes)
+              Expanded(
+                child: ToolbarSegment(
+                  key: Key('mode-${option.name}'),
+                  label: launchModeName(option),
+                  selected: option == mode,
+                  onTap: () => onChanged(option),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Muted icon-and-text action in a section heading.
+class _HeadingAction extends StatelessWidget {
+  const _HeadingAction({
+    super.key,
+    required this.label,
+    required this.onTap,
+    this.leading,
+    this.trailing,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final IconData? leading;
+  final IconData? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = scheme.onSurfaceVariant;
+    return InkWell(
+      borderRadius: BorderRadius.circular(6),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (leading != null) ...[
+              Icon(leading, size: 16, color: color),
+              const SizedBox(width: 4),
+            ],
+            Text(label, style: TextStyle(fontSize: 12.5, color: color)),
+            if (trailing != null) Icon(trailing, size: 18, color: color),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -227,6 +320,7 @@ class _LaunchTextFieldState extends ConsumerState<_LaunchTextField> {
   String? _editGameId;
   String _focusValue = '';
   bool _cancelled = false;
+  bool _focused = false;
 
   bool get _singleLine => (widget.maxLines ?? 1) == 1;
 
@@ -258,9 +352,7 @@ class _LaunchTextFieldState extends ConsumerState<_LaunchTextField> {
     // A game switch keeps this state alive (same keys), so the focus-loss
     // path saves to the captured game. This backstop only covers unmounts
     // such as closing the pane. Invalid and portal paths never save.
-    if (_editGameId != null &&
-        !_cancelled &&
-        _controller.text != _focusValue) {
+    if (_editGameId != null && !_cancelled && _controller.text != _focusValue) {
       final text = _controller.text;
       if (widget.validate?.call(text) == null &&
           !(widget.isPath && text.isNotEmpty && isPortalPath(text))) {
@@ -277,6 +369,7 @@ class _LaunchTextFieldState extends ConsumerState<_LaunchTextField> {
   }
 
   void _onFocus() {
+    setState(() => _focused = _focusNode.hasFocus);
     if (_focusNode.hasFocus) {
       _editGameId = widget.gameId;
       _focusValue = _controller.text;
@@ -321,21 +414,56 @@ class _LaunchTextFieldState extends ConsumerState<_LaunchTextField> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final field = TextField(
       controller: _controller,
       focusNode: _focusNode,
       minLines: widget.minLines,
       maxLines: widget.maxLines,
       keyboardType: widget.keyboardType,
-      decoration: InputDecoration(
-        hintText: widget.hint,
-        isDense: true,
-        border: const OutlineInputBorder(),
-        errorText: _error,
-      ),
+      style: theme.textTheme.bodyMedium,
+      decoration:
+          settingsInputDecoration(
+            context,
+            hint: widget.hint,
+            contentPadding: _singleLine ? null : const EdgeInsets.all(10),
+          ).copyWith(
+            constraints: _singleLine
+                ? null
+                : const BoxConstraints(minHeight: 72),
+          ),
       onSubmitted: _singleLine ? (_) => _submit() : null,
     );
+    final control = widget.isPath && _singleLine
+        ? SizedBox(
+            height: 40,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                field,
+                if (!_focused && _controller.text.isNotEmpty)
+                  MiddleEllipsisValue(text: _controller.text),
+              ],
+            ),
+          )
+        : field;
     final footer = widget.footerBuilder?.call(context, _controller.text);
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        control,
+        if (_error != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            _error!,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.error,
+            ),
+          ),
+        ],
+        if (footer != null) ...[const SizedBox(height: 4), footer],
+      ],
+    );
     final wrapped = Focus(
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent &&
@@ -345,23 +473,14 @@ class _LaunchTextFieldState extends ConsumerState<_LaunchTextField> {
         }
         return KeyEventResult.ignored;
       },
-      child: footer == null
-          ? field
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                field,
-                const SizedBox(height: 4),
-                footer,
-              ],
-            ),
+      child: body,
     );
     if (widget.label == null) return wrapped;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         launchFieldLabel(context, widget.label!, widget.isDefault),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         wrapped,
       ],
     );
@@ -379,9 +498,8 @@ class _ExecutableField extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        launchFieldLabel(
-            context, 'Executable', game.launch.executable == null),
-        const SizedBox(height: 4),
+        launchFieldLabel(context, 'Executable', false),
+        const SizedBox(height: 6),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -393,17 +511,18 @@ class _ExecutableField extends ConsumerWidget {
                 hint: defaultExecutable,
                 isPath: true,
                 onSave: (editor, id, text) => editor.update(
-                      id,
-                      (g) => g.launch.executable =
-                          text.isEmpty ? null : text,
-                    ),
+                  id,
+                  (g) => g.launch.executable = text.isEmpty ? null : text,
+                ),
               ),
             ),
             const SizedBox(width: 8),
-            TextButton(
+            BrandGlassButton(
               key: const Key('launch-executable-choose'),
+              height: 40,
+              expand: false,
               onPressed: () => _choose(context, ref),
-              child: const Text('Choose…'),
+              label: const Text('Choose…'),
             ),
           ],
         ),
@@ -434,8 +553,11 @@ const String _defaultKey = 'default';
 const String _customKey = 'custom';
 
 class _WineRunnerField extends ConsumerStatefulWidget {
-  const _WineRunnerField(
-      {required this.game, required this.runners, required this.defaultRunner});
+  const _WineRunnerField({
+    required this.game,
+    required this.runners,
+    required this.defaultRunner,
+  });
 
   final Game game;
   final List<WineRunner> runners;
@@ -470,11 +592,10 @@ class _WineRunnerFieldState extends ConsumerState<_WineRunnerField> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         launchFieldLabel(context, 'Runner', stored == null),
-        const SizedBox(height: 4),
-        DropdownButton<String>(
+        const SizedBox(height: 6),
+        SettingsDropdown<String>(
           key: const Key('launch-runner'),
           value: _showCustom ? _customKey : _selected(),
-          isExpanded: true,
           items: [
             const DropdownMenuItem(
               value: _defaultKey,
@@ -485,10 +606,7 @@ class _WineRunnerFieldState extends ConsumerState<_WineRunnerField> {
                 value: runner.binary,
                 child: Text('${runner.name} (${runner.source})'),
               ),
-            const DropdownMenuItem(
-              value: _customKey,
-              child: Text('Custom…'),
-            ),
+            const DropdownMenuItem(value: _customKey, child: Text('Custom…')),
           ],
           onChanged: (value) {
             if (value == null) return;
@@ -501,10 +619,9 @@ class _WineRunnerFieldState extends ConsumerState<_WineRunnerField> {
               setState(() => _forceCustom = true);
             } else {
               setState(() => _forceCustom = false);
-              ref.read(gameEditorProvider).update(
-                    widget.game.id,
-                    (g) => g.launch.runner = value,
-                  );
+              ref
+                  .read(gameEditorProvider)
+                  .update(widget.game.id, (g) => g.launch.runner = value);
             }
           },
         ),
@@ -525,10 +642,12 @@ class _WineRunnerFieldState extends ConsumerState<_WineRunnerField> {
                 ),
               ),
               const SizedBox(width: 8),
-              TextButton(
+              BrandGlassButton(
                 key: const Key('launch-runner-choose'),
+                height: 40,
+                expand: false,
                 onPressed: () => _choose(context, ref),
-                child: const Text('Choose…'),
+                label: const Text('Choose…'),
               ),
             ],
           ),
@@ -557,16 +676,18 @@ class _WineRunnerFieldState extends ConsumerState<_WineRunnerField> {
 }
 
 class _ProtonRunnerField extends ConsumerStatefulWidget {
-  const _ProtonRunnerField(
-      {required this.game, required this.runners, required this.defaultRunner});
+  const _ProtonRunnerField({
+    required this.game,
+    required this.runners,
+    required this.defaultRunner,
+  });
 
   final Game game;
   final List<ProtonRunner> runners;
   final String? defaultRunner;
 
   @override
-  ConsumerState<_ProtonRunnerField> createState() =>
-      _ProtonRunnerFieldState();
+  ConsumerState<_ProtonRunnerField> createState() => _ProtonRunnerFieldState();
 }
 
 class _ProtonRunnerFieldState extends ConsumerState<_ProtonRunnerField> {
@@ -594,25 +715,18 @@ class _ProtonRunnerFieldState extends ConsumerState<_ProtonRunnerField> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         launchFieldLabel(context, 'Runner', stored == null),
-        const SizedBox(height: 4),
-        DropdownButton<String>(
+        const SizedBox(height: 6),
+        SettingsDropdown<String>(
           key: const Key('launch-runner'),
           value: _showCustom ? _customKey : _selected(),
-          isExpanded: true,
           items: [
             const DropdownMenuItem(
               value: _defaultKey,
               child: Text('umu default'),
             ),
             for (final runner in widget.runners)
-              DropdownMenuItem(
-                value: runner.path,
-                child: Text(runner.name),
-              ),
-            const DropdownMenuItem(
-              value: _customKey,
-              child: Text('Custom…'),
-            ),
+              DropdownMenuItem(value: runner.path, child: Text(runner.name)),
+            const DropdownMenuItem(value: _customKey, child: Text('Custom…')),
           ],
           onChanged: (value) {
             if (value == null) return;
@@ -625,10 +739,9 @@ class _ProtonRunnerFieldState extends ConsumerState<_ProtonRunnerField> {
               setState(() => _forceCustom = true);
             } else {
               setState(() => _forceCustom = false);
-              ref.read(gameEditorProvider).update(
-                    widget.game.id,
-                    (g) => g.launch.runner = value,
-                  );
+              ref
+                  .read(gameEditorProvider)
+                  .update(widget.game.id, (g) => g.launch.runner = value);
             }
           },
         ),
@@ -649,10 +762,12 @@ class _ProtonRunnerFieldState extends ConsumerState<_ProtonRunnerField> {
                 ),
               ),
               const SizedBox(width: 8),
-              TextButton(
+              BrandGlassButton(
                 key: const Key('launch-runner-choose'),
+                height: 40,
+                expand: false,
                 onPressed: () => _choose(context, ref),
-                child: const Text('Choose…'),
+                label: const Text('Choose…'),
               ),
             ],
           ),
@@ -677,10 +792,11 @@ class _ProtonRunnerFieldState extends ConsumerState<_ProtonRunnerField> {
 }
 
 class _PrefixField extends ConsumerStatefulWidget {
-  const _PrefixField(
-      {required this.game,
-      required this.prefixes,
-      required this.defaultPrefix});
+  const _PrefixField({
+    required this.game,
+    required this.prefixes,
+    required this.defaultPrefix,
+  });
 
   final Game game;
   final List<SteamPrefix> prefixes;
@@ -717,11 +833,10 @@ class _PrefixFieldState extends ConsumerState<_PrefixField> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         launchFieldLabel(context, 'Prefix', stored == null),
-        const SizedBox(height: 4),
-        DropdownButton<String>(
+        const SizedBox(height: 6),
+        SettingsDropdown<String>(
           key: const Key('launch-prefix'),
           value: _showCustom ? _customKey : _selected(),
-          isExpanded: true,
           items: [
             DropdownMenuItem(
               value: _defaultKey,
@@ -731,12 +846,10 @@ class _PrefixFieldState extends ConsumerState<_PrefixField> {
               DropdownMenuItem(
                 value: prefix.path,
                 child: Text(
-                    '${prefix.gameName ?? 'App ${prefix.appId}'} (${prefix.appId})'),
+                  '${prefix.gameName ?? 'App ${prefix.appId}'} (${prefix.appId})',
+                ),
               ),
-            const DropdownMenuItem(
-              value: _customKey,
-              child: Text('Custom…'),
-            ),
+            const DropdownMenuItem(value: _customKey, child: Text('Custom…')),
           ],
           onChanged: (value) {
             if (value == null) return;
@@ -749,10 +862,9 @@ class _PrefixFieldState extends ConsumerState<_PrefixField> {
               setState(() => _forceCustom = true);
             } else {
               setState(() => _forceCustom = false);
-              ref.read(gameEditorProvider).update(
-                    widget.game.id,
-                    (g) => g.launch.prefix = value,
-                  );
+              ref
+                  .read(gameEditorProvider)
+                  .update(widget.game.id, (g) => g.launch.prefix = value);
             }
           },
         ),
@@ -773,10 +885,12 @@ class _PrefixFieldState extends ConsumerState<_PrefixField> {
                 ),
               ),
               const SizedBox(width: 8),
-              TextButton(
+              BrandGlassButton(
                 key: const Key('launch-prefix-choose'),
+                height: 40,
+                expand: false,
                 onPressed: () => _choose(context, ref),
-                child: const Text('Choose…'),
+                label: const Text('Choose…'),
               ),
             ],
           ),
@@ -835,20 +949,16 @@ class _LocaleFieldState extends ConsumerState<_LocaleField> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         launchFieldLabel(context, 'Locale', stored == null),
-        const SizedBox(height: 4),
-        DropdownButton<String>(
+        const SizedBox(height: 6),
+        SettingsDropdown<String>(
           key: const Key('launch-locale'),
           value: _showCustom ? _customKey : _selected(),
           hint: Text(localeDisplay(widget.defaultLocale)),
-          isExpanded: true,
           items: [
             const DropdownMenuItem(value: '', child: Text('System')),
             for (final preset in localePresets)
               DropdownMenuItem(value: preset, child: Text(preset)),
-            const DropdownMenuItem(
-              value: _customKey,
-              child: Text('Custom…'),
-            ),
+            const DropdownMenuItem(value: _customKey, child: Text('Custom…')),
           ],
           onChanged: (value) {
             if (value == null) return;
@@ -856,10 +966,9 @@ class _LocaleFieldState extends ConsumerState<_LocaleField> {
               setState(() => _forceCustom = true);
             } else {
               setState(() => _forceCustom = false);
-              ref.read(gameEditorProvider).update(
-                    widget.game.id,
-                    (g) => g.launch.locale = value,
-                  );
+              ref
+                  .read(gameEditorProvider)
+                  .update(widget.game.id, (g) => g.launch.locale = value);
             }
           },
         ),
@@ -871,10 +980,10 @@ class _LocaleFieldState extends ConsumerState<_LocaleField> {
             initial: _selected() == _customKey ? (stored ?? '') : '',
             hint: localeDisplay(widget.defaultLocale),
             onSave: (editor, id, text) => editor.update(
-                  id,
-                  // A blank custom locale means the system locale.
-                  (g) => g.launch.locale = text.isEmpty ? '' : text,
-                ),
+              id,
+              // A blank custom locale means the system locale.
+              (g) => g.launch.locale = text.isEmpty ? '' : text,
+            ),
           ),
         ],
       ],
@@ -898,9 +1007,9 @@ class _UmuField extends ConsumerWidget {
       hint: defaultUmu,
       isDefault: game.launch.umuGameId == null,
       onSave: (editor, id, text) => editor.update(
-            id,
-            (g) => g.launch.umuGameId = text.isEmpty ? null : text,
-          ),
+        id,
+        (g) => g.launch.umuGameId = text.isEmpty ? null : text,
+      ),
     );
   }
 }
@@ -925,10 +1034,9 @@ class _SteamAppIdField extends ConsumerWidget {
         return 'Steam App ID must be digits.';
       },
       onSave: (editor, id, text) => editor.update(
-            id,
-            (g) => g.launch.steamAppId =
-                text.isEmpty ? null : int.parse(text),
-          ),
+        id,
+        (g) => g.launch.steamAppId = text.isEmpty ? null : int.parse(text),
+      ),
     );
   }
 }
@@ -973,9 +1081,9 @@ class _ArgumentsField extends ConsumerWidget {
         }
       },
       onSave: (editor, id, text) => editor.update(
-            id,
-            (g) => g.launch.arguments = text.isEmpty ? null : text,
-          ),
+        id,
+        (g) => g.launch.arguments = text.isEmpty ? null : text,
+      ),
     );
   }
 }
@@ -1003,9 +1111,9 @@ class _EnvironmentField extends ConsumerWidget {
         return null;
       },
       onSave: (editor, id, text) => editor.update(
-            id,
-            (g) => g.launch.environment = text.isEmpty ? null : text,
-          ),
+        id,
+        (g) => g.launch.environment = text.isEmpty ? null : text,
+      ),
     );
   }
 }

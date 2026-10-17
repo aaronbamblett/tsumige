@@ -357,6 +357,25 @@ void main() {
     expect(barWidth(2), closeTo(19 / 3600, 1e-9));
   });
 
+  testWidgets('launch and history tabs do not overflow at 1000 by 640',
+      (tester) async {
+    final now = DateTime.now();
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', playSessions: [
+        core.PlaySession(startedAt: now, durationSeconds: 1800),
+      ]),
+    ], width: 1000, height: 640);
+    await openPane(tester, 'Alpha');
+    await openTab(tester, 'Launch');
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(find.byKey(const Key('launch-advanced-toggle')));
+    await tester.tap(find.byKey(const Key('launch-advanced-toggle')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await openTab(tester, 'History');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('history lists the newer session first', (tester) async {
     final older = DateTime.utc(2024, 1, 2, 10, 0);
     final newer = DateTime.utc(2024, 3, 4, 12, 30);
@@ -485,9 +504,8 @@ void main() {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
     await openTab(tester, 'Launch');
-    expect(find.textContaining('Proton', findRichText: true), findsOneWidget);
-    expect(find.textContaining('default', findRichText: true),
-        findsWidgets);
+    expect(find.textContaining('Proton', findRichText: true), findsWidgets);
+    expect(find.text('Default'), findsWidgets);
     expect(find.text('Prefix'), findsOneWidget);
     expect(find.text('Runner'), findsOneWidget);
     expect(find.textContaining('umu default', findRichText: true), findsOneWidget);
@@ -533,6 +551,9 @@ void main() {
     );
     expect(tester.widget<TextField>(exeField).controller?.text,
         '/games/alpha/run.sh');
+    await tester.ensureVisible(find.byKey(const Key('launch-advanced-toggle')));
+    await tester.tap(find.byKey(const Key('launch-advanced-toggle')));
+    await tester.pumpAndSettle();
     expect(find.text('Arguments'), findsOneWidget);
     final argsField = find.descendant(
       of: find.byKey(const Key('launch-arguments')),

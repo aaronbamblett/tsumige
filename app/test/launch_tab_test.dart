@@ -21,7 +21,11 @@ import 'package:vnl/src/features/library/data/library_repository.dart';
 import 'package:vnl/src/features/library/domain/cover_source.dart';
 import 'package:vnl/src/features/library/domain/game_editor.dart';
 import 'package:vnl/src/features/library/domain/runner_detection.dart';
+import 'package:vnl/src/features/library/presentation/widgets/detail_tabs/launch_tab.dart';
+import 'package:vnl/src/features/library/presentation/widgets/library_toolbar.dart';
+import 'package:vnl/src/features/settings/presentation/sections/settings_widgets.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
+import 'package:vnl/src/utils/theme/brand.dart';
 
 class LaunchFakeRepository implements LibraryRepository {
   LaunchFakeRepository(this.games);
@@ -52,6 +56,8 @@ Future<LaunchFakeRepository> pumpLaunch(
   List<detect.SteamPrefix> prefixes = const [],
   Future<String?> Function({String? initialDirectory, PathPickMode mode})?
       pathPicker,
+  List<core.LaunchMode>? launchModes,
+  void Function()? onRunnerScan,
 }) async {
   tester.view.physicalSize = const Size(1280, 800);
   tester.view.devicePixelRatio = 1.0;
@@ -75,7 +81,12 @@ Future<LaunchFakeRepository> pumpLaunch(
       dataDirProvider.overrideWithValue(core.DataDir(temp.path)),
       libraryRepositoryProvider.overrideWithValue(fake),
       coverExistsProvider.overrideWithValue((_) => false),
-      wineRunnersProvider.overrideWith((ref) => Future.value(wines)),
+      wineRunnersProvider.overrideWith((ref) {
+        onRunnerScan?.call();
+        return Future.value(wines);
+      }),
+      if (launchModes != null)
+        availableLaunchModesProvider.overrideWithValue(launchModes),
       protonRunnersProvider.overrideWith((ref) => Future.value(protons)),
       steamPrefixesProvider.overrideWith((ref) => Future.value(prefixes)),
       if (pathPicker != null)
@@ -105,6 +116,12 @@ Future<void> blur(WidgetTester tester) async {
   await tester.pump();
 }
 
+Future<void> openAdvanced(WidgetTester tester) async {
+  await tester.ensureVisible(find.byKey(const Key('launch-advanced-toggle')));
+  await tester.tap(find.byKey(const Key('launch-advanced-toggle')));
+  await tester.pumpAndSettle();
+}
+
 String fieldText(WidgetTester tester, Key key) {
   final field = find.descendant(
       of: find.byKey(key), matching: find.byType(TextField));
@@ -120,33 +137,20 @@ void main() {
     expect(find.text('Prefix'), findsOneWidget);
     expect(find.text('Steam app id'), findsNothing);
 
-    await tester.ensureVisible(find.byKey(const Key('launch-mode')));
-
-    await tester.tap(find.byKey(const Key('launch-mode')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Native').last);
+    await tester.tap(find.byKey(const Key('mode-native')));
     await tester.pumpAndSettle();
     expect(find.text('Executable'), findsOneWidget);
-    expect(find.text('Arguments'), findsOneWidget);
     expect(find.text('Runner'), findsNothing);
     expect(find.text('Prefix'), findsNothing);
     expect(find.text('Locale'), findsNothing);
 
-    await tester.ensureVisible(find.byKey(const Key('launch-mode')));
-
-    await tester.tap(find.byKey(const Key('launch-mode')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Steam').last);
+    await tester.tap(find.byKey(const Key('mode-steam')));
     await tester.pumpAndSettle();
     expect(find.text('Steam app id'), findsOneWidget);
     expect(find.text('Executable'), findsNothing);
     expect(find.text('Arguments'), findsNothing);
 
-    await tester.ensureVisible(find.byKey(const Key('launch-mode')));
-
-    await tester.tap(find.byKey(const Key('launch-mode')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Wine').last);
+    await tester.tap(find.byKey(const Key('mode-wine')));
     await tester.pumpAndSettle();
     expect(find.text('Runner'), findsOneWidget);
     expect(find.text('Prefix'), findsOneWidget);
@@ -156,6 +160,7 @@ void main() {
   testWidgets('text field saves on blur and Esc reverts', (tester) async {
     final repo = await pumpLaunch(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openLaunch(tester, 'Alpha');
+    await openAdvanced(tester);
     await tester.enterText(
         find.byKey(const Key('launch-umu')), 'umu-12345');
     await blur(tester);
@@ -195,7 +200,7 @@ void main() {
     await openLaunch(tester, 'Alpha');
     expect(
       tester
-          .widget<DropdownButton<String>>(
+          .widget<SettingsDropdown<String>>(
               find.byKey(const Key('launch-runner')))
           .value,
       'custom',
@@ -269,6 +274,7 @@ void main() {
       (tester) async {
     final repo = await pumpLaunch(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openLaunch(tester, 'Alpha');
+    await openAdvanced(tester);
     await tester.enterText(
         find.byKey(const Key('launch-arguments')), '--foo "unclosed');
     await blur(tester);
@@ -282,6 +288,7 @@ void main() {
       (tester) async {
     final repo = await pumpLaunch(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openLaunch(tester, 'Alpha');
+    await openAdvanced(tester);
     await tester.enterText(
         find.byKey(const Key('launch-environment')), 'NOEQUALS');
     await blur(tester);
@@ -294,6 +301,7 @@ void main() {
   testWidgets('the args preview count is right', (tester) async {
     await pumpLaunch(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openLaunch(tester, 'Alpha');
+    await openAdvanced(tester);
     expect(find.text('Splits into 0 arguments'), findsOneWidget);
     await tester.enterText(
         find.byKey(const Key('launch-arguments')), '--foo "a b"');
@@ -301,5 +309,76 @@ void main() {
     expect(find.text('Splits into 2 arguments'), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
+  });
+
+  testWidgets('mode segment saves the picked mode', (tester) async {
+    final repo = await pumpLaunch(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openLaunch(tester, 'Alpha');
+    await tester.tap(find.byKey(const Key('mode-native')));
+    await tester.pumpAndSettle();
+    expect(repo.games.first.launch.mode, core.LaunchMode.native);
+    expect(find.text('Executable'), findsOneWidget);
+    expect(find.text('Runner'), findsNothing);
+  });
+
+  testWidgets('a stored mode missing from the list stays selected',
+      (tester) async {
+    await pumpLaunch(
+      tester,
+      [
+        core.Game(
+            id: 'g1',
+            title: 'Alpha',
+            launch: core.LaunchOverrides(mode: core.LaunchMode.native)),
+      ],
+      launchModes: const [core.LaunchMode.proton, core.LaunchMode.wine],
+    );
+    await openLaunch(tester, 'Alpha');
+    final native = tester.widget<ToolbarSegment>(
+        find.byKey(const Key('mode-native')));
+    expect(native.selected, isTrue);
+    expect(
+        tester
+            .widget<ToolbarSegment>(find.byKey(const Key('mode-proton')))
+            .selected,
+        isFalse);
+  });
+
+  testWidgets('inherited values carry a Default note', (tester) async {
+    await pumpLaunch(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openLaunch(tester, 'Alpha');
+    expect(find.text('Default'), findsWidgets);
+    expect(find.text('Mode'), findsOneWidget);
+  });
+
+  testWidgets('Advanced is collapsed by default and expands', (tester) async {
+    await pumpLaunch(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openLaunch(tester, 'Alpha');
+    expect(find.text('Arguments'), findsNothing);
+    expect(find.text('Show'), findsOneWidget);
+    await openAdvanced(tester);
+    expect(find.text('Arguments'), findsOneWidget);
+    expect(find.text('Environment'), findsOneWidget);
+    expect(find.text('Hide'), findsOneWidget);
+  });
+
+  testWidgets('Rescan reruns the runner scan', (tester) async {
+    var scans = 0;
+    await pumpLaunch(tester, [core.Game(id: 'g1', title: 'Alpha')],
+        onRunnerScan: () => scans++);
+    await openLaunch(tester, 'Alpha');
+    final before = scans;
+    await tester.ensureVisible(find.byKey(const Key('launch-rescan')));
+    await tester.tap(find.byKey(const Key('launch-rescan')));
+    await tester.pumpAndSettle();
+    expect(scans, greaterThan(before));
+  });
+
+  testWidgets('Choose is a glass button', (tester) async {
+    await pumpLaunch(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openLaunch(tester, 'Alpha');
+    expect(
+        tester.widget(find.byKey(const Key('launch-executable-choose'))),
+        isA<BrandGlassButton>());
   });
 }
