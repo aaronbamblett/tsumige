@@ -33,6 +33,7 @@ import 'art_overlay.dart';
 import 'detail_tabs/history_tab.dart';
 import 'detail_tabs/info_tab.dart';
 import 'detail_tabs/launch_tab.dart';
+import 'detail_tabs/related_tab.dart';
 
 /// Pane hero height; the art covers the full width from the top.
 const double _kHeroHeight = 340;
@@ -52,9 +53,10 @@ class GameDetailPane extends HookConsumerWidget {
     final infoScroll = useScrollController();
     final launchScroll = useScrollController();
     final historyScroll = useScrollController();
+    final relatedScroll = useScrollController();
     final hasCover = game.cover != null && game.cover!.isNotEmpty;
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: LayoutBuilder(
         builder: (context, paneConstraints) => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -120,7 +122,7 @@ class GameDetailPane extends HookConsumerWidget {
             ),
             LayoutBuilder(
               builder: (context, constraints) {
-                final tabWidth = (constraints.maxWidth - 24) / 3;
+                final tabWidth = (constraints.maxWidth - 24) / 4;
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: TabBar(
@@ -160,6 +162,12 @@ class GameDetailPane extends HookConsumerWidget {
                         icon: Icon(Icons.history_rounded, size: 20),
                         text: 'History',
                       ),
+                      Tab(
+                        height: 60,
+                        iconMargin: EdgeInsets.only(bottom: 4),
+                        icon: Icon(Icons.link_rounded, size: 20),
+                        text: 'Related',
+                      ),
                     ],
                   ),
                 );
@@ -179,6 +187,10 @@ class GameDetailPane extends HookConsumerWidget {
                   _TabBody(
                     controller: historyScroll,
                     child: HistoryTab(game: game),
+                  ),
+                  _TabBody(
+                    controller: relatedScroll,
+                    child: RelatedTab(game: game),
                   ),
                 ],
               ),

@@ -25,6 +25,8 @@ import 'package:vnl/src/features/library/data/library_repository.dart';
 import 'package:vnl/src/features/library/domain/cover_source.dart';
 import 'package:vnl/src/features/library/domain/game_editor.dart';
 import 'package:vnl/src/features/library/domain/running_games.dart';
+import 'package:vnl/src/features/library/domain/selection.dart';
+import 'package:vnl/src/features/library/presentation/widgets/detail_tabs/related_tab.dart';
 import 'package:vnl/src/features/library/presentation/widgets/game_cover_tile.dart';
 import 'package:vnl/src/features/library/presentation/widgets/game_detail_pane.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
@@ -64,7 +66,8 @@ Future<void> pumpLibrary(WidgetTester tester, List<core.Game> games,
     {double width = 1280,
     double height = 800,
     void Function(Directory)? exposeTemp,
-    Future<String?> Function()? coverPicker}) async {
+    Future<String?> Function()? coverPicker,
+    Future<bool> Function(Uri)? urlOpener}) async {
   setSurface(tester, width, height);
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
       .setMockMethodCallHandler(
@@ -85,6 +88,8 @@ Future<void> pumpLibrary(WidgetTester tester, List<core.Game> games,
       coverExistsProvider.overrideWithValue((_) => false),
       if (coverPicker != null)
         coverPickerProvider.overrideWithValue(coverPicker),
+      if (urlOpener != null)
+        vndbUrlOpenerProvider.overrideWithValue(urlOpener),
     ],
     child: const VnlApp(),
   ));
@@ -1036,5 +1041,107 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Beta'), findsNothing);
+  });
+
+  testWidgets('related tab orders sequels and prequels first', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', relations: const [
+        core.VnRelation(vndbId: 'v10', relation: 'ser', title: 'Series Part', official: true),
+        core.VnRelation(vndbId: 'v900011', relation: 'seq', title: 'Sequel', official: true),
+        core.VnRelation(vndbId: 'v12', relation: 'alt', title: 'Alt Title', official: true),
+        core.VnRelation(vndbId: 'v13', relation: 'preq', title: 'Prequel', official: true),
+        core.VnRelation(vndbId: 'v900014', relation: 'side', title: 'Side Story', official: true),
+      ]),
+    ]);
+    await openPane(tester, 'Alpha');
+    await openTab(tester, 'Related');
+    Offset at(String title) => tester.getTopLeft(paneText(tester, title));
+    expect(at('Sequel').dy, at('Prequel').dy);
+    expect(at('Sequel').dx, lessThan(at('Prequel').dx));
+    expect(at('Prequel').dx, lessThan(at('Series Part').dx));
+    expect(at('Side Story').dy, greaterThan(at('Series Part').dy));
+    expect(at('Alt Title').dy, at('Side Story').dy);
+    expect(at('Alt Title').dx, greaterThan(at('Side Story').dx));
+    expect(find.text('Series Part'), findsWidgets);
+  });
+
+  testWidgets('an owned relation selects its library game', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', relations: const [
+        core.VnRelation(vndbId: 'v900011', relation: 'seq', title: 'Owned Sequel', official: true),
+      ]),
+      core.Game(id: 'g2', title: 'Owned Sequel', vndbId: 'v900011'),
+    ]);
+    await openPane(tester, 'Alpha');
+    await openTab(tester, 'Related');
+    await tester.ensureVisible(paneText(tester, 'Owned Sequel'));
+    await tester.tap(paneText(tester, 'Owned Sequel'));
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(GameDetailPane)));
+    expect(container.read(selectedGameIdProvider), 'g2');
+  });
+
+  testWidgets('an unowned relation opens its VNDB page through the opener',
+      (tester) async {
+    final opened = <Uri>[];
+    await pumpLibrary(
+      tester,
+      [
+        core.Game(id: 'g1', title: 'Alpha', relations: const [
+          core.VnRelation(vndbId: 'v13', relation: 'preq', title: 'Prequel', official: true),
+        ]),
+      ],
+      urlOpener: (uri) async {
+        opened.add(uri);
+        return true;
+      },
+    );
+    await openPane(tester, 'Alpha');
+    await openTab(tester, 'Related');
+    expect(find.byIcon(Icons.north_east_rounded), findsOneWidget);
+    await tester.ensureVisible(paneText(tester, 'Prequel'));
+    await tester.tap(paneText(tester, 'Prequel'));
+    await tester.pump();
+    expect(opened.single.toString(), 'https://vndb.org/v13');
+  });
+
+  testWidgets('More like this lists owned games sharing content tags',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', vndbTags: const [
+        core.VndbTag(name: 'Romance', rating: 2.0, spoiler: 0, category: 'cont'),
+      ]),
+      core.Game(id: 'g2', title: 'Beta', vndbTags: const [
+        core.VndbTag(name: 'Romance', rating: 2.0, spoiler: 0, category: 'cont'),
+      ]),
+      core.Game(id: 'g3', title: 'Gamma'),
+    ]);
+    await openPane(tester, 'Alpha');
+    await openTab(tester, 'Related');
+    Finder body(String text) => find.descendant(
+          of: find.byType(TabBarView),
+          matching: find.text(text),
+        );
+    expect(body('More like this'), findsOneWidget);
+    expect(body('Gamma'), findsNothing);
+    await tester.ensureVisible(body('Beta'));
+    await tester.tap(body('Beta'));
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(GameDetailPane)));
+    expect(container.read(selectedGameIdProvider), 'g2');
+  });
+
+  testWidgets('empty related and similar sections are hidden', (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openPane(tester, 'Alpha');
+    await openTab(tester, 'Related');
+    Finder body(String text) => find.descendant(
+          of: find.byType(TabBarView),
+          matching: find.text(text),
+        );
+    expect(body('Related'), findsNothing);
+    expect(body('More like this'), findsNothing);
   });
 }
