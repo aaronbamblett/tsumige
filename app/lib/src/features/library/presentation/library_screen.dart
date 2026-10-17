@@ -67,7 +67,8 @@ class LibraryScreen extends HookConsumerWidget {
         if (entry != null && !startupReported) {
           startupReported = true;
           stderr.writeln(
-              'startup_ms=${DateTime.now().difference(entry).inMilliseconds}');
+            'startup_ms=${DateTime.now().difference(entry).inMilliseconds}',
+          );
         }
         final recovered = await recoverSessions(
           ref.read(dataDirProvider),
@@ -94,23 +95,23 @@ class LibraryScreen extends HookConsumerWidget {
     final defaultMode = ref.watch(launchModeProvider);
     final umuMissing = ref.watch(umuRunPathProvider) == null;
     final libraryGames = libraryAsync.value?.library.games ?? const [];
-    final usesProton = defaultMode == core.LaunchMode.proton ||
+    final usesProton =
+        defaultMode == core.LaunchMode.proton ||
         libraryGames.any(
-            (game) => (game.launch.mode ?? defaultMode) == core.LaunchMode.proton);
+          (game) => (game.launch.mode ?? defaultMode) == core.LaunchMode.proton,
+        );
     return Scaffold(
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final gridWidth = constraints.maxWidth -
-                (selected == null ? 0 : _kPaneSlotWidth);
+            final gridWidth =
+                constraints.maxWidth - (selected == null ? 0 : _kPaneSlotWidth);
             return Column(
               children: [
                 LibraryToolbar(
                   gridRight: gridWidth - LibraryGrid.horizontalPadding,
                 ),
-                SkippedBanner(
-                  skipped: libraryAsync.value?.skipped ?? const [],
-                ),
+                SkippedBanner(skipped: libraryAsync.value?.skipped ?? const []),
                 if (umuMissing && usesProton) const _UmuBanner(),
                 Expanded(
                   child: Focus(
@@ -134,7 +135,7 @@ class LibraryScreen extends HookConsumerWidget {
                             decoration: BoxDecoration(
                               color: Theme.of(context)
                                   .colorScheme
-                                  .surfaceContainerLow,
+                                  .surfaceContainer,
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
                                 color: Theme.of(context)

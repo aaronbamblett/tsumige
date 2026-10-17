@@ -8,7 +8,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../../../core/format.dart';
 import '../../../../../core/model.dart';
+import '../../../../../utils/theme/brand.dart';
 import '../../../domain/game_editor.dart';
 import '../../../domain/vndb_markup.dart';
 
@@ -20,10 +22,13 @@ TextStyle? detailSectionLabelStyle(BuildContext context) {
   );
 }
 
-Widget detailSectionDivider(BuildContext context) => Divider(
-      height: 24,
-      thickness: 1,
-      color: Theme.of(context).colorScheme.outlineVariant,
+Widget detailSectionDivider(BuildContext context) => Padding(
+      padding: const EdgeInsets.only(top: 18, bottom: 16),
+      child: Divider(
+        height: 1,
+        thickness: 1,
+        color: Theme.of(context).colorScheme.outlineVariant,
+      ),
     );
 
 class DetailSection extends StatelessWidget {
@@ -41,12 +46,15 @@ class DetailSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(label, style: detailSectionLabelStyle(context)),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            ),
             const Spacer(),
             ...actions,
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         child,
       ],
     );
@@ -61,18 +69,14 @@ class InfoTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final labelStyle = detailSectionLabelStyle(context);
     final blocks = <Widget>[];
-    if (game.vndbRating != null ||
-        (game.released != null && game.released!.isNotEmpty)) {
-      blocks.add(_facts(theme, labelStyle));
-    }
+    blocks.add(_facts(theme));
     if (game.tags.isNotEmpty) {
       blocks.add(_TagsSection(game: game));
     }
     blocks.add(_MarkupSection(
       game: game,
-      label: 'DESCRIPTION',
+      label: 'Description',
       emptyHint: 'No description',
       editTooltip: 'Edit description',
       getValue: (g) => g.description,
@@ -80,7 +84,7 @@ class InfoTab extends ConsumerWidget {
     ));
     blocks.add(_MarkupSection(
       game: game,
-      label: 'NOTES',
+      label: 'Notes',
       emptyHint: 'No notes',
       editTooltip: 'Edit notes',
       getValue: (g) => g.notes,
@@ -100,47 +104,24 @@ class InfoTab extends ConsumerWidget {
     );
   }
 
-  Widget _facts(ThemeData theme, TextStyle? labelStyle) {
-    return Wrap(
-      spacing: 32,
-      runSpacing: 12,
+  Widget _facts(ThemeData theme) {
+    final seconds = game.totalPlaytimeSeconds;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        if (game.vndbRating != null)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('VNDB RATING', style: labelStyle),
-              const SizedBox(height: 4),
-              Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: (game.vndbRating! / 10).toStringAsFixed(1),
-                      style: theme.textTheme.titleMedium,
-                    ),
-                    if (game.vndbVotecount != null)
-                      TextSpan(
-                        text: ' · ${game.vndbVotecount} votes',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
+        Text(
+          'Played',
+          style: theme.textTheme.labelSmall?.copyWith(
+            fontSize: 11.5,
+            color: theme.colorScheme.onSurfaceVariant,
           ),
-        if (game.released != null && game.released!.isNotEmpty)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('RELEASED', style: labelStyle),
-              const SizedBox(height: 4),
-              Text(game.released!, style: theme.textTheme.bodyLarge),
-            ],
-          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          seconds > 0 ? formatPlaytime(seconds) : 'Never',
+          style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
+        ),
       ],
     );
   }
@@ -200,25 +181,17 @@ class _TagsSectionState extends ConsumerState<_TagsSection> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return DetailSection(
-      label: 'TAGS',
+      label: 'Tags',
       child: Wrap(
         spacing: 6,
         runSpacing: 6,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           for (final tag in widget.game.tags)
-            Chip(
-              label: Text(tag, style: theme.textTheme.labelMedium),
-              visualDensity: VisualDensity.compact,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              deleteIcon: const Icon(Icons.close_rounded, size: 14),
-              deleteButtonTooltipMessage: 'Remove $tag',
-              onDeleted: () => ref.read(gameEditorProvider).update(
+            _TagChip(
+              label: tag,
+              onRemove: () => ref.read(gameEditorProvider).update(
                   widget.game.id,
                   (g) => g.tags = [for (final t in g.tags) if (t != tag) t]),
             ),
@@ -252,15 +225,72 @@ class _TagsSectionState extends ConsumerState<_TagsSection> {
               ),
             )
           else
-            ActionChip(
-              label: const Text('+'),
-              visualDensity: VisualDensity.compact,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+            InkWell(
+              borderRadius: _kChipRadius,
+              onTap: () => setState(() => _adding = true),
+              child: Container(
+                width: _kChipHeight,
+                height: _kChipHeight,
+                alignment: Alignment.center,
+                decoration: _chipDecoration,
+                child: Text(
+                  '+',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
               ),
-              onPressed: () => setState(() => _adding = true),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+const double _kChipHeight = 28;
+final _kChipRadius = BorderRadius.circular(7);
+final _chipDecoration = BoxDecoration(
+  borderRadius: _kChipRadius,
+  border: Border.all(color: OnImage.text.withValues(alpha: 0.14)),
+);
+
+class _TagChip extends StatelessWidget {
+  const _TagChip({required this.label, required this.onRemove});
+
+  final String label;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      height: _kChipHeight,
+      padding: const EdgeInsets.only(left: 11, right: 4),
+      decoration: _chipDecoration,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontSize: 12.5, color: scheme.onSurface),
+          ),
+          const SizedBox(width: 4),
+          Tooltip(
+            message: 'Remove $label',
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onRemove,
+              child: Padding(
+                padding: const EdgeInsets.all(2),
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 14,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -288,9 +318,33 @@ class _MarkupSection extends ConsumerStatefulWidget {
   ConsumerState<_MarkupSection> createState() => _MarkupSectionState();
 }
 
+/// Four lines of description at 14 px with a 1.5 line height.
+const double _kDescriptionCollapsedHeight = 4 * 14 * 1.5;
+
+class _ExpandToggle extends StatelessWidget {
+  const _ExpandToggle({required this.expanded, required this.onPressed});
+
+  final bool expanded;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: IconButton(
+        tooltip: expanded ? 'Show less' : 'Show more',
+        icon: Icon(
+          expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+        ),
+        onPressed: onPressed,
+      ),
+    );
+  }
+}
+
 class _MarkupSectionState extends ConsumerState<_MarkupSection> {
   bool _editing = false;
   bool _cancelled = false;
+  bool _expanded = false;
   String? _editGameId;
   GameEditor? _editor;
   late final TextEditingController _controller;
@@ -408,10 +462,41 @@ class _MarkupSectionState extends ConsumerState<_MarkupSection> {
                   ),
                 );
               }
-              if (widget.label == 'DESCRIPTION') {
-                return DefaultTextStyle(
+              if (widget.label == 'Description') {
+                final text = DefaultTextStyle(
                   style: theme.textTheme.bodyMedium!.copyWith(height: 1.5),
                   child: VndbMarkupText(text: value),
+                );
+                if (_expanded) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      text,
+                      _ExpandToggle(
+                        expanded: true,
+                        onPressed: () => setState(() => _expanded = false),
+                      ),
+                    ],
+                  );
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      height: _kDescriptionCollapsedHeight,
+                      child: ClipRect(
+                        child: OverflowBox(
+                          alignment: Alignment.topLeft,
+                          maxHeight: double.infinity,
+                          child: text,
+                        ),
+                      ),
+                    ),
+                    _ExpandToggle(
+                      expanded: false,
+                      onPressed: () => setState(() => _expanded = true),
+                    ),
+                  ],
                 );
               }
               return Text(value, style: theme.textTheme.bodyMedium);

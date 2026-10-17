@@ -120,6 +120,8 @@ void main() {
     expect(find.text('Prefix'), findsOneWidget);
     expect(find.text('Steam app id'), findsNothing);
 
+    await tester.ensureVisible(find.byKey(const Key('launch-mode')));
+
     await tester.tap(find.byKey(const Key('launch-mode')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Native').last);
@@ -130,6 +132,8 @@ void main() {
     expect(find.text('Prefix'), findsNothing);
     expect(find.text('Locale'), findsNothing);
 
+    await tester.ensureVisible(find.byKey(const Key('launch-mode')));
+
     await tester.tap(find.byKey(const Key('launch-mode')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Steam').last);
@@ -137,6 +141,8 @@ void main() {
     expect(find.text('Steam app id'), findsOneWidget);
     expect(find.text('Executable'), findsNothing);
     expect(find.text('Arguments'), findsNothing);
+
+    await tester.ensureVisible(find.byKey(const Key('launch-mode')));
 
     await tester.tap(find.byKey(const Key('launch-mode')));
     await tester.pumpAndSettle();
@@ -209,6 +215,7 @@ void main() {
       ],
     );
     await openLaunch(tester, 'Alpha');
+    await tester.ensureVisible(find.byKey(const Key('launch-runner')));
     await tester.tap(find.byKey(const Key('launch-runner')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('GE-9').last);
@@ -229,6 +236,7 @@ void main() {
           '/run/user/1000/real/picked.exe',
     );
     await openLaunch(tester, 'Alpha');
+    await tester.ensureVisible(find.byKey(const Key('launch-executable-choose')));
     await tester.tap(find.byKey(const Key('launch-executable-choose')));
     await tester.pump();
     await tester.pump();

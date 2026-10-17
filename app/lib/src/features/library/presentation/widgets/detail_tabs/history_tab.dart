@@ -27,7 +27,7 @@ class HistoryTab extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DetailSection(
-            label: 'TOTAL PLAYTIME',
+            label: 'Total playtime',
             child: Text(
               formatPlaytime(game.totalPlaytimeSeconds),
               style: theme.textTheme.titleMedium,
@@ -35,7 +35,7 @@ class HistoryTab extends StatelessWidget {
           ),
           detailSectionDivider(context),
           DetailSection(
-            label: 'SESSIONS',
+            label: 'Sessions',
             child: sessions.isEmpty
                 ? Text(
                     'Not played yet',

@@ -19,10 +19,12 @@ import 'package:vnl/main.dart';
 import 'package:vnl/src/core/covers.dart' as core;
 import 'package:vnl/src/core/model.dart' as core;
 import 'package:vnl/src/core/paths.dart' as core;
+import 'package:vnl/src/core/launch/game_runner.dart';
 import 'package:vnl/src/core/vndb.dart' as core;
 import 'package:vnl/src/features/library/data/library_repository.dart';
 import 'package:vnl/src/features/library/domain/cover_source.dart';
 import 'package:vnl/src/features/library/domain/game_editor.dart';
+import 'package:vnl/src/features/library/domain/running_games.dart';
 import 'package:vnl/src/features/library/presentation/widgets/game_cover_tile.dart';
 import 'package:vnl/src/features/library/presentation/widgets/game_detail_pane.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
@@ -168,6 +170,7 @@ Future<void> tapSpoilerText(WidgetTester tester, String secret) async {
     });
   }
   expect(target, isNotNull);
+  await tester.ensureVisible(find.byWidget(target!));
   final paragraph =
       tester.renderObject<RenderParagraph>(find.byWidget(target!));
   final plain = target!.text.toPlainText();
@@ -215,12 +218,72 @@ void main() {
     expect(heroRect.contains(titleRect.bottomRight), isTrue);
   });
 
-  testWidgets('hero without a cover is a 120px block', (tester) async {
+  testWidgets('hero shrinks so the pane fits a 640 px window', (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')],
+        width: 1000, height: 640);
+    await openPane(tester, 'Alpha');
+    expect(tester.takeException(), isNull);
+    final heroRect =
+        tester.getRect(find.byKey(const ValueKey('detail-hero')));
+    expect(heroRect.height, lessThan(340));
+    expect(heroRect.height, greaterThanOrEqualTo(180));
+  });
+
+  testWidgets('Play label follows the launch phase', (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openPane(tester, 'Alpha');
+    expect(find.widgetWithText(FilledButton, 'Play'), findsOneWidget);
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(GameDetailPane)));
+    container
+        .read(runningGamesProvider.notifier)
+        .setPhase('g1', LaunchPhase.starting);
+    await tester.pump();
+    expect(find.widgetWithText(FilledButton, 'Launching…'), findsOneWidget);
+    container
+        .read(runningGamesProvider.notifier)
+        .setPhase('g1', LaunchPhase.running);
+    await tester.pump();
+    expect(find.widgetWithText(FilledButton, 'Running'), findsOneWidget);
+  });
+
+  testWidgets('hero buttons are 38 px circles', (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openPane(tester, 'Alpha');
+    for (final tooltip in ['Favourite', 'More', 'Close']) {
+      expect(
+        find.descendant(
+          of: find.byTooltip(tooltip),
+          matching: find.byWidgetPredicate((w) =>
+              w is Container &&
+              w.decoration is BoxDecoration &&
+              (w.decoration as BoxDecoration).shape == BoxShape.circle),
+        ),
+        findsOneWidget,
+        reason: tooltip,
+      );
+    }
+  });
+
+  testWidgets('pane tab bodies show a visible scrollbar', (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openPane(tester, 'Alpha');
+    final bars = tester.widgetList<Scrollbar>(find.descendant(
+      of: find.byType(GameDetailPane),
+      matching: find.byType(Scrollbar),
+    ));
+    expect(bars, isNotEmpty);
+    for (final bar in bars) {
+      expect(bar.thumbVisibility, isTrue);
+    }
+  });
+
+  testWidgets('hero is 340 px tall with or without a cover', (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
     final heroRect =
         tester.getRect(find.byKey(const ValueKey('detail-hero')));
-    expect(heroRect.height, moreOrLessEquals(120, epsilon: 0.5));
+    expect(heroRect.height, moreOrLessEquals(340, epsilon: 0.5));
   });
 
   testWidgets('the three tabs exist and Launch shows Mode', (tester) async {
@@ -239,9 +302,9 @@ void main() {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
     await openTab(tester, 'History');
-    expect(find.text('TOTAL PLAYTIME'), findsOneWidget);
+    expect(find.text('Total playtime'), findsOneWidget);
     expect(find.text('0 min'), findsOneWidget);
-    expect(find.text('SESSIONS'), findsOneWidget);
+    expect(find.text('Sessions'), findsOneWidget);
     expect(find.text('Not played yet'), findsOneWidget);
   });
 
@@ -279,15 +342,13 @@ void main() {
       ),
     ]);
     await openPane(tester, 'Alpha');
-    expect(paneText(tester, 'VNDB RATING'), findsOneWidget);
-    expect(richPaneText(tester, '8.5'), findsOneWidget);
-    expect(richPaneText(tester, '12 votes'), findsOneWidget);
-    expect(paneText(tester, 'RELEASED'), findsOneWidget);
+    expect(find.text('★ 8.5'), findsOneWidget);
+    expect(find.text('VNDB Rating · 12 votes'), findsOneWidget);
     expect(find.text('2024-05-06'), findsOneWidget);
-    expect(paneText(tester, 'TAGS'), findsOneWidget);
+    expect(paneText(tester, 'Tags'), findsOneWidget);
     expect(paneText(tester, 'Action'), findsOneWidget);
     expect(paneText(tester, 'Romance'), findsOneWidget);
-    expect(paneText(tester, 'DESCRIPTION'), findsOneWidget);
+    expect(paneText(tester, 'Description'), findsOneWidget);
   });
 
   testWidgets('fifteen tags wrap without overflow at panel width 400',
@@ -332,7 +393,7 @@ void main() {
           id: 'g1', title: 'Alpha', description: 'A very long tale. ' * 500),
     ]);
     await openPane(tester, 'Alpha');
-    final launch = find.widgetWithText(FilledButton, 'Launch');
+    final launch = find.widgetWithText(FilledButton, 'Play');
     expect(launch, findsOneWidget);
     expect(tester.widget<FilledButton>(launch).onPressed, isNull);
     final launchRect = tester.getRect(launch);
@@ -350,15 +411,15 @@ void main() {
     ]);
     await openPane(tester, 'Alpha');
     expect(
-        find.widgetWithText(OutlinedButton, 'Run .exe inside prefix'),
+        find.widgetWithText(OutlinedButton, 'Run .exe inside prefix…'),
         findsNothing);
-    expect(find.widgetWithText(FilledButton, 'Launch'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Play'), findsOneWidget);
   });
 
   testWidgets('run exe button shows for a Proton game', (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
-    expect(find.widgetWithText(OutlinedButton, 'Run .exe inside prefix'),
+    expect(find.widgetWithText(OutlinedButton, 'Run .exe inside prefix…'),
         findsOneWidget);
   });
 
@@ -518,17 +579,22 @@ void main() {
       core.Game(id: 'g1', title: 'Alpha', vndbRating: 85.0),
     ]);
     await openPane(tester, 'Alpha');
-    expect(paneText(tester, 'VNDB RATING'), findsOneWidget);
-    expect(richPaneText(tester, '8.5'), findsOneWidget);
+    expect(find.text('VNDB Rating'), findsOneWidget);
+    expect(find.text('★ 8.5'), findsOneWidget);
     expect(find.textContaining('votes'), findsNothing);
   });
 
-  testWidgets('release shows the RELEASED label', (tester) async {
+  testWidgets('release shows in the meta row next to the rating',
+      (tester) async {
     await pumpLibrary(tester, [
-      core.Game(id: 'g1', title: 'Alpha', released: '2021-08-26'),
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        released: '2021-08-26',
+        vndbRating: 60,
+      ),
     ]);
     await openPane(tester, 'Alpha');
-    expect(find.text('RELEASED'), findsOneWidget);
     expect(find.text('2021-08-26'), findsOneWidget);
   });
 
@@ -536,12 +602,12 @@ void main() {
       (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
-    expect(paneText(tester, 'DESCRIPTION'), findsOneWidget);
+    expect(paneText(tester, 'Description'), findsOneWidget);
     expect(paneText(tester, 'No description'), findsOneWidget);
-    expect(paneText(tester, 'NOTES'), findsOneWidget);
+    expect(paneText(tester, 'Notes'), findsOneWidget);
     expect(paneText(tester, 'No notes'), findsOneWidget);
-    expect(find.text('TAGS'), findsNothing);
-    expect(find.text('VNDB RATING'), findsNothing);
+    expect(find.text('Tags'), findsNothing);
+    expect(find.text('VNDB Rating'), findsNothing);
   });
 
   testWidgets('rating value divides by ten', (tester) async {
@@ -557,6 +623,7 @@ void main() {
       core.Game(id: 'g1', title: 'Alpha', tags: ['Action', 'Romance']),
     ]);
     await openPane(tester, 'Alpha');
+    await tester.ensureVisible(find.byTooltip('Remove Action'));
     await tester.tap(find.byTooltip('Remove Action'));
     await tester.pumpAndSettle();
     expect(paneText(tester, 'Action'), findsNothing);
@@ -569,6 +636,7 @@ void main() {
       core.Game(id: 'g1', title: 'Alpha', tags: ['Action']),
     ]);
     await openPane(tester, 'Alpha');
+    await tester.ensureVisible(paneText(tester, '+'));
     await tester.tap(paneText(tester, '+'));
     await tester.pump();
     final field = find.descendant(
@@ -591,6 +659,7 @@ void main() {
       core.Game(id: 'g1', title: 'Alpha', tags: ['Action']),
     ]);
     await openPane(tester, 'Alpha');
+    await tester.ensureVisible(paneText(tester, '+'));
     await tester.tap(paneText(tester, '+'));
     await tester.pump();
     final field = find.descendant(
@@ -656,7 +725,8 @@ void main() {
       core.Game(id: 'g1', title: 'Alpha', notes: 'old notes'),
     ]);
     await openPane(tester, 'Alpha');
-    expect(paneText(tester, 'NOTES'), findsOneWidget);
+    expect(paneText(tester, 'Notes'), findsOneWidget);
+    await tester.ensureVisible(find.byTooltip('Edit notes'));
     await tester.tap(find.byTooltip('Edit notes'));
     await tester.pump();
     await tester.enterText(

@@ -162,7 +162,7 @@ Future<void> openPane(WidgetTester tester, String title) async {
   await tester.pump();
 }
 
-Finder launchButton() => find.widgetWithText(FilledButton, 'Launch');
+Finder launchButton() => find.widgetWithText(FilledButton, 'Play');
 Finder runningButton() => find.widgetWithText(FilledButton, 'Running');
 
 String launchTooltip(WidgetTester tester) {
@@ -201,7 +201,7 @@ void main() {
     await openPane(tester, 'Alpha');
     expect(tester.widget<FilledButton>(launchButton()).onPressed, isNull);
     expect(launchTooltip(tester), 'No executable set');
-    expect(find.text('Run .exe inside prefix'), findsNothing);
+    expect(find.text('Run .exe inside prefix…'), findsNothing);
   });
 
   testWidgets('launch is disabled when the steam app id is missing',
@@ -223,7 +223,7 @@ void main() {
     await openPane(tester, 'Alpha');
     expect(tester.widget<FilledButton>(launchButton()).onPressed, isNull);
     expect(launchTooltip(tester), 'umu-run not found on PATH');
-    expect(find.text('Run .exe inside prefix'), findsOneWidget);
+    expect(find.text('Run .exe inside prefix…'), findsOneWidget);
   });
 
   testWidgets('proton launch is enabled with umu-run', (tester) async {
@@ -353,7 +353,7 @@ void main() {
   });
 
   testWidgets(
-      'a launch that ends after the pane was closed and reopened ends as Launch',
+      'a launch that ends after the pane was closed and reopened ends as Play',
       (tester) async {
     final runner = FakeRunner()..gate = Completer<void>();
     await pumpLaunch(tester, [protonGame('g1', 'Alpha')],
@@ -413,7 +413,7 @@ void main() {
     expect(launchButton(), findsOneWidget);
   });
 
-  testWidgets('a runner error returns the button to Launch', (tester) async {
+  testWidgets('a runner error returns the button to Play', (tester) async {
     final runner = FakeRunner();
     runner.script = (_) async => throw StateError('boom');
     await pumpLaunch(tester, [protonGame('g1', 'Alpha')],
@@ -432,7 +432,7 @@ void main() {
     await pumpLaunch(tester, [protonGame('g1', 'Alpha')],
         umu: '/usr/bin/umu-run', runner: runner, picker: noPick);
     await openPane(tester, 'Alpha');
-    await tester.tap(find.text('Run .exe inside prefix'));
+    await tester.tap(find.text('Run .exe inside prefix…'));
     await tester.pump();
     await tester.pump();
     expect(runner.calls, isEmpty);
@@ -444,7 +444,7 @@ void main() {
     await pumpLaunch(tester, [protonGame('g1', 'Alpha')],
         umu: '/usr/bin/umu-run', runner: runner, picker: pickPatch);
     await openPane(tester, 'Alpha');
-    await tester.tap(find.text('Run .exe inside prefix'));
+    await tester.tap(find.text('Run .exe inside prefix…'));
     await tester.pump();
     await tester.pump();
     expect(runner.calls, hasLength(1));
