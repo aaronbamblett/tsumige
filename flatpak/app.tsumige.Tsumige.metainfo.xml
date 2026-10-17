@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>app.tsumige.Tsumige</id>
+  <name>Tsumige</name>
+  <summary>Visual novel library and launcher</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MPL-2.0</project_license>
+  <developer id="io.github.aaronbamblett">
+    <name>Aaron Bamblett</name>
+  </developer>
+  <description>
+    <p>
+      Tsumige keeps your visual novel library in one place and launches each
+      game with the runner you choose: Proton, Wine, native, or Steam.
+    </p>
+  </description>
+  <launchable type="desktop-id">app.tsumige.Tsumige.desktop</launchable>
+  <url type="homepage">https://github.com/aaronbamblett/tsumige</url>
+  <url type="bugtracker">https://github.com/aaronbamblett/tsumige/issues</url>
+  <content_rating type="oars-1.1"/>
+  <releases>
+  </releases>
+</component>

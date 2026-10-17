@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Tsumige
+Comment=Visual novel library and launcher
+Exec=tsumige
+Icon=app.tsumige.Tsumige
+Terminal=false
+Type=Application
+Categories=Game;
+Keywords=visual novel;vndb;launcher;
