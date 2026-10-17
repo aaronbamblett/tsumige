@@ -32,8 +32,7 @@ enum PrefKey {
   windowMaximized('window.maximized', false),
   appTheme('appearance.appTheme', null),
   themeMode('appearance.themeMode', null),
-  customThemeColor('appearance.customColor', null),
-  trueBlack('appearance.trueBlack', null);
+  customThemeColor('appearance.customColor', null);
 
   const PrefKey(this.key, this.defaultValue);
 

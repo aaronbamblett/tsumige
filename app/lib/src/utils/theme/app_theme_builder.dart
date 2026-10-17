@@ -15,21 +15,16 @@ import 'brand.dart';
 import 'theme_tokens.dart';
 
 /// Single source of truth for app ThemeData. Named themes use brand tokens;
-/// custom uses ColorScheme.fromSeed. AMOLED applies only to dark.
+/// custom uses ColorScheme.fromSeed.
 ThemeData buildAppTheme({
   required AppTheme theme,
   required Brightness brightness,
   required Color customSeed,
-  required bool amoled,
 }) {
   final tokens = theme == AppTheme.custom ? null : tokensFor(theme, brightness);
-  ColorScheme scheme = theme == AppTheme.custom
+  final ColorScheme scheme = theme == AppTheme.custom
       ? ColorScheme.fromSeed(seedColor: customSeed, brightness: brightness)
       : schemeFromTokens(tokens!, brightness);
-
-  if (brightness == Brightness.dark && amoled) {
-    scheme = applyAmoled(scheme);
-  }
 
   // theme-kit's own light gradients and on-accent colour; the dark blocks and
   // Custom keep the accent→accent2 gradient and its dark content colour.

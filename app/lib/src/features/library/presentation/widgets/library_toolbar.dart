@@ -7,7 +7,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../constants/pref_keys.dart' as keys;
@@ -15,6 +14,7 @@ import '../../data/library_repository.dart';
 import '../../domain/cover_source.dart';
 import '../../domain/library_query.dart';
 import '../../../../utils/prefs/app_prefs.dart';
+import '../../../settings/presentation/settings_dialog.dart';
 import '../add_game/add_game_dialog.dart';
 import 'library_grid.dart';
 
@@ -203,7 +203,7 @@ class LibraryToolbar extends ConsumerWidget {
                       child: Tooltip(
                         message: 'Settings',
                         child: InkWell(
-                          onTap: () => context.push('/settings'),
+                          onTap: () => showSettingsDialog(context),
                           child: const Icon(Icons.settings_rounded, size: 20),
                         ),
                       ),
