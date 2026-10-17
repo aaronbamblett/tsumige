@@ -940,7 +940,7 @@ void main() {
     expect(paneText(tester, '<1 h'), findsOneWidget);
   });
 
-  testWidgets('clicking a developer filters the library and shows a chip',
+  testWidgets('clicking a developer filters the library; the Filter panel clears it',
       (tester) async {
     await pumpLibrary(tester, [
       core.Game(
@@ -957,12 +957,16 @@ void main() {
     await openPane(tester, 'Alpha');
     await tester.tap(paneText(tester, 'Azarashi Soft'));
     await tester.pumpAndSettle();
-    expect(find.text('Developer: Azarashi Soft'), findsOneWidget);
     expect(find.text('Beta'), findsNothing);
     expect(find.text('Alpha'), findsWidgets);
-    await tester.tap(find.byTooltip('Clear developer filter'));
+    await tester.tap(find.byKey(const ValueKey('toolbar-filter')));
     await tester.pumpAndSettle();
-    expect(find.text('Developer: Azarashi Soft'), findsNothing);
+    expect(find.byTooltip('Remove Azarashi Soft'), findsOneWidget);
+    await tester.tap(find.byTooltip('Remove Azarashi Soft'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Remove Azarashi Soft'), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
     expect(find.text('Beta'), findsOneWidget);
   });
 
@@ -1035,8 +1039,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.descendant(
-        of: find.byKey(const ValueKey('toolbar-tag')),
-        matching: find.text('VNDB: Romance'),
+        of: find.byKey(const ValueKey('toolbar-filter')),
+        matching: find.text('1'),
       ),
       findsOneWidget,
     );

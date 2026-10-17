@@ -157,7 +157,7 @@ void main() {
     await tester.enterText(findToolbarSearch(), 'Game 7');
     await tester.pump();
     expect(find.byType(GameCoverTile), findsOneWidget);
-    expect(find.textContaining('games'), findsNothing);
+    expect(find.textContaining(RegExp(r'\d+ games?')), findsNothing);
   });
 
   testWidgets('a wider cover setting lowers the column count', (tester) async {
@@ -180,7 +180,7 @@ void main() {
       find.byType(MenuAnchor).at(0),
       find.byTooltip('Ascending'),
       find.text('Favourites'),
-      find.byType(MenuAnchor).at(1),
+      find.byKey(const ValueKey('toolbar-filter')),
       find.byTooltip('Add game'),
       find.byTooltip('Settings'),
     ];

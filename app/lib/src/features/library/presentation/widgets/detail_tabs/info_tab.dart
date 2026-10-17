@@ -429,7 +429,7 @@ class _TagsSectionState extends ConsumerState<_TagsSection> {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           for (final tag in widget.game.tags)
-            _TagChip(
+            TagChip(
               label: tag,
               onRemove: () => ref.read(gameEditorProvider).update(
                   widget.game.id,
@@ -495,8 +495,8 @@ final _chipDecoration = BoxDecoration(
   border: Border.all(color: OnImage.text.withValues(alpha: 0.14)),
 );
 
-class _TagChip extends StatelessWidget {
-  const _TagChip({required this.label, required this.onRemove});
+class TagChip extends StatelessWidget {
+  const TagChip({super.key, required this.label, required this.onRemove});
 
   final String label;
   final VoidCallback onRemove;

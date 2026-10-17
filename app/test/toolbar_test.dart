@@ -88,6 +88,16 @@ Future<void> pumpToolbar(
   await tester.pump();
 }
 
+Finder filterBadge(WidgetTester tester, [String count = '1']) => find.descendant(
+      of: find.byKey(const ValueKey('toolbar-filter')),
+      matching: find.text(count),
+    );
+
+Future<void> openFilter(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('toolbar-filter')));
+  await tester.pumpAndSettle();
+}
+
 List<core.Game> taggedGames() => [
       core.Game(id: 'g1', title: 'Alpha', tags: ['Romance']),
       core.Game(id: 'g2', title: 'Beta', tags: ['Action']),
@@ -127,10 +137,12 @@ double lastCoverRight(WidgetTester tester) {
 }
 
 void main() {
-  testWidgets('sort and tag menus show their current values', (tester) async {
+  testWidgets('sort menu and Filter box show their current values',
+      (tester) async {
     await pumpToolbar(tester, taggedGames());
     expect(find.text('Added'), findsOneWidget);
-    expect(find.text('All tags'), findsOneWidget);
+    expect(find.text('Filter'), findsOneWidget);
+    expect(filterBadge(tester), findsNothing);
   });
 
   testWidgets('choosing Title sets the sort field', (tester) async {
@@ -145,27 +157,20 @@ void main() {
     expect(find.text('Title'), findsOneWidget);
   });
 
-  testWidgets('choosing a tag filters, All tags clears', (tester) async {
+  testWidgets('a tag chosen in the Filter panel filters; All tags clears',
+      (tester) async {
     await pumpToolbar(tester, taggedGames());
     final container = ProviderScope.containerOf(
         tester.element(find.byType(LibraryToolbar)));
-    await tester.tap(find.text('All tags'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Romance').last);
-    await tester.pumpAndSettle();
-    expect(container.read(tagFilterProvider), 'Romance');
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('toolbar-tag')),
-        matching: find.text('Romance'),
-      ),
-      findsOneWidget,
-    );
+    await openFilter(tester);
     await tester.tap(find.text('Romance'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('All tags').last);
-    await tester.pump();
+    expect(container.read(tagFilterProvider), 'Romance');
+    expect(filterBadge(tester), findsOneWidget);
+    await tester.tap(find.text('All tags'));
+    await tester.pumpAndSettle();
     expect(container.read(tagFilterProvider), isNull);
+    expect(filterBadge(tester), findsNothing);
   });
 
   testWidgets('add is a glass brand button', (tester) async {
@@ -184,7 +189,7 @@ void main() {
       (tester) async {
     await pumpToolbar(tester, manyGames());
     expect(find.byType(Slider), findsNothing);
-    expect(find.textContaining('games'), findsNothing);
+    expect(find.textContaining(RegExp(r'\d+ games?')), findsNothing);
     expect(find.textContaining(' of '), findsNothing);
   });
 
@@ -200,14 +205,14 @@ void main() {
     );
   });
 
-  testWidgets('tag box ends on the last cover column at 1400 wide',
+  testWidgets('Filter box ends on the last cover column at 1400 wide',
       (tester) async {
     await pumpToolbar(tester, manyGames(), size: const Size(1400, 980));
     openPane(tester, 'game-0');
     await settle(tester);
-    final tagRight =
-        tester.getRect(find.byKey(const ValueKey('toolbar-tag'))).right;
-    expect((tagRight - lastCoverRight(tester)).abs(), lessThanOrEqualTo(1.0));
+    final filterRight =
+        tester.getRect(find.byKey(const ValueKey('toolbar-filter'))).right;
+    expect((filterRight - lastCoverRight(tester)).abs(), lessThanOrEqualTo(1.0));
   });
 
   testWidgets('settings box ends on the pane edge at 1400 wide',
@@ -250,7 +255,7 @@ void main() {
     );
   });
 
-  testWidgets('Tag menu lists VNDB tags with counts and filters by one',
+  testWidgets('Filter panel lists user tags, then VNDB tags with counts',
       (tester) async {
     await pumpToolbar(tester, [
       core.Game(id: 'g1', title: 'Alpha', tags: ['Mine'], vndbTags: const [
@@ -265,34 +270,154 @@ void main() {
     ]);
     final container = ProviderScope.containerOf(
         tester.element(find.byType(LibraryToolbar)));
-    await tester.tap(find.text('All tags'));
-    await tester.pumpAndSettle();
+    await openFilter(tester);
+    expect(find.text('Mine'), findsOneWidget);
     expect(find.text('VNDB tags'), findsOneWidget);
     expect(
       find.descendant(
-        of: find.widgetWithText(MenuItemButton, 'Romance'),
+        of: find.widgetWithText(InkWell, 'Romance'),
         matching: find.text('2'),
       ),
       findsOneWidget,
     );
-    await tester.enterText(find.byWidgetPredicate((w) => w is TextField && w.decoration?.hintText == 'Search VNDB tags'), 'yur');
+    await tester.enterText(find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.hintText == 'Search tags…'), 'yur');
     await tester.pumpAndSettle();
-    expect(find.widgetWithText(MenuItemButton, 'Romance'), findsNothing);
-    expect(find.widgetWithText(MenuItemButton, 'Yuri'), findsOneWidget);
-    await tester.enterText(find.byWidgetPredicate((w) => w is TextField && w.decoration?.hintText == 'Search VNDB tags'), '');
+    expect(find.text('Romance'), findsNothing);
+    expect(find.text('Yuri'), findsOneWidget);
+    await tester.enterText(find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.hintText == 'Search tags…'), '');
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(MenuItemButton, 'Romance'));
+    await tester.tap(find.text('Romance'));
     await tester.pumpAndSettle();
     expect(container.read(tagFilterProvider), 'vndb:Romance');
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('toolbar-tag')),
-        matching: find.text('VNDB: Romance'),
-      ),
-      findsOneWidget,
-    );
     expect(find.text('Gamma'), findsNothing);
     expect(find.text('Alpha'), findsOneWidget);
     expect(find.text('Beta'), findsOneWidget);
+  });
+
+  testWidgets('adult segments filter the library and count in the badge',
+      (tester) async {
+    await pumpToolbar(tester, [
+      core.Game(id: 'g1', title: 'Alpha', adultVndb: true),
+      core.Game(id: 'g2', title: 'Beta', adultVndb: false),
+      core.Game(id: 'g3', title: 'Gamma', adultOverride: true),
+    ]);
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(LibraryToolbar)));
+    await openFilter(tester);
+    await tester.tap(find.text('Hide adult'));
+    await tester.pumpAndSettle();
+    expect(container.read(adultFilterProvider), keys.AdultFilter.hide);
+    expect(find.text('Alpha'), findsNothing);
+    expect(find.text('Beta'), findsOneWidget);
+    expect(find.text('Gamma'), findsNothing);
+    expect(filterBadge(tester), findsOneWidget);
+    await tester.tap(find.text('Adult only'));
+    await tester.pumpAndSettle();
+    expect(find.text('Alpha'), findsOneWidget);
+    expect(find.text('Beta'), findsNothing);
+    expect(find.text('Gamma'), findsOneWidget);
+    await tester.tap(find.text('All games'));
+    await tester.pumpAndSettle();
+    expect(container.read(adultFilterProvider), keys.AdultFilter.all);
+    expect(filterBadge(tester), findsNothing);
+  });
+
+  testWidgets('badge counts tag, adult and developer; accent outline shows',
+      (tester) async {
+    await pumpToolbar(tester, taggedGames());
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(LibraryToolbar)));
+    container.read(tagFilterProvider.notifier).set('Romance');
+    container.read(adultFilterProvider.notifier).set(keys.AdultFilter.hide);
+    container
+        .read(developerFilterProvider.notifier)
+        .set(core.Developer(id: 'p1', name: 'Azarashi Soft'));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('toolbar-filter')),
+        matching: find.text('3'),
+      ),
+      findsOneWidget,
+    );
+    final box = tester.widget<Container>(find
+        .descendant(
+          of: find.byKey(const ValueKey('toolbar-filter')),
+          matching: find.byType(Container),
+        )
+        .first);
+    final border = (box.decoration! as BoxDecoration).border! as Border;
+    expect(
+      border.top.color,
+      Theme.of(tester.element(find.byType(LibraryToolbar))).colorScheme.primary,
+    );
+  });
+
+  testWidgets('Clear all resets tag, adult and developer filters',
+      (tester) async {
+    await pumpToolbar(tester, taggedGames());
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(LibraryToolbar)));
+    await openFilter(tester);
+    await tester.tap(find.text('Romance'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Hide adult'));
+    await tester.pumpAndSettle();
+    container
+        .read(developerFilterProvider.notifier)
+        .set(core.Developer(id: 'p1', name: 'Azarashi Soft'));
+    await tester.pumpAndSettle();
+    expect(filterBadge(tester, '3'), findsOneWidget);
+    await tester.tap(find.text('Clear all'));
+    await tester.pumpAndSettle();
+    expect(container.read(tagFilterProvider), isNull);
+    expect(container.read(adultFilterProvider), keys.AdultFilter.all);
+    expect(container.read(developerFilterProvider), isNull);
+    expect(filterBadge(tester), findsNothing);
+  });
+
+  testWidgets('Escape closes the panel and returns focus to the Filter box',
+      (tester) async {
+    await pumpToolbar(tester, taggedGames());
+    await openFilter(tester);
+    expect(find.text('Adult'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text('Adult'), findsNothing);
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'filter');
+  });
+
+  testWidgets('an outside click closes the panel without activating the tile',
+      (tester) async {
+    await pumpToolbar(tester, taggedGames());
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(LibraryToolbar)));
+    await openFilter(tester);
+    await tester.tap(find.text('Beta'));
+    await tester.pumpAndSettle();
+    expect(find.text('Adult'), findsNothing);
+    expect(container.read(selectedGameIdProvider), isNull);
+    expect(container.read(tagFilterProvider), isNull);
+  });
+
+  testWidgets('toolbar does not overlap Add with the pane open and a developer set',
+      (tester) async {
+    for (final size in [const Size(1000, 640), const Size(1280, 800), const Size(1400, 980)]) {
+      await pumpToolbar(tester, manyGames(), size: size);
+      final container = ProviderScope.containerOf(
+          tester.element(find.byType(LibraryToolbar)));
+      container
+          .read(developerFilterProvider.notifier)
+          .set(core.Developer(id: 'p1', name: 'Azarashi Soft'));
+      openPane(tester, 'game-0');
+      await settle(tester);
+      expect(tester.takeException(), isNull);
+      final filterRight =
+          tester.getRect(find.byKey(const ValueKey('toolbar-filter'))).right;
+      final addLeft = tester.getRect(find.byTooltip('Add game')).left;
+      expect(filterRight, lessThanOrEqualTo(addLeft), reason: '$size');
+    }
   });
 }

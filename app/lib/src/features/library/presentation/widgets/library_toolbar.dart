@@ -7,9 +7,11 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../constants/pref_keys.dart' as keys;
+import '../../../../core/model.dart' show Developer;
 import '../../data/library_repository.dart';
 import '../../domain/cover_source.dart';
 import '../../domain/library_query.dart';
@@ -17,6 +19,7 @@ import '../../../../utils/prefs/app_prefs.dart';
 import '../../../../utils/theme/brand.dart';
 import '../../../settings/presentation/settings_dialog.dart';
 import '../add_game/add_game_dialog.dart';
+import 'detail_tabs/info_tab.dart' show TagChip;
 import 'library_grid.dart';
 
 const Map<keys.SortField, String> sortFieldLabels = {
@@ -27,24 +30,34 @@ const Map<keys.SortField, String> sortFieldLabels = {
   keys.SortField.vndbRating: 'VNDB Rating',
 };
 
+const Map<keys.AdultFilter, String> adultFilterLabels = {
+  keys.AdultFilter.all: 'All games',
+  keys.AdultFilter.hide: 'Hide adult',
+  keys.AdultFilter.only: 'Adult only',
+};
+
 const double _kControlHeight = 40;
 const double _kGap = 10;
 const double _kSortWidth = 180;
 const double _kSegmentsWidth = 170;
-const double _kTagWidth = 180;
-const double _kDeveloperWidth = 220;
+const double _kFilterWidth = 180;
 const double _kSearchMinWidth = 200;
 const double _kAddWidth = 104;
 const double _kRightInset = 12;
+const double _kPanelWidth = 360;
 
 /// Width of the right group: Add, a gap, then Settings.
 const double _kRightGroupWidth = _kAddWidth + _kGap + _kControlHeight;
 
 /// Width the left group needs with the search box at its minimum.
 const double _kLeftGroupMinWidth =
-    _kSearchMinWidth + _kSortWidth + _kSegmentsWidth + _kTagWidth + 3 * _kGap;
+    _kSearchMinWidth +
+    _kSortWidth +
+    _kSegmentsWidth +
+    _kFilterWidth +
+    3 * _kGap;
 
-/// Search, sort, favourites and tag controls on the left; Add and Settings
+/// Search, sort, favourites and the Filter panel on the left; Add and Settings
 /// pinned right. [gridRight] is where the grid's last cover column ends, so
 /// the left group lines up with the covers. The left group stops short of
 /// the right group when the two would meet. The search box absorbs any
@@ -57,14 +70,9 @@ class LibraryToolbar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final games = ref.watch(libraryProvider).value?.library.games ?? [];
-    final tags = allTags(games);
-    final vndbTags = vndbTagCounts(games);
     final field = ref.watch(sortFieldProvider);
     final ascending = ref.watch(sortAscendingProvider);
     final favouritesOnly = ref.watch(favouritesOnlyProvider);
-    final tagFilter = ref.watch(tagFilterProvider);
-    final developer = ref.watch(developerFilterProvider);
     final scheme = Theme.of(context).colorScheme;
     return SizedBox(
       height: 64,
@@ -76,8 +84,7 @@ class LibraryToolbar extends ConsumerWidget {
           );
           final leftWidth = math.max(
             leftEnd - LibraryGrid.horizontalPadding,
-            _kLeftGroupMinWidth +
-                (developer == null ? 0 : _kGap + _kDeveloperWidth),
+            _kLeftGroupMinWidth,
           );
           return Stack(
             children: [
@@ -161,50 +168,7 @@ class LibraryToolbar extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(width: _kGap),
-                    _ToolbarBox(
-                      key: const ValueKey('toolbar-tag'),
-                      width: _kTagWidth,
-                      child: _TagMenu(
-                        tags: tags,
-                        vndbTags: vndbTags,
-                        value: tagFilter,
-                        onSelected: (value) =>
-                            ref.read(tagFilterProvider.notifier).set(value),
-                      ),
-                    ),
-                    if (developer != null) ...[
-                      const SizedBox(width: _kGap),
-                      _ToolbarBox(
-                        key: const ValueKey('toolbar-developer'),
-                        width: _kDeveloperWidth,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 14),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Developer: ${developer.name}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              Tooltip(
-                                message: 'Clear developer filter',
-                                child: InkWell(
-                                  onTap: () => ref
-                                      .read(developerFilterProvider.notifier)
-                                      .set(null),
-                                  child: const SizedBox(
-                                    width: _kControlHeight,
-                                    child: Icon(Icons.close_rounded, size: 18),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                    const _FilterButton(),
                   ],
                 ),
               ),
@@ -249,11 +213,18 @@ class LibraryToolbar extends ConsumerWidget {
 }
 
 /// The shared control chrome: a 40 px box, 10 px radius, `surfaceContainer`
-/// fill and an `outlineVariant` border that brightens on hover.
+/// fill and an `outlineVariant` border that brightens on hover. A
+/// [borderColor] replaces the border while it is set.
 class _ToolbarBox extends StatefulWidget {
-  const _ToolbarBox({super.key, this.width, required this.child});
+  const _ToolbarBox({
+    super.key,
+    this.width,
+    this.borderColor,
+    required this.child,
+  });
 
   final double? width;
+  final Color? borderColor;
   final Widget child;
 
   @override
@@ -277,9 +248,11 @@ class _ToolbarBoxState extends State<_ToolbarBox> {
           color: scheme.surfaceContainer,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: _hovered
-                ? scheme.onSurface.withValues(alpha: 0.18)
-                : scheme.outlineVariant,
+            color:
+                widget.borderColor ??
+                (_hovered
+                    ? scheme.onSurface.withValues(alpha: 0.18)
+                    : scheme.outlineVariant),
           ),
         ),
         child: widget.child,
@@ -339,132 +312,456 @@ class _SortMenu extends StatelessWidget {
   }
 }
 
-class _TagMenu extends StatefulWidget {
-  const _TagMenu({
-    required this.tags,
-    required this.vndbTags,
-    required this.value,
-    required this.onSelected,
-  });
-
-  final List<String> tags;
-  final List<(String, int)> vndbTags;
-  final String? value;
-  final ValueChanged<String?> onSelected;
+/// The Filter box: a count badge and accent outline while any filter is set.
+/// Opens [_FilterPanel] under itself, with no scrim.
+class _FilterButton extends ConsumerStatefulWidget {
+  const _FilterButton();
 
   @override
-  State<_TagMenu> createState() => _TagMenuState();
+  ConsumerState<_FilterButton> createState() => _FilterButtonState();
 }
 
-class _TagMenuState extends State<_TagMenu> {
-  /// VNDB tags listed before a search narrows the list.
-  static const _vndbListLimit = 40;
+class _FilterButtonState extends ConsumerState<_FilterButton> {
+  final _controller = OverlayPortalController();
+  final _link = LayerLink();
+  final _focus = FocusNode(debugLabel: 'filter');
 
-  var _query = '';
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
 
-  String _label(String? value) {
-    if (value == null) return 'All tags';
-    if (value.startsWith(vndbTagPrefix)) {
-      return 'VNDB: ${value.substring(vndbTagPrefix.length)}';
-    }
-    return value;
+  void _close() {
+    _controller.hide();
+    _focus.requestFocus();
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final needle = _query.trim().toLowerCase();
-    final vndb = needle.isEmpty
-        ? widget.vndbTags.take(_vndbListLimit).toList()
-        : widget.vndbTags
-              .where((t) => t.$1.toLowerCase().contains(needle))
-              .toList();
-    final value = widget.value;
-    return MenuAnchor(
-      style: const MenuStyle(
-        minimumSize: WidgetStatePropertyAll(Size(_kTagWidth, 0)),
-        maximumSize: WidgetStatePropertyAll(Size(double.infinity, 360)),
+    final count = activeFilterCount(
+      ref.watch(tagFilterProvider),
+      ref.watch(adultFilterProvider),
+      ref.watch(developerFilterProvider),
+    );
+    return CompositedTransformTarget(
+      link: _link,
+      child: OverlayPortal(
+        controller: _controller,
+        overlayChildBuilder: (context) =>
+            _FilterPanelOverlay(link: _link, onClose: _close),
+        child: _ToolbarBox(
+          key: const ValueKey('toolbar-filter'),
+          width: _kFilterWidth,
+          borderColor: count > 0 ? scheme.primary : null,
+          child: InkWell(
+            focusNode: _focus,
+            onTap: () => _controller.isShowing ? _close() : _controller.show(),
+            child: Padding(
+              padding: const EdgeInsets.only(left: 14, right: 10),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.filter_list_rounded,
+                    size: 18,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: _kGap),
+                  const Expanded(child: Text('Filter', maxLines: 1)),
+                  if (count > 0) ...[
+                    Container(
+                      width: 18,
+                      height: 18,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: scheme.primary,
+                      ),
+                      child: Text(
+                        '$count',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: scheme.onPrimary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  const Icon(Icons.arrow_drop_down_rounded, size: 22),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
-      menuChildren: [
-        SizedBox(
-          width: _kTagWidth,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-            child: TextField(
-              onChanged: (text) => setState(() => _query = text),
-              style: const TextStyle(fontSize: 13.5),
-              decoration: const InputDecoration(
-                isDense: true,
-                hintText: 'Search VNDB tags',
-                prefixIcon: Icon(Icons.search_rounded, size: 18),
-              ),
-            ),
+    );
+  }
+}
+
+/// Number of filters in use: a tag, a non-All adult setting and a developer.
+int activeFilterCount(
+  String? tag,
+  keys.AdultFilter adult,
+  Developer? developer,
+) =>
+    (tag != null ? 1 : 0) +
+    (adult != keys.AdultFilter.all ? 1 : 0) +
+    (developer != null ? 1 : 0);
+
+class _FilterPanelOverlay extends StatelessWidget {
+  const _FilterPanelOverlay({required this.link, required this.onClose});
+
+  final LayerLink link;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final height = MediaQuery.sizeOf(context).height;
+    return Stack(
+      children: [
+        // Invisible and opaque: an outside click closes the panel and never
+        // reaches the widget underneath.
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onClose,
           ),
         ),
-        MenuItemButton(
-          leadingIcon: value == null
-              ? const Icon(Icons.check_rounded, size: 18)
-              : null,
-          onPressed: () => widget.onSelected(null),
-          child: const Text('All tags'),
+        CompositedTransformFollower(
+          link: link,
+          targetAnchor: Alignment.bottomRight,
+          followerAnchor: Alignment.topRight,
+          offset: const Offset(0, 6),
+          child: _FilterPanel(maxHeight: height * 0.7, onClose: onClose),
         ),
-        for (final tag in widget.tags)
-          MenuItemButton(
-            leadingIcon: tag == value
-                ? const Icon(Icons.check_rounded, size: 18)
-                : null,
-            onPressed: () => widget.onSelected(tag),
-            child: Text(tag),
-          ),
-        if (widget.vndbTags.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-            child: Text(
-              'VNDB tags',
-              style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
-            ),
-          ),
-        for (final (name, count) in vndb)
-          MenuItemButton(
-            leadingIcon: vndbTagFilter(name) == value
-                ? const Icon(Icons.check_rounded, size: 18)
-                : null,
-            onPressed: () => widget.onSelected(vndbTagFilter(name)),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(name),
-                const SizedBox(width: 12),
-                Text(
-                  '$count',
-                  style: TextStyle(color: scheme.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ),
       ],
-      builder: (context, controller, _) => InkWell(
-        onTap: () => controller.isOpen ? controller.close() : controller.open(),
-        child: Padding(
-          padding: const EdgeInsets.only(left: 14, right: 10),
-          child: Row(
-            children: [
-              Icon(
-                Icons.local_offer_rounded,
-                size: 18,
-                color: scheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: _kGap),
-              Expanded(
-                child: Text(
-                  _label(value),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+    );
+  }
+}
+
+class _FilterPanel extends ConsumerStatefulWidget {
+  const _FilterPanel({required this.maxHeight, required this.onClose});
+
+  final double maxHeight;
+  final VoidCallback onClose;
+
+  @override
+  ConsumerState<_FilterPanel> createState() => _FilterPanelState();
+}
+
+class _FilterPanelState extends ConsumerState<_FilterPanel> {
+  /// VNDB tags listed before a search narrows the list.
+  static const _vndbListLimit = 40;
+
+  final _scroll = ScrollController();
+  final _focus = FocusNode(debugLabel: 'filter panel');
+  var _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focus.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _clearAll() {
+    ref.read(tagFilterProvider.notifier).set(null);
+    ref.read(adultFilterProvider.notifier).set(keys.AdultFilter.all);
+    ref.read(developerFilterProvider.notifier).set(null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final games = ref.watch(libraryProvider).value?.library.games ?? [];
+    final tagFilter = ref.watch(tagFilterProvider);
+    final adult = ref.watch(adultFilterProvider);
+    final developer = ref.watch(developerFilterProvider);
+    final needle = _query.trim().toLowerCase();
+    final userTags = [
+      for (final tag in allTags(games))
+        if (needle.isEmpty || tag.toLowerCase().contains(needle)) tag,
+    ];
+    final allVndb = vndbTagCounts(games);
+    final vndbTags = needle.isEmpty
+        ? allVndb.take(_vndbListLimit).toList()
+        : [
+            for (final t in allVndb)
+              if (t.$1.toLowerCase().contains(needle)) t,
+          ];
+    final activeCount = activeFilterCount(tagFilter, adult, developer);
+    return Material(
+      color: scheme.surfaceContainer,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Focus(
+        focusNode: _focus,
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.escape) {
+            widget.onClose();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: SizedBox(
+          width: _kPanelWidth,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: widget.maxHeight),
+            child: Scrollbar(
+              controller: _scroll,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                controller: _scroll,
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _PanelSection(
+                      title: 'Adult',
+                      child: _ToolbarBox(
+                        child: Padding(
+                          padding: const EdgeInsets.all(3),
+                          child: Row(
+                            children: [
+                              for (final entry
+                                  in adultFilterLabels.entries) ...[
+                                if (entry.key != keys.AdultFilter.all)
+                                  const SizedBox(width: 2),
+                                Expanded(
+                                  child: _Segment(
+                                    label: entry.value,
+                                    selected: adult == entry.key,
+                                    onTap: () => ref
+                                        .read(adultFilterProvider.notifier)
+                                        .set(entry.key),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (developer != null) ...[
+                      const _PanelDivider(),
+                      _PanelSection(
+                        title: 'Developer',
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: TagChip(
+                            label: developer.name,
+                            onRemove: () => ref
+                                .read(developerFilterProvider.notifier)
+                                .set(null),
+                          ),
+                        ),
+                      ),
+                    ],
+                    const _PanelDivider(),
+                    _PanelSection(
+                      title: 'Tags',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _ToolbarBox(
+                            child: Padding(
+                              padding: const EdgeInsets.only(
+                                left: 14,
+                                right: 6,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.search_rounded,
+                                    size: 18,
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                  const SizedBox(width: _kGap),
+                                  Expanded(
+                                    child: TextField(
+                                      onChanged: (text) =>
+                                          setState(() => _query = text),
+                                      style: const TextStyle(fontSize: 14),
+                                      decoration: InputDecoration.collapsed(
+                                        hintText: 'Search tags…',
+                                        hintStyle: TextStyle(
+                                          color: scheme.outline,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _TagOption(
+                            label: 'All tags',
+                            selected: tagFilter == null,
+                            onTap: () =>
+                                ref.read(tagFilterProvider.notifier).set(null),
+                          ),
+                          for (final tag in userTags)
+                            _TagOption(
+                              label: tag,
+                              selected: tag == tagFilter,
+                              onTap: () =>
+                                  ref.read(tagFilterProvider.notifier).set(tag),
+                            ),
+                          if (vndbTags.isNotEmpty) ...[
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(10, 12, 10, 4),
+                              child: Text(
+                                'VNDB tags',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                            for (final (name, count) in vndbTags)
+                              _TagOption(
+                                label: name,
+                                count: count,
+                                selected: vndbTagFilter(name) == tagFilter,
+                                onTap: () => ref
+                                    .read(tagFilterProvider.notifier)
+                                    .set(vndbTagFilter(name)),
+                              ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (activeCount > 0) ...[
+                      const _PanelDivider(),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: BrandGlassButton(
+                          height: 36,
+                          expand: false,
+                          onPressed: _clearAll,
+                          label: const Text('Clear all'),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              const Icon(Icons.arrow_drop_down_rounded, size: 22),
-            ],
+            ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PanelSection extends StatelessWidget {
+  const _PanelSection({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        child,
+      ],
+    );
+  }
+}
+
+class _PanelDivider extends StatelessWidget {
+  const _PanelDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Divider(
+        height: 1,
+        thickness: 1,
+        color: Theme.of(context).colorScheme.outlineVariant,
+      ),
+    );
+  }
+}
+
+/// One row of the Tags list: a check for the selected tag, its name and an
+/// optional game count.
+class _TagOption extends StatelessWidget {
+  const _TagOption({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.count,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final int? count;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 18,
+              child: selected
+                  ? Icon(Icons.check_rounded, size: 18, color: scheme.primary)
+                  : null,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  color: selected ? scheme.primary : scheme.onSurface,
+                ),
+              ),
+            ),
+            if (count != null)
+              Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+          ],
         ),
       ),
     );
