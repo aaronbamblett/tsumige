@@ -118,4 +118,34 @@ void main() {
       ['Science', 'story'],
     );
   });
+
+  test('vndb tag filter matches rating 1.0 and up under the vndb prefix', () {
+    final strong = Game(id: 'a', title: 'A', vndbTags: const [
+      VndbTag(name: 'Romance', rating: 2.0, spoiler: 0, category: 'cont'),
+    ]);
+    final weak = Game(id: 'b', title: 'B', vndbTags: const [
+      VndbTag(name: 'Romance', rating: 0.5, spoiler: 0, category: 'cont'),
+    ]);
+    final mine = Game(id: 'c', title: 'C', tags: ['Romance']);
+    final found = applyQuery(
+      [strong, weak, mine],
+      const LibraryQuery(tag: 'vndb:Romance'),
+    );
+    expect(found.map((g) => g.id), ['a']);
+  });
+
+  test('vndbTagCounts counts non-spoiler tags at rating 2.0 and up', () {
+    final games = [
+      Game(id: 'a', title: 'A', vndbTags: const [
+        VndbTag(name: 'Romance', rating: 2.5, spoiler: 0, category: 'cont'),
+        VndbTag(name: 'Twist', rating: 2.5, spoiler: 1, category: 'cont'),
+        VndbTag(name: 'Weak', rating: 1.5, spoiler: 0, category: 'cont'),
+      ]),
+      Game(id: 'b', title: 'B', vndbTags: const [
+        VndbTag(name: 'Romance', rating: 2.0, spoiler: 0, category: 'cont'),
+        VndbTag(name: 'Yuri', rating: 2.0, spoiler: 0, category: 'cont'),
+      ]),
+    ];
+    expect(vndbTagCounts(games), [('Romance', 2), ('Yuri', 1)]);
+  });
 }

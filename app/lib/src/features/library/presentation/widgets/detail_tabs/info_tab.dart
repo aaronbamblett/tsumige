@@ -10,9 +10,11 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../../core/format.dart';
 import '../../../../../core/model.dart';
+import '../../../../../utils/prefs/app_prefs.dart' show tagFilterProvider;
 import '../../../../../utils/theme/brand.dart';
 import '../../../domain/cover_source.dart';
 import '../../../domain/game_editor.dart';
+import '../../../domain/library_query.dart';
 import '../../../domain/vndb_markup.dart';
 
 TextStyle? detailSectionLabelStyle(BuildContext context) {
@@ -51,8 +53,16 @@ class DetailSection extends StatelessWidget {
               label,
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
             ),
-            const Spacer(),
-            ...actions,
+            Flexible(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: actions,
+                ),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 10),
@@ -73,6 +83,9 @@ class InfoTab extends ConsumerWidget {
     blocks.add(_facts(context, ref));
     if (game.tags.isNotEmpty) {
       blocks.add(_TagsSection(game: game));
+    }
+    if (game.vndbTags.isNotEmpty) {
+      blocks.add(_VndbTagsSection(key: ValueKey(game.id), game: game));
     }
     blocks.add(_MarkupSection(
       game: game,
@@ -218,6 +231,136 @@ class _DeveloperLink extends ConsumerWidget {
         style: const TextStyle(
           decoration: TextDecoration.underline,
           decorationStyle: TextDecorationStyle.dotted,
+        ),
+      ),
+    );
+  }
+}
+
+const List<(String, String)> _vndbTagGroups = [
+  ('cont', 'Content'),
+  ('tech', 'Technical'),
+  ('ero', 'Sexual'),
+];
+
+class _VndbTagsSection extends ConsumerStatefulWidget {
+  const _VndbTagsSection({super.key, required this.game});
+
+  final Game game;
+
+  @override
+  ConsumerState<_VndbTagsSection> createState() => _VndbTagsSectionState();
+}
+
+class _VndbTagsSectionState extends ConsumerState<_VndbTagsSection> {
+  var _showAll = false;
+  var _showSpoilers = false;
+
+  bool _keep(VndbTag tag) {
+    if (tag.spoiler > 0 && !_showSpoilers) return false;
+    return _showAll ? tag.rating > 0 : tag.rating >= 2.0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tags = widget.game.vndbTags;
+    final allCount = tags.where((t) => t.spoiler == 0 && t.rating > 0).length;
+    final hasSpoilers = tags.any((t) => t.spoiler > 0);
+    final linkStyle = _linkButtonStyle(Theme.of(context).colorScheme);
+    return DetailSection(
+      label: 'VNDB tags',
+      actions: [
+        TextButton(
+          style: linkStyle,
+          onPressed: () => setState(() => _showAll = !_showAll),
+          child: Text(_showAll ? 'Show fewer' : 'Show all $allCount'),
+        ),
+        if (hasSpoilers)
+          TextButton(
+            style: linkStyle,
+            onPressed: () => setState(() => _showSpoilers = !_showSpoilers),
+            child: Text(_showSpoilers ? 'Hide spoilers' : 'Show spoilers'),
+          ),
+      ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (category, label) in _vndbTagGroups)
+            ..._group(context, label, _visible(category)),
+        ],
+      ),
+    );
+  }
+
+  List<VndbTag> _visible(String category) {
+    final visible = [
+      for (final tag in widget.game.vndbTags)
+        if (tag.category == category && _keep(tag)) tag,
+    ];
+    visible.sort((a, b) => b.rating.compareTo(a.rating));
+    return visible;
+  }
+
+  ButtonStyle _linkButtonStyle(ColorScheme scheme) => TextButton.styleFrom(
+    foregroundColor: scheme.onSurfaceVariant,
+    minimumSize: const Size(0, 28),
+    padding: const EdgeInsets.symmetric(horizontal: 8),
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    textStyle: const TextStyle(fontSize: 12.5),
+  );
+
+  List<Widget> _group(BuildContext context, String label, List<VndbTag> tags) {
+    if (tags.isEmpty) return const [];
+    return [
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Text(label, style: detailSectionLabelStyle(context)),
+      ),
+      Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [for (final tag in tags) _VndbTagChip(tag: tag)],
+      ),
+      const SizedBox(height: 12),
+    ];
+  }
+}
+
+class _VndbTagChip extends ConsumerWidget {
+  const _VndbTagChip({required this.tag});
+
+  final VndbTag tag;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      borderRadius: _kChipRadius,
+      onTap: () =>
+          ref.read(tagFilterProvider.notifier).set(vndbTagFilter(tag.name)),
+      child: Container(
+        height: _kChipHeight,
+        padding: const EdgeInsets.symmetric(horizontal: 11),
+        alignment: Alignment.center,
+        decoration: _chipDecoration.copyWith(
+          color: scheme.onSurface.withValues(alpha: 0.03),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (tag.spoiler > 0) ...[
+              Icon(
+                Icons.visibility_off_rounded,
+                size: 12,
+                color: scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              tag.name,
+              style: TextStyle(fontSize: 12.5, color: scheme.onSurface),
+            ),
+          ],
         ),
       ),
     );

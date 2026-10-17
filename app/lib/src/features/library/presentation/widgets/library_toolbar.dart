@@ -59,6 +59,7 @@ class LibraryToolbar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final games = ref.watch(libraryProvider).value?.library.games ?? [];
     final tags = allTags(games);
+    final vndbTags = vndbTagCounts(games);
     final field = ref.watch(sortFieldProvider);
     final ascending = ref.watch(sortAscendingProvider);
     final favouritesOnly = ref.watch(favouritesOnlyProvider);
@@ -165,6 +166,7 @@ class LibraryToolbar extends ConsumerWidget {
                       width: _kTagWidth,
                       child: _TagMenu(
                         tags: tags,
+                        vndbTags: vndbTags,
                         value: tagFilter,
                         onSelected: (value) =>
                             ref.read(tagFilterProvider.notifier).set(value),
@@ -337,40 +339,108 @@ class _SortMenu extends StatelessWidget {
   }
 }
 
-class _TagMenu extends StatelessWidget {
+class _TagMenu extends StatefulWidget {
   const _TagMenu({
     required this.tags,
+    required this.vndbTags,
     required this.value,
     required this.onSelected,
   });
 
   final List<String> tags;
+  final List<(String, int)> vndbTags;
   final String? value;
   final ValueChanged<String?> onSelected;
 
   @override
+  State<_TagMenu> createState() => _TagMenuState();
+}
+
+class _TagMenuState extends State<_TagMenu> {
+  /// VNDB tags listed before a search narrows the list.
+  static const _vndbListLimit = 40;
+
+  var _query = '';
+
+  String _label(String? value) {
+    if (value == null) return 'All tags';
+    if (value.startsWith(vndbTagPrefix)) {
+      return 'VNDB: ${value.substring(vndbTagPrefix.length)}';
+    }
+    return value;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final needle = _query.trim().toLowerCase();
+    final vndb = needle.isEmpty
+        ? widget.vndbTags.take(_vndbListLimit).toList()
+        : widget.vndbTags
+              .where((t) => t.$1.toLowerCase().contains(needle))
+              .toList();
+    final value = widget.value;
     return MenuAnchor(
       style: const MenuStyle(
         minimumSize: WidgetStatePropertyAll(Size(_kTagWidth, 0)),
         maximumSize: WidgetStatePropertyAll(Size(double.infinity, 360)),
       ),
       menuChildren: [
+        SizedBox(
+          width: _kTagWidth,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+            child: TextField(
+              onChanged: (text) => setState(() => _query = text),
+              style: const TextStyle(fontSize: 13.5),
+              decoration: const InputDecoration(
+                isDense: true,
+                hintText: 'Search VNDB tags',
+                prefixIcon: Icon(Icons.search_rounded, size: 18),
+              ),
+            ),
+          ),
+        ),
         MenuItemButton(
           leadingIcon: value == null
               ? const Icon(Icons.check_rounded, size: 18)
               : null,
-          onPressed: () => onSelected(null),
+          onPressed: () => widget.onSelected(null),
           child: const Text('All tags'),
         ),
-        for (final tag in tags)
+        for (final tag in widget.tags)
           MenuItemButton(
             leadingIcon: tag == value
                 ? const Icon(Icons.check_rounded, size: 18)
                 : null,
-            onPressed: () => onSelected(tag),
+            onPressed: () => widget.onSelected(tag),
             child: Text(tag),
+          ),
+        if (widget.vndbTags.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+            child: Text(
+              'VNDB tags',
+              style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
+            ),
+          ),
+        for (final (name, count) in vndb)
+          MenuItemButton(
+            leadingIcon: vndbTagFilter(name) == value
+                ? const Icon(Icons.check_rounded, size: 18)
+                : null,
+            onPressed: () => widget.onSelected(vndbTagFilter(name)),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(name),
+                const SizedBox(width: 12),
+                Text(
+                  '$count',
+                  style: TextStyle(color: scheme.onSurfaceVariant),
+                ),
+              ],
+            ),
           ),
       ],
       builder: (context, controller, _) => InkWell(
@@ -387,7 +457,7 @@ class _TagMenu extends StatelessWidget {
               const SizedBox(width: _kGap),
               Expanded(
                 child: Text(
-                  value ?? 'All tags',
+                  _label(value),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),

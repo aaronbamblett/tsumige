@@ -960,4 +960,81 @@ void main() {
     expect(find.text('Developer: Azarashi Soft'), findsNothing);
     expect(find.text('Beta'), findsOneWidget);
   });
+
+  testWidgets('VNDB tags default view hides spoiler and weak tags',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', vndbTags: const [
+        core.VndbTag(name: 'Romance', rating: 2.5, spoiler: 0, category: 'cont'),
+        core.VndbTag(name: 'Weak Tag', rating: 1.0, spoiler: 0, category: 'cont'),
+        core.VndbTag(name: 'Secret Twist', rating: 2.5, spoiler: 1, category: 'cont'),
+        core.VndbTag(name: 'Kissing', rating: 2.2, spoiler: 0, category: 'ero'),
+        core.VndbTag(name: 'Zero Tag', rating: 0, spoiler: 0, category: 'tech'),
+      ]),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(paneText(tester, 'VNDB tags'), findsOneWidget);
+    expect(paneText(tester, 'Content'), findsOneWidget);
+    expect(paneText(tester, 'Sexual'), findsOneWidget);
+    expect(paneText(tester, 'Technical'), findsNothing);
+    expect(paneText(tester, 'Romance'), findsOneWidget);
+    expect(paneText(tester, 'Kissing'), findsOneWidget);
+    expect(paneText(tester, 'Weak Tag'), findsNothing);
+    expect(paneText(tester, 'Secret Twist'), findsNothing);
+    expect(paneText(tester, 'Show all 3'), findsOneWidget);
+    expect(paneText(tester, 'Show spoilers'), findsOneWidget);
+  });
+
+  testWidgets('show all and show spoilers reveal tags and reset on game change',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', vndbTags: const [
+        core.VndbTag(name: 'Romance', rating: 2.5, spoiler: 0, category: 'cont'),
+        core.VndbTag(name: 'Weak Tag', rating: 1.0, spoiler: 0, category: 'cont'),
+        core.VndbTag(name: 'Secret Twist', rating: 2.5, spoiler: 1, category: 'cont'),
+      ]),
+      core.Game(id: 'g2', title: 'Beta', vndbTags: const [
+        core.VndbTag(name: 'Mystery', rating: 2.5, spoiler: 0, category: 'cont'),
+      ]),
+    ]);
+    await openPane(tester, 'Alpha');
+    await tester.ensureVisible(paneText(tester, 'Show all 2'));
+    await tester.tap(paneText(tester, 'Show all 2'));
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Weak Tag'), findsOneWidget);
+    expect(paneText(tester, 'Show fewer'), findsOneWidget);
+    await tester.ensureVisible(paneText(tester, 'Show spoilers'));
+    await tester.tap(paneText(tester, 'Show spoilers'));
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Secret Twist'), findsOneWidget);
+    expect(find.byIcon(Icons.visibility_off_rounded), findsOneWidget);
+    expect(paneText(tester, 'Hide spoilers'), findsOneWidget);
+    await tester.tap(find.text('Beta').first);
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Show all 1'), findsOneWidget);
+    expect(paneText(tester, 'Show fewer'), findsNothing);
+    expect(paneText(tester, 'Mystery'), findsOneWidget);
+    expect(paneText(tester, 'Weak Tag'), findsNothing);
+  });
+
+  testWidgets('clicking a VNDB tag sets the Tag filter', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', vndbTags: const [
+        core.VndbTag(name: 'Romance', rating: 2.5, spoiler: 0, category: 'cont'),
+      ]),
+      core.Game(id: 'g2', title: 'Beta'),
+    ]);
+    await openPane(tester, 'Alpha');
+    await tester.ensureVisible(paneText(tester, 'Romance'));
+    await tester.tap(paneText(tester, 'Romance'));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('toolbar-tag')),
+        matching: find.text('VNDB: Romance'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Beta'), findsNothing);
+  });
 }

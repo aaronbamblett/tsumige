@@ -249,4 +249,50 @@ void main() {
       isA<DesktopWindowScaffold>(),
     );
   });
+
+  testWidgets('Tag menu lists VNDB tags with counts and filters by one',
+      (tester) async {
+    await pumpToolbar(tester, [
+      core.Game(id: 'g1', title: 'Alpha', tags: ['Mine'], vndbTags: const [
+        core.VndbTag(name: 'Romance', rating: 2.5, spoiler: 0, category: 'cont'),
+      ]),
+      core.Game(id: 'g2', title: 'Beta', vndbTags: const [
+        core.VndbTag(name: 'Romance', rating: 2.0, spoiler: 0, category: 'cont'),
+      ]),
+      core.Game(id: 'g3', title: 'Gamma', vndbTags: const [
+        core.VndbTag(name: 'Yuri', rating: 2.0, spoiler: 0, category: 'cont'),
+      ]),
+    ]);
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(LibraryToolbar)));
+    await tester.tap(find.text('All tags'));
+    await tester.pumpAndSettle();
+    expect(find.text('VNDB tags'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.widgetWithText(MenuItemButton, 'Romance'),
+        matching: find.text('2'),
+      ),
+      findsOneWidget,
+    );
+    await tester.enterText(find.byWidgetPredicate((w) => w is TextField && w.decoration?.hintText == 'Search VNDB tags'), 'yur');
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(MenuItemButton, 'Romance'), findsNothing);
+    expect(find.widgetWithText(MenuItemButton, 'Yuri'), findsOneWidget);
+    await tester.enterText(find.byWidgetPredicate((w) => w is TextField && w.decoration?.hintText == 'Search VNDB tags'), '');
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(MenuItemButton, 'Romance'));
+    await tester.pumpAndSettle();
+    expect(container.read(tagFilterProvider), 'vndb:Romance');
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('toolbar-tag')),
+        matching: find.text('VNDB: Romance'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Gamma'), findsNothing);
+    expect(find.text('Alpha'), findsOneWidget);
+    expect(find.text('Beta'), findsOneWidget);
+  });
 }
