@@ -4,6 +4,16 @@ A visual novel library and launcher for Linux. Working name; the public name is 
 
 Licensed under the Mozilla Public License 2.0. See `LICENSE`.
 
+## Install
+
+Download the file for your system from the
+[releases page](https://github.com/aaronbamblett/tsumige/releases).
+
+- **Linux (Flatpak, recommended):** `flatpak remote-add --if-not-exists tsumige https://flatpak.tsumige.app/index.flatpakrepo`, then `flatpak install tsumige app.tsumige.Tsumige`.
+- **Linux (AppImage):** download `Tsumige-…-x86_64.AppImage`, run `chmod +x` on it, then run it.
+- **macOS:** unzip `Tsumige-…-macos.zip`. The app is unsigned, so right-click it and choose Open the first time.
+- **Windows:** unzip `Tsumige-…-windows-x64.zip` and run `tsumige.exe`.
+
 ## Building
 
 Flutter 3.47.7 via fvm (`.fvmrc` at the repo root applies in subfolders).
