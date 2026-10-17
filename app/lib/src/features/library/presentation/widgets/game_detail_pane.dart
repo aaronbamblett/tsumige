@@ -17,13 +17,14 @@ import '../../../../utils/prefs/app_prefs.dart' hide LaunchMode;
 import '../../data/library_repository.dart';
 import '../../domain/cover_source.dart';
 import '../../domain/launch_actions.dart';
+import '../../domain/running_games.dart';
 import '../../domain/selection.dart';
 import 'detail_tabs/history_tab.dart';
 import 'detail_tabs/info_tab.dart';
 import 'detail_tabs/launch_tab.dart';
 import 'detail_tabs/routes_tab.dart';
 
-const bool _launchingEnabled = false;
+
 
 class GameDetailPane extends ConsumerWidget {
   const GameDetailPane({super.key, required this.game});
@@ -191,9 +192,11 @@ class _Footer extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final actions = ref.watch(launchActionsProvider);
-    final mode = game.launch.mode ?? ref.watch(launchModeProvider);
+    final LaunchMode mode = game.launch.mode ?? ref.watch(launchModeProvider);
+    final running = ref.watch(runningGamesProvider).contains(game.id);
     final showRunExe =
         mode == LaunchMode.proton || mode == LaunchMode.wine;
+    final launchTip = _launchTooltip(ref, running, mode);
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -202,33 +205,48 @@ class _Footer extends ConsumerWidget {
         children: [
           if (showRunExe)
             Tooltip(
-              message: 'Launching arrives in the next build',
+              message: running ? 'Running' : '',
               child: SizedBox(
                 width: double.infinity,
                 height: 44,
                 child: OutlinedButton(
-                  onPressed: _launchingEnabled
-                      ? () => actions.runExeInPrefix(game)
-                      : null,
+                  onPressed: running
+                      ? null
+                      : () => actions.runExeInPrefix(context, game),
                   child: const Text('Run .exe inside prefix'),
                 ),
               ),
             ),
           Tooltip(
-            message: 'Launching arrives in the next build',
+            message: launchTip ?? '',
             child: SizedBox(
               width: double.infinity,
               height: 44,
               child: FilledButton(
-                onPressed: _launchingEnabled
-                    ? () => actions.launch(game)
+                onPressed: launchTip == null
+                    ? () => actions.launch(context, game)
                     : null,
-                child: const Text('Launch'),
+                child: Text(running ? 'Running' : 'Launch'),
               ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  String? _launchTooltip(WidgetRef ref, bool running, LaunchMode mode) {
+    if (running) return 'Running';
+    if (mode == LaunchMode.steam) {
+      if (game.launch.steamAppId == null) return 'Steam App ID is not set';
+    } else {
+      final exe = game.launch.executable;
+      if (exe == null || exe.isEmpty) return 'No executable set';
+      if (mode == LaunchMode.proton &&
+          ref.watch(umuRunPathProvider) == null) {
+        return 'umu-run not found on PATH';
+      }
+    }
+    return null;
   }
 }

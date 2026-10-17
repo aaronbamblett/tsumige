@@ -308,8 +308,7 @@ void main() {
     final launchRect = tester.getRect(launch);
     expect(launchRect.top, greaterThanOrEqualTo(0));
     expect(launchRect.bottom, lessThanOrEqualTo(800));
-    expect(find.byTooltip('Launching arrives in the next build'),
-        findsNWidgets(2));
+    expect(find.byTooltip('No executable set'), findsOneWidget);
   });
 
   testWidgets('run exe button is absent for a Native game', (tester) async {

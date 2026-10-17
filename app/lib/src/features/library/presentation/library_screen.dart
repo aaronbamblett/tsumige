@@ -11,14 +11,38 @@ import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../core/launch/session_recorder.dart';
+import '../../../core/model.dart' as core;
+import '../../../utils/prefs/app_prefs.dart';
 import '../../../utils/startup_time.dart';
+import '../../../utils/toast.dart';
 import '../data/library_repository.dart';
 import '../domain/cover_source.dart';
+import '../domain/launch_actions.dart';
 import '../domain/selection.dart';
 import 'widgets/game_detail_pane.dart';
 import 'widgets/library_grid.dart';
 import 'widgets/library_toolbar.dart';
 import 'widgets/skipped_banner.dart';
+
+/// One-line banner shown when Proton games cannot launch because `umu-run`
+/// is missing from PATH. It sits next to the skipped-entries banner.
+class _UmuBanner extends StatelessWidget {
+  const _UmuBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Card(
+      margin: EdgeInsets.all(8),
+      child: Padding(
+        padding: EdgeInsets.all(12),
+        child: Text(
+          "umu-run was not found on PATH, so Proton games can't launch.",
+        ),
+      ),
+    );
+  }
+}
 
 /// The library view: toolbar above a lazy cover grid. After the first frame
 /// with data it prints `startup_ms` and fills in missing thumbnails in the
@@ -41,6 +65,16 @@ class LibraryScreen extends HookConsumerWidget {
           stderr.writeln(
               'startup_ms=${DateTime.now().difference(entry).inMilliseconds}');
         }
+        final recovered = await recoverSessions(
+          ref.read(dataDirProvider),
+          ref.read(sessionStoreProvider),
+        );
+        if (recovered > 0) {
+          ref.invalidate(libraryProvider);
+          if (context.mounted) {
+            Toast(context).show('Recovered $recovered play session(s)');
+          }
+        }
         final loaded = ref.read(libraryProvider).value;
         if (loaded == null) return;
         final report = await ref
@@ -55,6 +89,12 @@ class LibraryScreen extends HookConsumerWidget {
     final total =
         libraryAsync.value?.library.games.length ?? games.length;
     final selected = ref.watch(selectedGameProvider);
+    final defaultMode = ref.watch(launchModeProvider);
+    final umuMissing = ref.watch(umuRunPathProvider) == null;
+    final libraryGames = libraryAsync.value?.library.games ?? const [];
+    final usesProton = defaultMode == core.LaunchMode.proton ||
+        libraryGames.any(
+            (game) => (game.launch.mode ?? defaultMode) == core.LaunchMode.proton);
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -64,6 +104,7 @@ class LibraryScreen extends HookConsumerWidget {
               skipped:
                   libraryAsync.value?.skipped ?? const [],
             ),
+            if (umuMissing && usesProton) const _UmuBanner(),
             Expanded(
               child: Focus(
                 autofocus: true,
