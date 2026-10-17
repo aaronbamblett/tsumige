@@ -237,6 +237,68 @@ abstract class _$FavouritesOnly extends $Notifier<bool> {
   }
 }
 
+/// Adult filter; stored as the enum index, out-of-range reads fall back to
+/// [keys.AdultFilter.all].
+
+@ProviderFor(AdultFilter)
+final adultFilterProvider = AdultFilterProvider._();
+
+/// Adult filter; stored as the enum index, out-of-range reads fall back to
+/// [keys.AdultFilter.all].
+final class AdultFilterProvider
+    extends $NotifierProvider<AdultFilter, keys.AdultFilter> {
+  /// Adult filter; stored as the enum index, out-of-range reads fall back to
+  /// [keys.AdultFilter.all].
+  AdultFilterProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'adultFilterProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$adultFilterHash();
+
+  @$internal
+  @override
+  AdultFilter create() => AdultFilter();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(keys.AdultFilter value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<keys.AdultFilter>(value),
+    );
+  }
+}
+
+String _$adultFilterHash() => r'c8d997f5e490a8a40886af14624fad610499440c';
+
+/// Adult filter; stored as the enum index, out-of-range reads fall back to
+/// [keys.AdultFilter.all].
+
+abstract class _$AdultFilter extends $Notifier<keys.AdultFilter> {
+  keys.AdultFilter build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<keys.AdultFilter, keys.AdultFilter>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<keys.AdultFilter, keys.AdultFilter>,
+              keys.AdultFilter,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
 /// Tag filter; null means no filter.
 
 @ProviderFor(TagFilter)

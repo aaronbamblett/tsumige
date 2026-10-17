@@ -1144,4 +1144,30 @@ void main() {
     expect(body('Related'), findsNothing);
     expect(body('More like this'), findsNothing);
   });
+
+  testWidgets('the More menu sets and clears the adult override',
+      (tester) async {
+    final games = [core.Game(id: 'g1', title: 'Alpha', adultVndb: false)];
+    await pumpLibrary(tester, games);
+    await openPane(tester, 'Alpha');
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    expect(find.text("Use VNDB's adult flag"), findsNothing);
+    await tester.tap(find.text('Mark as adult'));
+    await tester.pumpAndSettle();
+    expect(games.single.adultOverride, isTrue);
+    expect(games.single.isAdult, isTrue);
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mark as not adult'));
+    await tester.pumpAndSettle();
+    expect(games.single.adultOverride, isFalse);
+    expect(games.single.isAdult, isFalse);
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text("Use VNDB's adult flag"));
+    await tester.pumpAndSettle();
+    expect(games.single.adultOverride, isNull);
+    expect(games.single.isAdult, isFalse);
+  });
 }

@@ -48,6 +48,24 @@ class FavouritesOnly extends _$FavouritesOnly with PrefsMixin<bool> {
   void set(bool value) => state = value;
 }
 
+/// Adult filter; stored as the enum index, out-of-range reads fall back to
+/// [keys.AdultFilter.all].
+@riverpod
+class AdultFilter extends _$AdultFilter with PrefsMixin<keys.AdultFilter> {
+  @override
+  keys.AdultFilter build() {
+    persistOnChange((next) async =>
+        prefs.setInt(keys.PrefKey.adultFilter.key, next.index));
+    final stored = prefs.getInt(keys.PrefKey.adultFilter.key);
+    if (stored == null || stored < 0 || stored >= keys.AdultFilter.values.length) {
+      return keys.AdultFilter.all;
+    }
+    return keys.AdultFilter.values[stored];
+  }
+
+  void set(keys.AdultFilter value) => state = value;
+}
+
 /// Tag filter; null means no filter.
 @riverpod
 class TagFilter extends _$TagFilter with PrefsMixin<String?> {

@@ -148,4 +148,23 @@ void main() {
     ];
     expect(vndbTagCounts(games), [('Romance', 2), ('Yuri', 1)]);
   });
+
+  test('adult filter keeps all games, hides adult or shows only adult', () {
+    final games = [
+      Game(id: 'a', title: 'A', adultVndb: true),
+      Game(id: 'b', title: 'B', adultVndb: false),
+      Game(id: 'c', title: 'C', adultOverride: true),
+      Game(id: 'd', title: 'D', adultVndb: true, adultOverride: false),
+    ];
+    List<String> ids(AdultFilter filter) => [
+          for (final g in applyQuery(
+            games,
+            LibraryQuery(adult: filter, field: SortField.title),
+          ))
+            g.id,
+        ];
+    expect(ids(AdultFilter.all), ['a', 'b', 'c', 'd']);
+    expect(ids(AdultFilter.hide), ['b', 'd']);
+    expect(ids(AdultFilter.only), ['a', 'c']);
+  });
 }

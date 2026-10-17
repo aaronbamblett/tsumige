@@ -7,6 +7,9 @@
 /// Library sort orders.
 enum SortField { added, title, lastPlayed, playtime, vndbRating }
 
+/// Toolbar filter on adult games.
+enum AdultFilter { all, hide, only }
+
 /// Cover grid tile width bounds, in logical pixels.
 const int coverWidthMin = 100;
 const int coverWidthMax = 400;
@@ -21,6 +24,7 @@ enum PrefKey {
   sortField('library.sortField', 0),
   sortAscending('library.sortAscending', true),
   favouritesOnly('library.favouritesOnly', false),
+  adultFilter('library.adultFilter', 0),
   tagFilter('library.tagFilter', null),
   launchMode('launch.mode', 'proton'),
   launchPrefix('launch.prefix', '~/Games/vnl/prefix'),

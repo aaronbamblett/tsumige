@@ -449,6 +449,22 @@ class _HeroControls extends ConsumerWidget {
                 _changeCover(context, ref, game);
               case 'refetch':
                 _refetchCover(context, ref, game);
+              case 'adult':
+                ref
+                    .read(gameEditorProvider)
+                    .update(
+                      game.id,
+                      (g) => g.adultOverride = !g.isAdult,
+                      context: context,
+                    );
+              case 'adult-vndb':
+                ref
+                    .read(gameEditorProvider)
+                    .update(
+                      game.id,
+                      (g) => g.adultOverride = null,
+                      context: context,
+                    );
               case 'delete':
                 _deleteGame(context, ref, game);
             }
@@ -459,6 +475,15 @@ class _HeroControls extends ConsumerWidget {
               const PopupMenuItem(
                 value: 'refetch',
                 child: Text('Re-fetch cover from VNDB'),
+              ),
+            PopupMenuItem(
+              value: 'adult',
+              child: Text(game.isAdult ? 'Mark as not adult' : 'Mark as adult'),
+            ),
+            if (game.adultOverride != null)
+              const PopupMenuItem(
+                value: 'adult-vndb',
+                child: Text("Use VNDB's adult flag"),
               ),
             const PopupMenuItem(value: 'delete', child: Text('Delete game…')),
           ],

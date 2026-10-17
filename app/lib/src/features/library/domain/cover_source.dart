@@ -103,6 +103,7 @@ List<Game> visibleGames(Ref ref) {
     favouritesOnly: ref.watch(favouritesOnlyProvider),
     tag: ref.watch(tagFilterProvider),
     developerId: ref.watch(developerFilterProvider)?.id,
+    adult: ref.watch(adultFilterProvider),
     field: ref.watch(sortFieldProvider),
     ascending: ref.watch(sortAscendingProvider),
   );

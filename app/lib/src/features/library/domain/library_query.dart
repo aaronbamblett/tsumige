@@ -19,6 +19,7 @@ class LibraryQuery {
     this.favouritesOnly = false,
     this.tag,
     this.developerId,
+    this.adult = AdultFilter.all,
     this.field = SortField.added,
     this.ascending = true,
   });
@@ -27,6 +28,7 @@ class LibraryQuery {
   final bool favouritesOnly;
   final String? tag;
   final String? developerId;
+  final AdultFilter adult;
   final SortField field;
   final bool ascending;
 }
@@ -55,6 +57,8 @@ List<Game> applyQuery(List<Game> games, LibraryQuery q) {
         !g.developers.any((d) => d.id == q.developerId)) {
       return false;
     }
+    if (q.adult == AdultFilter.hide && g.isAdult) return false;
+    if (q.adult == AdultFilter.only && !g.isAdult) return false;
     return true;
   }).toList();
   int byTitle(Game a, Game b) =>
