@@ -9,6 +9,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,12 +18,14 @@ import 'package:vnl/src/core/covers.dart' as core;
 import 'package:vnl/src/core/model.dart' as core;
 import 'package:vnl/src/core/paths.dart' as core;
 import 'package:vnl/src/core/vndb.dart' as core;
+import 'package:vnl/src/constants/pref_keys.dart' as keys;
 import 'package:vnl/src/features/library/data/library_repository.dart';
 import 'package:vnl/src/features/library/domain/cover_source.dart';
 import 'package:vnl/src/features/library/presentation/widgets/game_cover_grid_delegate.dart';
 import 'package:vnl/src/features/library/presentation/widgets/game_cover_tile.dart';
 import 'package:vnl/src/utils/prefs/app_prefs.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
+import 'package:vnl/src/widgets/search_field.dart';
 
 class GridFakeRepository implements LibraryRepository {
   GridFakeRepository(this.games);
@@ -61,6 +64,14 @@ void setSurface(WidgetTester tester, double width, double height) {
 
 Future<void> pumpLibrary(WidgetTester tester, List<core.Game> games) async {
   setSurface(tester, 1280, 800);
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(
+    const MethodChannel('window_manager'),
+    (call) async {
+      if (call.method == 'isMaximized') return false;
+      return null;
+    },
+  );
   final temp = Directory.systemTemp.createTempSync('vnl_grid_test_');
   addTearDown(() => temp.deleteSync(recursive: true));
   SharedPreferences.setMockInitialValues({});
@@ -97,7 +108,13 @@ void main() {
 
   testWidgets('typing in search changes the count text', (tester) async {
     await pumpLibrary(tester, fakeGames(2000));
-    await tester.enterText(find.byType(TextField), 'zzz');
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(SearchField),
+        matching: find.byType(TextField),
+      ),
+      'zzz',
+    );
     await tester.pump();
     expect(find.text('0 of 2000'), findsOneWidget);
   });
@@ -114,11 +131,11 @@ void main() {
   testWidgets('toolbar is one row at 1280 wide', (tester) async {
     await pumpLibrary(tester, fakeGames(20));
     final items = [
-      find.byType(TextField),
-      find.text('Added'),
+      find.byType(SearchField),
+      find.byType(DropdownMenu<keys.SortField>),
       find.byTooltip('Ascending'),
       find.byType(SegmentedButton<bool>),
-      find.text('Tags'),
+      find.byType(DropdownMenu<String?>),
       find.byType(Slider),
       find.text('20 games'),
       find.byTooltip('Settings'),
@@ -282,7 +299,10 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(tester.takeException(), isNull);
-      final ratings = find.textContaining('VNDB Rating');
+      final ratings = find.descendant(
+        of: find.byType(GameCoverTile),
+        matching: find.textContaining('VNDB Rating'),
+      );
       if (width == 400) expect(ratings, findsOneWidget);
       for (final element in ratings.evaluate()) {
         final paragraph = tester.renderObject<RenderParagraph>(
@@ -296,7 +316,13 @@ void main() {
     await pumpLibrary(tester, [
       core.Game(id: 'g1', title: 'Alpha', tags: ['zzz-unique-tag']),
     ]);
-    expect(find.textContaining('zzz-unique-tag'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(GameCoverTile),
+        matching: find.textContaining('zzz-unique-tag'),
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('no overflow at slider values 100, 192 and 400',

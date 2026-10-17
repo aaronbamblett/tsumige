@@ -20,7 +20,9 @@ import 'package:vnl/src/core/paths.dart' as core;
 import 'package:vnl/src/core/vndb.dart' as core;
 import 'package:vnl/src/features/library/data/library_repository.dart';
 import 'package:vnl/src/features/library/domain/cover_source.dart';
+import 'package:vnl/src/features/library/presentation/widgets/game_detail_pane.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
+import 'package:vnl/src/widgets/search_field.dart';
 
 class DetailFakeRepository implements LibraryRepository {
   DetailFakeRepository(this.games);
@@ -78,6 +80,11 @@ Future<void> openPane(WidgetTester tester, String title) async {
   await tester.pump();
   await tester.pump();
 }
+
+Finder paneText(WidgetTester tester, String text) => find.descendant(
+      of: find.byType(GameDetailPane),
+      matching: find.text(text),
+    );
 
 void _visitSpans(
     InlineSpan span, TextStyle? inherited, void Function(TextSpan, TextStyle?) fn) {
@@ -194,7 +201,11 @@ void main() {
 
   testWidgets('search field is at least 240 wide at 1280', (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
-    final width = tester.getSize(find.byType(TextField)).width;
+    final searchBox = find.descendant(
+      of: find.byType(SearchField),
+      matching: find.byType(TextField),
+    );
+    final width = tester.getSize(searchBox).width;
     expect(width, greaterThanOrEqualTo(240));
     expect(width, lessThanOrEqualTo(360));
   });
@@ -217,7 +228,13 @@ void main() {
       core.Game(id: 'g2', title: 'Beta'),
     ]);
     await openPane(tester, 'Alpha');
-    await tester.enterText(find.byType(TextField), 'zzz');
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(SearchField),
+        matching: find.byType(TextField),
+      ),
+      'zzz',
+    );
     await tester.pump();
     expect(find.text('0 of 2'), findsOneWidget);
     expect(find.text('Alpha'), findsOneWidget);
@@ -272,7 +289,7 @@ void main() {
       core.Game(id: 'g1', title: 'Alpha', vndbRating: 85.0),
     ]);
     await openPane(tester, 'Alpha');
-    expect(find.text('VNDB Rating'), findsOneWidget);
+    expect(paneText(tester, 'VNDB Rating'), findsOneWidget);
     expect(find.text('8.5'), findsOneWidget);
     expect(find.textContaining('votes'), findsNothing);
   });
@@ -340,13 +357,13 @@ void main() {
       ),
     ]);
     await openPane(tester, 'Alpha');
-    expect(find.text('VNDB Rating'), findsOneWidget);
+    expect(paneText(tester, 'VNDB Rating'), findsOneWidget);
     expect(find.text('8.5'), findsOneWidget);
     expect(find.text('12 votes'), findsOneWidget);
     expect(find.text('Released'), findsOneWidget);
     expect(find.text('2024-05-06'), findsOneWidget);
-    expect(find.text('Action'), findsOneWidget);
-    expect(find.text('Romance'), findsOneWidget);
+    expect(paneText(tester, 'Action'), findsOneWidget);
+    expect(paneText(tester, 'Romance'), findsOneWidget);
     expect(find.text('Total playtime'), findsOneWidget);
     expect(find.text('0 min'), findsOneWidget);
     expect(find.textContaining(RegExp(r'^Total \d')), findsNothing);
@@ -386,7 +403,8 @@ void main() {
     final coverRect =
         tester.getRect(find.byKey(const ValueKey('detail-cover')));
     expect(coverRect.width, moreOrLessEquals(190, epsilon: 0.5));
-    final labelTopLeft = tester.getTopLeft(find.text('VNDB Rating'));
+    final labelTopLeft =
+        tester.getTopLeft(paneText(tester, 'VNDB Rating'));
     expect(labelTopLeft.dx, greaterThan(coverRect.right));
     expect((labelTopLeft.dy - coverRect.top).abs(), lessThanOrEqualTo(20));
     expect(find.text('6.4'), findsOneWidget);

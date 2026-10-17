@@ -21,7 +21,7 @@ import 'window_geometry_store.dart';
 const kMinWindowSize = Size(300, 400);
 const kDefaultWindowSize = Size(1280, 900);
 
-/// Initialise the desktop window: use the normal OS title bar, restore the
+/// Initialise the desktop window: hide the OS title bar, restore the
 /// saved size/maximized state, and show only once Flutter is ready (no white
 /// flash). Position is never saved or restored. No-op on web/mobile.
 Future<void> initDesktopWindow(SharedPreferences prefs) async {
@@ -40,7 +40,7 @@ Future<void> initDesktopWindow(SharedPreferences prefs) async {
     size: restoreSize,
     minimumSize: kMinWindowSize,
     center: saved.size == null,
-    titleBarStyle: TitleBarStyle.normal,
+    titleBarStyle: TitleBarStyle.hidden,
     // macOS: keep the native traffic lights floating over our surface.
     windowButtonVisibility: Platform.isMacOS,
   );
