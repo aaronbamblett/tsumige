@@ -7,7 +7,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../constants/pref_keys.dart' as keys;
-import '../../core/model.dart' as core;
 import 'prefs_mixin.dart';
 
 part 'app_prefs.g.dart';
@@ -73,16 +72,6 @@ class TagFilter extends _$TagFilter with PrefsMixin<String?> {
   String? build() => initString(keys.PrefKey.tagFilter);
 
   void set(String? value) => state = value;
-}
-
-/// Default launch mode for games. Stored by enum name; unknown values fall
-/// back to proton. Nothing reads it yet; launching is phase 2.
-@riverpod
-class LaunchMode extends _$LaunchMode with PrefsMixin<core.LaunchMode> {
-  @override
-  core.LaunchMode build() => initLaunchMode();
-
-  void set(core.LaunchMode value) => state = value;
 }
 
 /// Default Wine/Proton prefix for games. Nothing reads it yet.

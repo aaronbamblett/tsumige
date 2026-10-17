@@ -13,7 +13,7 @@ import '../../../../../core/launch/args.dart';
 import '../../../../../core/launch/detect.dart';
 import '../../../../../core/launch/env.dart';
 import '../../../../../core/model.dart';
-import '../../../../../utils/prefs/app_prefs.dart' hide LaunchMode;
+import '../../../../../utils/prefs/app_prefs.dart';
 import '../../../../../utils/toast.dart';
 import '../../../domain/game_editor.dart';
 import '../../../domain/runner_detection.dart';
@@ -61,12 +61,11 @@ class LaunchTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final defaultMode = ref.watch(launchModeProvider);
     final defaultPrefix = ref.watch(launchPrefixProvider);
     final defaultRunner = ref.watch(launchRunnerProvider);
     final defaultLocale = ref.watch(launchLocaleProvider);
     final defaultUmu = ref.watch(launchUmuGameIdProvider);
-    final mode = game.launch.mode ?? defaultMode;
+    final mode = game.launch.mode ?? LaunchMode.proton;
     final wines =
         ref.watch(wineRunnersProvider).value ?? const <WineRunner>[];
     final protons = ref.watch(protonRunnersProvider).value ??
@@ -76,7 +75,7 @@ class LaunchTab extends ConsumerWidget {
     final children = <Widget>[
       launchFieldLabel(context, 'Mode', game.launch.mode == null),
       const SizedBox(height: 4),
-      _ModeDropdown(game: game, defaultMode: defaultMode),
+      _ModeDropdown(game: game),
     ];
     void gap() {
       children.add(const SizedBox(height: 12));
@@ -156,17 +155,16 @@ class LaunchTab extends ConsumerWidget {
 }
 
 class _ModeDropdown extends ConsumerWidget {
-  const _ModeDropdown({required this.game, required this.defaultMode});
+  const _ModeDropdown({required this.game});
 
   final Game game;
-  final LaunchMode defaultMode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return DropdownButton<LaunchMode>(
       key: const Key('launch-mode'),
       value: game.launch.mode,
-      hint: Text(launchModeName(defaultMode)),
+      hint: Text(launchModeName(LaunchMode.proton)),
       isExpanded: true,
       items: [
         for (final mode in LaunchMode.values)

@@ -8,7 +8,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vnl/src/constants/pref_keys.dart' as keys;
-import 'package:vnl/src/core/model.dart' as core;
 import 'package:vnl/src/utils/prefs/app_prefs.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
 
@@ -70,7 +69,6 @@ void main() {
     final container = containerFor(prefs);
     addTearDown(container.dispose);
 
-    expect(container.read(launchModeProvider), core.LaunchMode.proton);
     expect(container.read(launchPrefixProvider), '~/Games/vnl/prefix');
     expect(container.read(launchRunnerProvider), isNull);
     expect(container.read(launchLocaleProvider), 'ja_JP.UTF-8');

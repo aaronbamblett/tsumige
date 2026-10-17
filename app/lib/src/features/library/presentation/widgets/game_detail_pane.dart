@@ -20,7 +20,6 @@ import '../../../../core/launch/game_runner.dart';
 import '../../../../core/model.dart';
 import '../../../../core/trash.dart';
 import '../../../../core/vndb.dart';
-import '../../../../utils/prefs/app_prefs.dart' hide LaunchMode;
 import '../../../../utils/theme/brand.dart';
 import '../../../../utils/toast.dart';
 import '../../data/library_repository.dart';
@@ -611,7 +610,7 @@ class _Footer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final actions = ref.watch(launchActionsProvider);
     final scheme = Theme.of(context).colorScheme;
-    final LaunchMode mode = game.launch.mode ?? ref.watch(launchModeProvider);
+    final LaunchMode mode = game.launch.mode ?? LaunchMode.proton;
     final phase = ref.watch(runningGamesProvider)[game.id];
     final busy = phase != null;
     final showRunExe = mode == LaunchMode.proton || mode == LaunchMode.wine;

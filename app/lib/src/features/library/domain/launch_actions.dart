@@ -88,7 +88,7 @@ class LaunchActions {
   final Ref _ref;
 
   LaunchDefaults _defaults() => LaunchDefaults(
-        mode: _ref.read(launchModeProvider),
+        mode: core.LaunchMode.proton,
         prefix: _ref.read(launchPrefixProvider),
         runner: _ref.read(launchRunnerProvider),
         locale: _ref.read(launchLocaleProvider),

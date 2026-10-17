@@ -229,7 +229,7 @@ void main() {
     );
 
     await openSection(tester, 'launching');
-    expect(find.text('Default mode'), findsOneWidget);
+    expect(find.byKey(const Key('launch-mode-card-proton')), findsNothing);
     await openSection(tester, 'advanced');
     expect(find.text('UMU game id'), findsOneWidget);
     await openSection(tester, 'about');
@@ -364,29 +364,6 @@ void main() {
     expect(repo.saveCount, 0);
     expect(repo.loadCount, 2);
     await tester.pump(const Duration(seconds: 6));
-  });
-
-  testWidgets('mode cards write the pref and mark the selection', (
-    tester,
-  ) async {
-    final container = await pumpSettings(tester, SettingsFakeRepository());
-    await openSection(tester, 'launching');
-    expect(container.read(launchModeProvider), core.LaunchMode.proton);
-    expect(
-      find.byKey(const Key('launch-mode-selected-proton')),
-      findsOneWidget,
-    );
-    await tester.tap(find.byKey(const Key('launch-mode-card-wine')));
-    await tester.pump();
-    expect(container.read(launchModeProvider), core.LaunchMode.wine);
-    expect(find.byKey(const Key('launch-mode-selected-wine')), findsOneWidget);
-    expect(find.byKey(const Key('launch-mode-selected-proton')), findsNothing);
-
-    final heights = {
-      for (final mode in core.LaunchMode.values)
-        tester.getSize(find.byKey(Key('launch-mode-card-${mode.name}'))).height,
-    };
-    expect(heights, hasLength(1));
   });
 
   testWidgets('prefix field is 40 px tall', (tester) async {

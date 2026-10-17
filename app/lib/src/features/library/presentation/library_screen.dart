@@ -13,7 +13,6 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../core/launch/session_recorder.dart';
 import '../../../core/model.dart' as core;
-import '../../../utils/prefs/app_prefs.dart';
 import '../../../utils/startup_time.dart';
 import '../../../utils/toast.dart';
 import '../data/library_repository.dart';
@@ -92,14 +91,13 @@ class LibraryScreen extends HookConsumerWidget {
       return null;
     }, [libraryAsync.hasValue]);
     final selected = ref.watch(selectedGameProvider);
-    final defaultMode = ref.watch(launchModeProvider);
     final umuMissing = ref.watch(umuRunPathProvider) == null;
     final libraryGames = libraryAsync.value?.library.games ?? const [];
-    final usesProton =
-        defaultMode == core.LaunchMode.proton ||
-        libraryGames.any(
-          (game) => (game.launch.mode ?? defaultMode) == core.LaunchMode.proton,
-        );
+    final usesProton = libraryGames.any(
+      (game) =>
+          (game.launch.mode ?? core.LaunchMode.proton) ==
+          core.LaunchMode.proton,
+    );
     return Scaffold(
       body: SafeArea(
         child: LayoutBuilder(

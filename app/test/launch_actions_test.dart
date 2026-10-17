@@ -235,6 +235,19 @@ void main() {
         tester.widget<BrandButton>(launchButton()).onPressed, isNotNull);
   });
 
+  testWidgets('a game with no mode launches as Proton', (tester) async {
+    await pumpLaunch(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        launch: core.LaunchOverrides(executable: '/games/g/game.exe'),
+      ),
+    ], umu: '/usr/bin/umu-run');
+    await openPane(tester, 'Alpha');
+    expect(tester.widget<BrandButton>(launchButton()).onPressed, isNotNull);
+    expect(find.text('Run .exe inside prefix…'), findsOneWidget);
+  });
+
   testWidgets('pressing launch calls the runner once', (tester) async {
     final runner = FakeRunner();
     await pumpLaunch(tester, [protonGame('g1', 'Alpha')],

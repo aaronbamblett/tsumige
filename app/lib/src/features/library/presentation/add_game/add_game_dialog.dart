@@ -14,7 +14,6 @@ import 'package:uuid/uuid.dart';
 import '../../../../core/covers.dart';
 import '../../../../core/model.dart';
 import '../../../../core/vndb.dart';
-import '../../../../utils/prefs/app_prefs.dart' hide LaunchMode;
 import '../../../../utils/theme/brand.dart';
 import '../../../../utils/toast.dart';
 import '../../data/library_repository.dart';
@@ -67,7 +66,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     _tags = TextEditingController();
     _exe = TextEditingController();
     _steamAppId = TextEditingController();
-    _mode = ref.read(launchModeProvider);
+    _mode = LaunchMode.proton;
   }
 
   @override

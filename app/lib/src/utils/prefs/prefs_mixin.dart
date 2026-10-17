@@ -8,7 +8,6 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../constants/pref_keys.dart';
-import '../../core/model.dart' as core;
 
 part 'prefs_mixin.g.dart';
 
@@ -111,10 +110,4 @@ mixin PrefsMixin<T> {
     return SortField.added;
   }
 
-  core.LaunchMode initLaunchMode() {
-    persistOnChange((next) async =>
-        prefs.setString(PrefKey.launchMode.key, (next as core.LaunchMode).name));
-    return core.parseLaunchMode(prefs.getString(PrefKey.launchMode.key)) ??
-        core.LaunchMode.proton;
-  }
 }

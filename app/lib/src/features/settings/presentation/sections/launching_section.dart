@@ -8,7 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../core/launch/detect.dart';
-import '../../../../core/model.dart' as core;
 import '../../../../utils/prefs/app_prefs.dart';
 import '../../../../utils/theme/brand.dart';
 import '../../../library/domain/runner_detection.dart';
@@ -32,7 +31,6 @@ class LaunchingSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        const SettingsGroup(title: 'Default mode', child: _ModeCards()),
         const SettingsGroup(
           rowKey: Key('settings-row-prefix'),
           title: 'Wine prefix',
@@ -47,156 +45,6 @@ class LaunchingSection extends StatelessWidget {
         ),
         const _GameLanguageGroup(),
       ],
-    );
-  }
-}
-
-class _ModeCards extends ConsumerWidget {
-  const _ModeCards();
-
-  static const Map<core.LaunchMode, (String, String, IconData)> _info = {
-    core.LaunchMode.proton: (
-      'Proton',
-      'Windows games via umu and Proton',
-      Icons.sports_esports_rounded,
-    ),
-    core.LaunchMode.wine: (
-      'Wine',
-      'Windows games via a Wine build',
-      Icons.wine_bar_rounded,
-    ),
-    core.LaunchMode.native: ('Native', 'Linux games', Icons.terminal_rounded),
-    core.LaunchMode.steam: (
-      'Steam',
-      'Launch through Steam',
-      Icons.storefront_rounded,
-    ),
-  };
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final selected = ref.watch(launchModeProvider);
-    return SizedBox(
-      height: 136,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: 12,
-        children: [
-          for (final mode in core.LaunchMode.values)
-            Expanded(
-              child: _ModeCard(
-                key: Key('launch-mode-card-${mode.name}'),
-                mode: mode,
-                name: _info[mode]!.$1,
-                description: _info[mode]!.$2,
-                icon: _info[mode]!.$3,
-                selected: selected == mode,
-                onTap: () => ref.read(launchModeProvider.notifier).set(mode),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ModeCard extends StatelessWidget {
-  const _ModeCard({
-    super.key,
-    required this.mode,
-    required this.name,
-    required this.description,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final core.LaunchMode mode;
-  final String name;
-  final String description;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final theme = Theme.of(context);
-    return Semantics(
-      selected: selected,
-      button: true,
-      child: Material(
-        color: selected
-            ? scheme.primaryContainer.withValues(alpha: 0.6)
-            : scheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          hoverColor: scheme.onSurface.withValues(alpha: 0.06),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: selected ? scheme.primary : scheme.outlineVariant,
-                width: selected ? 2 : 1,
-              ),
-            ),
-            padding: const EdgeInsets.all(12),
-            child: Stack(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      icon,
-                      size: 22,
-                      color: selected
-                          ? scheme.primary
-                          : scheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      name,
-                      style: theme.textTheme.bodyLarge,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      description,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-                if (selected)
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: Container(
-                      key: Key('launch-mode-selected-${mode.name}'),
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: scheme.primary,
-                        border: Border.all(
-                          color: scheme.primaryContainer,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

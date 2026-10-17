@@ -356,68 +356,6 @@ abstract class _$TagFilter extends $Notifier<String?> {
   }
 }
 
-/// Default launch mode for games. Stored by enum name; unknown values fall
-/// back to proton. Nothing reads it yet; launching is phase 2.
-
-@ProviderFor(LaunchMode)
-final launchModeProvider = LaunchModeProvider._();
-
-/// Default launch mode for games. Stored by enum name; unknown values fall
-/// back to proton. Nothing reads it yet; launching is phase 2.
-final class LaunchModeProvider
-    extends $NotifierProvider<LaunchMode, core.LaunchMode> {
-  /// Default launch mode for games. Stored by enum name; unknown values fall
-  /// back to proton. Nothing reads it yet; launching is phase 2.
-  LaunchModeProvider._()
-    : super(
-        from: null,
-        argument: null,
-        retry: null,
-        name: r'launchModeProvider',
-        isAutoDispose: true,
-        dependencies: null,
-        $allTransitiveDependencies: null,
-      );
-
-  @override
-  String debugGetCreateSourceHash() => _$launchModeHash();
-
-  @$internal
-  @override
-  LaunchMode create() => LaunchMode();
-
-  /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(core.LaunchMode value) {
-    return $ProviderOverride(
-      origin: this,
-      providerOverride: $SyncValueProvider<core.LaunchMode>(value),
-    );
-  }
-}
-
-String _$launchModeHash() => r'8dde9a8e4f85b57fe258637386371fee1724b8d7';
-
-/// Default launch mode for games. Stored by enum name; unknown values fall
-/// back to proton. Nothing reads it yet; launching is phase 2.
-
-abstract class _$LaunchMode extends $Notifier<core.LaunchMode> {
-  core.LaunchMode build();
-  @$mustCallSuper
-  @override
-  WhenComplete runBuild() {
-    final ref = this.ref as $Ref<core.LaunchMode, core.LaunchMode>;
-    final element =
-        ref.element
-            as $ClassProviderElement<
-              AnyNotifier<core.LaunchMode, core.LaunchMode>,
-              core.LaunchMode,
-              Object?,
-              Object?
-            >;
-    return element.handleCreate(ref, build);
-  }
-}
-
 /// Default Wine/Proton prefix for games. Nothing reads it yet.
 
 @ProviderFor(LaunchPrefix)

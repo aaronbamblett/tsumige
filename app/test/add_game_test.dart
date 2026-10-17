@@ -307,6 +307,7 @@ void main() {
     final game = fake.games.single;
     expect(game.title, 'DEMO');
     expect(game.vndbId, 'v900017');
+    expect(game.launch.mode, core.LaunchMode.proton);
     expect(game.launch.executable, '/games/demo/run.exe');
     expect(game.cover, isNotNull);
     expect(container.read(selectedGameIdProvider), game.id);

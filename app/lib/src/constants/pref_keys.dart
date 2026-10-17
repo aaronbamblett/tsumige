@@ -26,7 +26,6 @@ enum PrefKey {
   favouritesOnly('library.favouritesOnly', false),
   adultFilter('library.adultFilter', 0),
   tagFilter('library.tagFilter', null),
-  launchMode('launch.mode', 'proton'),
   launchPrefix('launch.prefix', '~/Games/vnl/prefix'),
   launchRunner('launch.runner', null),
   launchLocale('launch.locale', 'ja_JP.UTF-8'),
