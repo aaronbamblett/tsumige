@@ -1,0 +1,13 @@
+# fastforge AppImage config (https://fastforge.dev). Built in CI via
+# `fastforge package --platform linux --targets appimage` from app/.
+display_name: Tsumige
+generic_name: Visual Novel Launcher
+icon: ../flatpak/app.tsumige.Tsumige.png
+startup_notify: true
+categories:
+  - Game
+keywords:
+  - visual novel
+  - vndb
+  - launcher
+metainfo: ../flatpak/app.tsumige.Tsumige.metainfo.xml

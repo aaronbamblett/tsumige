@@ -1,0 +1,93 @@
+name: Bug report
+description: Report a problem in Tsumige
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: List the steps to reproduce the problem, what you expected to happen, and what actually happened instead.
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. See ...
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: Tsumige version
+      description: The version of the release you downloaded.
+      placeholder: v1.0.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Linux AppImage
+        - Linux Flatpak
+        - macOS
+        - Windows
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS and version
+      placeholder: 'e.g. Fedora 44, macOS 15 or Windows 11'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: launch-mode
+    attributes:
+      label: Launch mode (game-launch bugs only)
+      description: Leave blank if the bug is not about launching a game.
+      options:
+        - Proton
+        - Wine
+        - Native
+        - Steam
+    validations:
+      required: false
+
+  - type: input
+    id: vndb-id
+    attributes:
+      label: Game's VNDB id (game-launch bugs only)
+      description: The id from the game's VNDB page address, for example v17.
+      placeholder: v17
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Launch logs
+      description: 'In the app, open Settings → Library → Launch logs and click "Open folder". Attach the log file for the launch that went wrong, or latest.log, by dragging it in here.'
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or recording
+      description: Drag images or a screen recording in here.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgements
+      options:
+        - label: I searched existing issues, including closed ones, and this is not a duplicate.
+          required: true
+        - label: "I am on the [latest release](https://github.com/aaronbamblett/tsumige/releases/latest)."
+          required: true
+        - label: This report was written by AI with no human review.

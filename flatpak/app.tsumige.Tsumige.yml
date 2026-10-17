@@ -1,0 +1,41 @@
+# Flatpak manifest for Tsumige.
+#
+# Packages a PRE-BUILT `flutter build linux` bundle (flatpak-builder runs
+# offline, so Flutter is built outside the sandbox in CI and the bundle is
+# dropped in here). CI places the bundle at ./bundle before running
+# flatpak-builder against this manifest (see flatpak.yml).
+app-id: app.tsumige.Tsumige
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+command: tsumige
+
+finish-args:
+  - --share=ipc
+  - --share=network            # VNDB lookups
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri               # GPU-accelerated rendering
+  # Games launch on the host through flatpak-spawn --host.
+  - --talk-name=org.freedesktop.Flatpak
+  - --filesystem=host          # games can live anywhere on disk
+
+modules:
+  - name: tsumige
+    buildsystem: simple
+    build-commands:
+      # App bundle → /app/tsumige, with the binary linked onto PATH.
+      - mkdir -p /app/tsumige
+      - cp -r bundle/* /app/tsumige/
+      # GitHub artifacts drop the executable bit on the round-trip, so restore it.
+      - chmod +x /app/tsumige/tsumige
+      - mkdir -p /app/bin
+      - ln -s /app/tsumige/tsumige /app/bin/tsumige
+      # Desktop integration metadata.
+      - install -Dm644 app.tsumige.Tsumige.desktop /app/share/applications/app.tsumige.Tsumige.desktop
+      - install -Dm644 app.tsumige.Tsumige.metainfo.xml /app/share/metainfo/app.tsumige.Tsumige.metainfo.xml
+      - install -Dm644 app.tsumige.Tsumige.png /app/share/icons/hicolor/512x512/apps/app.tsumige.Tsumige.png
+    sources:
+      # This dir — packaging files plus the CI-placed ./bundle (the Flutter build).
+      - type: dir
+        path: .

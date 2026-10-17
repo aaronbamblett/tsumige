@@ -1,0 +1,197 @@
+# Multi-platform release builder for Tsumige.
+#
+# Triggered by pushing a v*.*.* tag (or manually). Builds Linux (AppImage),
+# macOS (.app zip) and Windows (zip) from the tagged commit and attaches the
+# artifacts to the GitHub release. The Flatpak is built by flatpak.yml.
+#
+# Release stays a DRAFT until complete: every platform attaches its artifact to
+# a draft release, and the separate `publish` job flips it to published only
+# after all three builds succeed. A failed platform leaves the release a draft.
+# So the release is never public with missing artifacts.
+#
+# Maintainer flow for a release (e.g. v1.0.0):
+#   1. gh release create v1.0.0 --target <sha> --notes-file notes.md --draft
+#   2. git tag v1.0.0 <sha> && git push origin v1.0.0   # triggers this build
+# The draft (with its notes) is filled in by the builds, then auto-published.
+#
+# The macOS app is built UNSIGNED (no Apple Developer account in CI). Gatekeeper
+# blocks its first launch; the release notes tell users to right-click > Open.
+name: Release
+
+on:
+  workflow_dispatch:
+  # Weekly all-platform dry run: catches platform breakage before release day
+  # (the PR check builds only Linux via analyze and test). Without a tag ref,
+  # the release-attach and publish steps are skipped, so nothing is published.
+  schedule:
+    - cron: '0 6 * * 1'
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux
+          - os: macos-latest
+            target: macos
+          # Pinned to 2022: windows-latest (Server 2025) ships VS 2022 in a
+          # layout Flutter 3.32.4 fails to detect, so CMake falls back to the
+          # "Visual Studio 16 2019" generator and can't find an instance.
+          - os: windows-2022
+            target: windows
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Verify tag matches pubspec version
+        if: startsWith(github.ref, 'refs/tags/v')
+        # Stops a release built from a commit whose pubspec version doesn't match
+        # the tag (e.g. tagging v0.9.2 while pubspec still says 0.9.1); the
+        # artifacts would report the wrong in-app version.
+        # Windows defaults to PowerShell, which can't parse this script.
+        shell: bash
+        run: |
+          tag_ver="${GITHUB_REF_NAME#v}"
+          pubspec_ver="$(grep -m1 '^version:' app/pubspec.yaml | sed -E 's/version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
+          if [ "$tag_ver" != "$pubspec_ver" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME (version $tag_ver) does not match app/pubspec.yaml version $pubspec_ver"
+            exit 1
+          fi
+          echo "Tag matches pubspec version: $pubspec_ver"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: .fvmrc
+          channel: stable
+          cache: true
+
+      - name: Install Linux build deps
+        if: matrix.target == 'linux'
+        # Bounded retries/timeouts so a flaky Azure apt mirror can't hang the
+        # job for 20+ minutes (it did on the first run).
+        run: |
+          opts=(-o Acquire::Retries=3 -o Acquire::http::Timeout=25 -o Acquire::https::Timeout=25)
+          sudo apt-get "${opts[@]}" update
+          sudo apt-get "${opts[@]}" install -y --no-install-recommends \
+            clang cmake ninja-build pkg-config \
+            libgtk-3-dev libx11-dev libblkid-dev liblzma-dev
+
+      - name: Enable desktop targets
+        run: flutter config --enable-linux-desktop --enable-macos-desktop --enable-windows-desktop
+
+      - run: flutter pub get
+        working-directory: app
+      - run: flutter gen-l10n
+        working-directory: app
+      - run: dart run build_runner build --delete-conflicting-outputs
+        working-directory: app
+
+      # ---- builds ----
+      - name: Build Linux AppImage
+        if: matrix.target == 'linux'
+        working-directory: app
+        env:
+          # appimagetool is itself an AppImage; extract-and-run avoids needing FUSE on CI.
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          # Official appimagetool (fastforge shells out to it).
+          sudo wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -O /usr/local/bin/appimagetool
+          sudo chmod +x /usr/local/bin/appimagetool
+          # fastforge's AppImage maker may call `locate` for include resolution.
+          sudo apt-get install -y --no-install-recommends plocate && sudo updatedb || true
+          dart pub global activate fastforge
+          export PATH="$PATH:$HOME/.pub-cache/bin"
+          # Builds `flutter build linux --release` + packages an AppImage.
+          # Config: app/linux/packaging/appimage/make_config.yaml.
+          fastforge package --platform linux --targets appimage
+          # Collect the AppImage into the repo-root dist/ with our release naming.
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          built="$(find dist -name '*.AppImage' | head -1)"
+          mv "$built" "$GITHUB_WORKSPACE/dist/Tsumige-${{ github.ref_name }}-x86_64.AppImage"
+          # Drop fastforge's version subdir so the release only attaches our named files.
+          rm -rf dist
+
+      - name: Build macOS and Windows
+        if: matrix.target != 'linux'
+        working-directory: app
+        run: flutter build ${{ matrix.target }} --release
+
+      - name: Package macOS
+        if: matrix.target == 'macos'
+        run: |
+          mkdir -p dist
+          APP=$(find app/build/macos/Build/Products/Release -maxdepth 1 -name "*.app" | head -1)
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "dist/Tsumige-${{ github.ref_name }}-macos.zip"
+
+      - name: Package Windows
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          # Bundle the MSVC runtime DLLs (msvcp140 / vcruntime140 / *_1) next to
+          # the exe, so the app runs on machines WITHOUT the Visual C++
+          # Redistributable installed. Without these the window opens but never
+          # paints — a blank white screen — on otherwise-fine PCs.
+          $redist = vswhere -latest -find 'VC\Redist\MSVC\*\x64\*\*.dll'
+          Copy-Item $redist app\build\windows\x64\runner\Release\ -Force
+          Compress-Archive -Path app\build\windows\x64\runner\Release\* -DestinationPath "dist\Tsumige-${{ github.ref_name }}-windows-x64.zip"
+
+      - name: Attach to the draft release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*
+          fail_on_unmatched_files: true
+          # Keep the release a DRAFT while every platform attaches. It is
+          # published only by the `publish` job below, once all builds have
+          # succeeded, so users never see a release with missing or partial
+          # artifacts. action-gh-release leaves an existing release's body
+          # untouched when no body is given, so notes set on the draft
+          # beforehand are preserved.
+          draft: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    name: Publish the release
+    # Runs only after EVERY matrix build job succeeds. If any platform fails,
+    # this job is skipped and the release stays a draft for the maintainer to
+    # fix and re-run, so an incomplete release is never made public.
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish now that all platforms have attached
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # Guard: refuse to publish a release with empty notes (the draft
+          # should have been created with notes before tagging). Leaving it a
+          # draft is safer than publishing a blank release.
+          body=$(gh release view "$TAG" --repo "$REPO" --json body -q .body)
+          if [ -z "${body// /}" ]; then
+            echo "::error::Release $TAG has an empty body; leaving it as a draft. Add notes, then re-run this job."
+            exit 1
+          fi
+          # A draft flagged as a pre-release was marked that way deliberately:
+          # publish it, but never as Latest, so updaters that ask for the
+          # latest release keep pointing at the last full one.
+          pre=$(gh release view "$TAG" --repo "$REPO" --json isPrerelease -q .isPrerelease)
+          if [ "$pre" = "true" ]; then
+            gh release edit "$TAG" --repo "$REPO" --draft=false --prerelease
+          else
+            gh release edit "$TAG" --repo "$REPO" --draft=false --latest
+          fi
