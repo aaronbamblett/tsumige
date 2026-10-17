@@ -429,10 +429,24 @@ void main() {
       expect(size.height, lessThanOrEqualTo(72), reason: key);
     }
     await openSection(tester, 'launching');
-    for (final key in ['prefix', 'proton', 'locale']) {
+    for (final key in ['prefix', 'proton']) {
       final size = tester.getSize(find.byKey(Key('settings-row-$key')));
       expect(size.height, lessThanOrEqualTo(72), reason: key);
     }
+    final localeSize =
+        tester.getSize(find.byKey(const Key('settings-row-locale')));
+    expect(localeSize.height, lessThanOrEqualTo(80), reason: 'locale');
+  });
+
+  testWidgets('game language dropdown is as wide as the proton dropdown', (
+    tester,
+  ) async {
+    await pumpSettings(tester, SettingsFakeRepository());
+    await openSection(tester, 'launching');
+    expect(
+      tester.getSize(find.byKey(const Key('settings-locale'))).width,
+      tester.getSize(find.byKey(const Key('settings-proton-version'))).width,
+    );
   });
 
   testWidgets('game language dropdown stores presets and custom text', (

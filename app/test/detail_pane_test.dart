@@ -599,6 +599,37 @@ void main() {
     expect(find.text('2021-08-26'), findsOneWidget);
   });
 
+  testWidgets('release shows in the hero without a rating', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', released: '2021-08-26'),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(find.text('2021-08-26'), findsOneWidget);
+    expect(find.text('VNDB Rating'), findsNothing);
+  });
+
+  testWidgets('description has no expand chevron when it fits four lines',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', description: 'A short story.'),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(find.byTooltip('Show more'), findsNothing);
+  });
+
+  testWidgets('description overflowing four lines gets the expand chevron',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        description: List.filled(40, 'A long sentence of story.').join(' '),
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(find.byTooltip('Show more'), findsOneWidget);
+  });
+
   testWidgets('empty game shows description and notes placeholders',
       (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);

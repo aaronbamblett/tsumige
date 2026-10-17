@@ -274,7 +274,8 @@ class _HeroTitle extends StatelessWidget {
             ],
           ),
         ),
-        if (game.vndbRating != null)
+        if (game.vndbRating != null ||
+            (game.released?.isNotEmpty ?? false))
           Padding(
             padding: const EdgeInsets.only(top: 10),
             child: _MetaRow(game: game),
@@ -297,34 +298,38 @@ class _MetaRow extends StatelessWidget {
       fontSize: 13.5,
     );
     final votes = game.vndbVotecount;
+    final rating = game.vndbRating;
     final released = game.released;
+    final hasRelease = released != null && released.isNotEmpty;
     return Row(
       mainAxisSize: MainAxisSize.min,
       spacing: 10,
       children: [
-        Text(
-          '★ ${(game.vndbRating! / 10).toStringAsFixed(1)}',
-          style: TextStyle(color: colorScheme.primary, fontSize: 13.5),
-        ),
-        Flexible(
-          child: Text(
-            votes == null ? 'VNDB Rating' : 'VNDB Rating · $votes votes',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: style,
+        if (rating != null) ...[
+          Text(
+            '★ ${(rating / 10).toStringAsFixed(1)}',
+            style: TextStyle(color: colorScheme.primary, fontSize: 13.5),
           ),
-        ),
-        if (released != null && released.isNotEmpty) ...[
+          Flexible(
+            child: Text(
+              votes == null ? 'VNDB Rating' : 'VNDB Rating · $votes votes',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            ),
+          ),
+        ],
+        if (rating != null && hasRelease)
           Container(
             width: 1,
             height: 14,
             color: OnImage.text.withValues(alpha: 0.25),
           ),
+        if (hasRelease)
           Text(
             released,
             style: TextStyle(color: colorScheme.onSurface, fontSize: 13.5),
           ),
-        ],
       ],
     );
   }

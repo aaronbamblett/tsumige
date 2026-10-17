@@ -463,40 +463,56 @@ class _MarkupSectionState extends ConsumerState<_MarkupSection> {
                 );
               }
               if (widget.label == 'Description') {
+                final style = theme.textTheme.bodyMedium!.copyWith(height: 1.5);
                 final text = DefaultTextStyle(
-                  style: theme.textTheme.bodyMedium!.copyWith(height: 1.5),
+                  style: style,
                   child: VndbMarkupText(text: value),
                 );
-                if (_expanded) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      text,
-                      _ExpandToggle(
-                        expanded: true,
-                        onPressed: () => setState(() => _expanded = false),
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    final painter = TextPainter(
+                      text: TextSpan(
+                        text: vndbPlainText(value),
+                        style: style,
                       ),
-                    ],
-                  );
-                }
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(
-                      height: _kDescriptionCollapsedHeight,
-                      child: ClipRect(
-                        child: OverflowBox(
-                          alignment: Alignment.topLeft,
-                          maxHeight: double.infinity,
-                          child: text,
+                      maxLines: 4,
+                      textDirection: Directionality.of(context),
+                    )..layout(maxWidth: constraints.maxWidth);
+                    final overflows = painter.didExceedMaxLines;
+                    painter.dispose();
+                    if (!overflows) return text;
+                    if (_expanded) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          text,
+                          _ExpandToggle(
+                            expanded: true,
+                            onPressed: () => setState(() => _expanded = false),
+                          ),
+                        ],
+                      );
+                    }
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SizedBox(
+                          height: _kDescriptionCollapsedHeight,
+                          child: ClipRect(
+                            child: OverflowBox(
+                              alignment: Alignment.topLeft,
+                              maxHeight: double.infinity,
+                              child: text,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    _ExpandToggle(
-                      expanded: false,
-                      onPressed: () => setState(() => _expanded = true),
-                    ),
-                  ],
+                        _ExpandToggle(
+                          expanded: false,
+                          onPressed: () => setState(() => _expanded = true),
+                        ),
+                      ],
+                    );
+                  },
                 );
               }
               return Text(value, style: theme.textTheme.bodyMedium);

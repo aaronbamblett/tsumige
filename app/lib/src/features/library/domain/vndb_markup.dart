@@ -143,6 +143,17 @@ class _Parser {
 List<MarkupNode> parseVndbMarkup(String text) =>
     _Parser(text).parseNodes(0, null).$1;
 
+String vndbPlainText(String text) {
+  String plain(MarkupNode node) => switch (node) {
+    TextNode(:final text) => text,
+    BoldNode(:final children) ||
+    ItalicNode(:final children) ||
+    LinkNode(:final children) ||
+    SpoilerNode(:final children) => children.map(plain).join(),
+  };
+  return parseVndbMarkup(text).map(plain).join();
+}
+
 bool isOpenableUrl(String url) {
   final uri = Uri.tryParse(url);
   if (uri == null) return false;

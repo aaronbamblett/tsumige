@@ -365,7 +365,7 @@ class _GameLanguageGroupState extends ConsumerState<_GameLanguageGroup> {
       subtitle: 'Locale passed to Windows games. Japanese fixes most VN text.',
       divider: false,
       control: SizedBox(
-        width: 160,
+        width: 320,
         child: SettingsDropdown<String>(
           key: const Key('settings-locale'),
           value: showCustom ? _settingsCustomKey : selected,
