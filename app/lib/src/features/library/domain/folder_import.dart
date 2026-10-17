@@ -185,9 +185,47 @@ bool _keyBeats((bool, double, int) a, (bool, double, int) b) {
   return a.$3 > b.$3;
 }
 
-/// Lowercases, turns punctuation into spaces and collapses whitespace.
+const _accentFolds = {
+  'à': 'a',
+  'á': 'a',
+  'â': 'a',
+  'ã': 'a',
+  'ä': 'a',
+  'å': 'a',
+  'ç': 'c',
+  'è': 'e',
+  'é': 'e',
+  'ê': 'e',
+  'ë': 'e',
+  'ì': 'i',
+  'í': 'i',
+  'î': 'i',
+  'ï': 'i',
+  'ñ': 'n',
+  'ò': 'o',
+  'ó': 'o',
+  'ô': 'o',
+  'õ': 'o',
+  'ö': 'o',
+  'ø': 'o',
+  'ù': 'u',
+  'ú': 'u',
+  'û': 'u',
+  'ü': 'u',
+  'ý': 'y',
+  'ÿ': 'y',
+};
+
+final _accentPattern = RegExp('[${_accentFolds.keys.join()}]');
+
+/// Lowercases, folds Latin-1 accents, turns punctuation into spaces and
+/// collapses whitespace.
 String normalise(String value) {
-  final cleaned = value.toLowerCase().replaceAll(
+  final folded = value.toLowerCase().replaceAllMapped(
+    _accentPattern,
+    (m) => _accentFolds[m[0]]!,
+  );
+  final cleaned = folded.replaceAll(
     RegExp(r'[^\p{L}\p{N}\s]', unicode: true),
     ' ',
   );
@@ -201,19 +239,33 @@ List<String> vnTitles(VnSearchResult vn) => [
   ...vn.titles,
 ].where((t) => t.isNotEmpty).toList();
 
-/// Similarity of a folder name to a title, from 0 to 1. A substring match
-/// scores at least 0.85.
+/// Similarity of a folder name to a title, from 0 to 1. Equal once spaces
+/// are removed scores 1. A whole-word run of one inside the other, or one
+/// space-stripped form a prefix of the other, scores at least 0.85.
 double similarity(String folder, String title) {
   final a = normalise(folder);
   final b = normalise(title);
   if (a == b) return 1.0;
+  final sa = a.replaceAll(' ', '');
+  final sb = b.replaceAll(' ', '');
+  if (sa.isNotEmpty && sa == sb) return 1.0;
   var ratio = sequenceRatio(a, b);
-  if (a.isNotEmpty && b.isNotEmpty && (a.contains(b) || b.contains(a))) {
-    final shorter = math.min(a.runes.length, b.runes.length);
-    final longer = math.max(a.runes.length, b.runes.length);
-    ratio = math.max(ratio, 0.85 + 0.14 * shorter / longer);
+  if (a.isNotEmpty && b.isNotEmpty) {
+    if ((' $b ').contains(' $a ') || (' $a ').contains(' $b ')) {
+      ratio = math.max(ratio, _containmentScore(a, b));
+    } else if (sa.isNotEmpty &&
+        sb.isNotEmpty &&
+        (sa.startsWith(sb) || sb.startsWith(sa))) {
+      ratio = math.max(ratio, _containmentScore(sa, sb));
+    }
   }
   return ratio;
+}
+
+double _containmentScore(String x, String y) {
+  final shorter = math.min(x.runes.length, y.runes.length);
+  final longer = math.max(x.runes.length, y.runes.length);
+  return 0.85 + 0.14 * shorter / longer;
 }
 
 /// Ratcliff/Obershelp similarity, as Python's `difflib.SequenceMatcher`

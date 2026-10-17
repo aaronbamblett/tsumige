@@ -212,6 +212,54 @@ void main() {
     });
   });
 
+  group('reported matches', () {
+    test('DEMO beats Jewel Ademox, which only contains it', () {
+      final m = matchFolder('DEMO', [
+        _vn('v1', 'Jewel☆Ademox'),
+        _vn('v2', 'Demo Story -First Light-'),
+      ]);
+      expect(m.state, ImportMatchState.matched);
+      expect(m.vn!.id, 'v2');
+    });
+
+    test('MoonCafe matches Moon Café and the Night Butterflies', () {
+      final m = matchFolder('MoonCafe', [
+        _vn('v3', "Moon Café and the Night Butterflies"),
+      ]);
+      expect(m.state, ImportMatchState.matched);
+      expect(m.vn!.id, 'v3');
+    });
+
+    test('atrium is an exact match for a(t)rium, not Beat of the Atrium', () {
+      final m = matchFolder('atrium', [
+        _vn('v4', 'Beat of the Atrium'),
+        _vn('v5', 'a(t)rium'),
+      ]);
+      expect(m.state, ImportMatchState.matched);
+      expect(m.vn!.id, 'v5');
+      expect(similarity('atrium', 'a(t)rium'), 1.0);
+    });
+
+    test('accents fold to plain letters', () {
+      expect(normalise('Café Ñandú'), 'cafe nandu');
+      expect(similarity('Cafe', 'Café'), 1.0);
+    });
+
+    test('a containment must be whole words', () {
+      expect(similarity('DEMO', 'Jewel Ademox'), lessThan(0.65));
+      expect(similarity('DEMO', 'DEMO Plus'), greaterThanOrEqualTo(0.85));
+    });
+
+    test('an equal score keeps VNDB order', () {
+      final m = matchFolder('Foo Bar', [
+        _vn('v1', 'Foo Bar Deluxe'),
+        _vn('v2', 'Foo Bar Deluxe'),
+      ]);
+      expect(m.state, ImportMatchState.check);
+      expect(m.vn!.id, 'v1');
+    });
+  });
+
   group('shortenedQuery and lookupFolder', () {
     test('drops a subtitle after " - " or a colon', () {
       expect(shortenedQuery('Game Title - Subtitle Here'), 'Game Title');

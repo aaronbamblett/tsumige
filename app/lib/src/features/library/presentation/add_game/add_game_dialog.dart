@@ -276,6 +276,10 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
 
   @override
   Widget build(BuildContext context) {
+    return PopScope(canPop: !_saving, child: _shell(context));
+  }
+
+  Widget _shell(BuildContext context) {
     final searching = _step == 0;
     return DialogShell(
       frameKey: const Key('add-game-frame'),

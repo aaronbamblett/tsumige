@@ -41,6 +41,8 @@ const _chooseExeValue = '\u0000choose';
 
 String _games(int count) => count == 1 ? '1 game' : '$count games';
 
+typedef _Plan = ({List<bool> selected, List<bool> duplicate});
+
 class _ImportRow {
   _ImportRow(this.folder);
 
@@ -54,6 +56,7 @@ class _ImportRow {
   String? exePath;
   bool exeFromUser = false;
   bool ticked = false;
+  bool tickTouched = false;
 }
 
 class ImportFolderDialog extends ConsumerStatefulWidget {
@@ -116,11 +119,30 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     );
   }
 
-  bool _canTick(_ImportRow row, List<Game> games) =>
-      row.exePath != null && !_inLibrary(row, games);
+  bool _eligible(_ImportRow row, List<Game> games) =>
+      row.state != null && row.exePath != null && !_inLibrary(row, games);
 
-  bool _selected(_ImportRow row, List<Game> games) =>
-      row.ticked && _canTick(row, games);
+  bool _sameGame(_ImportRow a, _ImportRow b) =>
+      a.exePath == b.exePath || (a.vn != null && a.vn!.id == b.vn?.id);
+
+  /// Which rows are added, and which are duplicates of an earlier added row.
+  /// The first ticked row for a VNDB id or exe wins.
+  _Plan _plan(List<Game> games) {
+    final selected = List.filled(_rows.length, false);
+    final duplicate = List.filled(_rows.length, false);
+    for (var i = 0; i < _rows.length; i++) {
+      final row = _rows[i];
+      if (!_eligible(row, games)) continue;
+      for (var j = 0; j < i; j++) {
+        if (selected[j] && _sameGame(_rows[j], row)) {
+          duplicate[i] = true;
+          break;
+        }
+      }
+      selected[i] = row.ticked && !duplicate[i];
+    }
+    return (selected: selected, duplicate: duplicate);
+  }
 
   void _applyExe(_ImportRow row) {
     if (row.exeFromUser) return;
@@ -199,8 +221,10 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       row.vn = match.vn;
       row.error = error;
       _applyExe(row);
-      row.ticked =
-          match.state == ImportMatchState.matched && row.exePath != null;
+      if (!row.tickTouched) {
+        row.ticked =
+            match.state == ImportMatchState.matched && row.exePath != null;
+      }
     });
   }
 
@@ -310,9 +334,10 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
 
   Future<void> _add() async {
     final games = ref.read(libraryProvider).value?.library.games ?? const [];
+    final plan = _plan(games);
     final rows = [
-      for (final row in _rows)
-        if (_selected(row, games)) row,
+      for (var i = 0; i < _rows.length; i++)
+        if (plan.selected[i]) _rows[i],
     ];
     if (rows.isEmpty) return;
     if (rows.any((row) => isPortalPath(row.exePath!))) {
@@ -374,9 +399,14 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
 
   @override
   Widget build(BuildContext context) {
+    return PopScope(canPop: !_saving, child: _content(context));
+  }
+
+  Widget _content(BuildContext context) {
     final games =
         ref.watch(libraryProvider).value?.library.games ?? const <Game>[];
     final pick = _pickIndex;
+    final plan = _plan(games);
     if (pick != null) {
       return DialogShell(
         autofocus: false,
@@ -396,19 +426,19 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       title: 'Import a folder',
       onClose: _close,
       closeKey: const Key('import-close'),
-      body: _listBody(context, games),
-      footer: _listFooter(games),
+      body: _listBody(context, games, plan),
+      footer: _listFooter(games, plan),
     );
   }
 
-  Widget _listBody(BuildContext context, List<Game> games) {
+  Widget _listBody(BuildContext context, List<Game> games, _Plan plan) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final muted = theme.textTheme.bodySmall?.copyWith(
       fontSize: 13,
       color: scheme.onSurfaceVariant,
     );
-    final selected = _rows.where((row) => _selected(row, games)).length;
+    final selected = plan.selected.where((added) => added).length;
     final String emptyText;
     if (_root == null) {
       emptyText = 'Choose a folder to import';
@@ -458,21 +488,22 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
-          child: Row(
-            children: [
-              Text(
-                '${_rows.length} folders · $selected selected',
-                style: muted,
-              ),
-              const Spacer(),
-              Text('Tag each game', style: muted),
-              const SizedBox(width: 8),
-              _tagChip(context),
-            ],
+        if (_root != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
+            child: Row(
+              children: [
+                Text(
+                  '${_rows.length} folders · $selected selected',
+                  style: muted,
+                ),
+                const Spacer(),
+                Text('Tag each game', style: muted),
+                const SizedBox(width: 8),
+                _tagChip(context),
+              ],
+            ),
           ),
-        ),
         if (_scanning) const LinearProgressIndicator(),
         Expanded(
           child: _rows.isEmpty
@@ -481,7 +512,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                   padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
                   itemCount: _rows.length,
                   itemBuilder: (context, index) =>
-                      _rowWidget(context, index, games),
+                      _rowWidget(context, index, games, plan),
                 ),
         ),
       ],
@@ -516,7 +547,12 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     );
   }
 
-  Widget _rowWidget(BuildContext context, int index, List<Game> games) {
+  Widget _rowWidget(
+    BuildContext context,
+    int index,
+    List<Game> games,
+    _Plan plan,
+  ) {
     final row = _rows[index];
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -531,6 +567,12 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
             'In library',
             scheme.onSurface.withValues(alpha: 0.06),
             scheme.onSurfaceVariant,
+          )
+        : plan.duplicate[index]
+        ? (
+            'Duplicate',
+            scheme.onSurface.withValues(alpha: 0.04),
+            scheme.outline,
           )
         : pending
         ? (
@@ -586,9 +628,13 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
           children: [
             Checkbox(
               key: Key('import-check-$index'),
-              value: _selected(row, games),
-              onChanged: _canTick(row, games) && !_saving
-                  ? (value) => setState(() => row.ticked = value ?? false)
+              value: plan.selected[index],
+              onChanged:
+                  _eligible(row, games) && !plan.duplicate[index] && !_saving
+                  ? (value) => setState(() {
+                      row.ticked = value ?? false;
+                      row.tickTouched = true;
+                    })
                   : null,
             ),
             const SizedBox(width: 6),
@@ -720,8 +766,8 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     );
   }
 
-  Widget _listFooter(List<Game> games) {
-    final count = _rows.where((row) => _selected(row, games)).length;
+  Widget _listFooter(List<Game> games, _Plan plan) {
+    final count = plan.selected.where((added) => added).length;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
       child: Row(

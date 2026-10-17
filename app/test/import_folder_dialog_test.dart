@@ -27,6 +27,7 @@ import 'package:vnl/src/features/library/domain/add_game.dart';
 import 'package:vnl/src/features/library/domain/game_editor.dart';
 import 'package:vnl/src/features/library/presentation/add_game/add_game_dialog.dart';
 import 'package:vnl/src/features/library/presentation/add_game/import_folder_dialog.dart';
+import 'package:vnl/src/utils/theme/brand.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
 
 class _FakeRepository implements LibraryRepository {
@@ -58,9 +59,11 @@ class _FakeRepository implements LibraryRepository {
 
 /// Fake VNDB keyed by search query. Cover URLs containing "fail" return 404.
 class _Vndb {
-  _Vndb(this.byQuery);
+  _Vndb(this.byQuery, {this.gateQuery, this.gate});
 
   final Map<String, List<Map<String, Object?>>> byQuery;
+  final String? gateQuery;
+  final Completer<void>? gate;
 
   MockClient get client => MockClient((request) async {
     if (request.method == 'POST') {
@@ -68,6 +71,7 @@ class _Vndb {
       final filters = body['filters'] as List;
       if (filters.first == 'search') {
         final query = filters[2] as String;
+        if (query == gateQuery) await gate!.future;
         return http.Response(
           jsonEncode({'results': byQuery[query] ?? [], 'more': false}),
           200,
@@ -122,6 +126,7 @@ Map<String, List<Map<String, Object?>>> _defaultResults() => {
     _vnRow('v7', 'Solo Quest Remake'),
     _vnRow('v8', 'Solo Quest Remaster'),
   ],
+  'DEMO Copy': [_vnRow('v900017', 'DEMO')],
 };
 
 void _exe(String root, String relative) {
@@ -136,7 +141,7 @@ void _exe(String root, String relative) {
 ///  Owned Game    matches a library game, disabled
 ///  Rena sensei   close match, pre-ticked
 ///  Solo Quest    two results (check match), two exes
-String _fixture(Directory temp) {
+String _fixture(Directory temp, {bool duplicate = false}) {
   final root = p.join(temp.path, 'Visual novels');
   _exe(root, 'DEMO/DEMO.exe');
   _exe(root, 'DEMO/unins000.exe');
@@ -145,6 +150,7 @@ String _fixture(Directory temp) {
   _exe(root, 'Rena sensei/RenaPool.exe');
   _exe(root, 'Solo Quest/Solo.exe');
   _exe(root, 'Solo Quest/bin/Extra.exe');
+  if (duplicate) _exe(root, 'DEMO Copy/demo copy.exe');
   return root;
 }
 
@@ -164,6 +170,10 @@ Future<_Harness> _open(
   List<core.Game>? games,
   Map<String, List<Map<String, Object?>>>? results,
   Size surface = const Size(1400, 980),
+  bool duplicate = false,
+  Completer<void>? gate,
+  String? gateQuery,
+  Completer<String?>? picker,
 }) async {
   tester.view.physicalSize = surface;
   tester.view.devicePixelRatio = 1.0;
@@ -173,12 +183,16 @@ Future<_Harness> _open(
   });
   final temp = Directory.systemTemp.createTempSync('vnl_import_dialog_test_');
   addTearDown(() => temp.deleteSync(recursive: true));
-  final root = _fixture(temp);
+  final root = _fixture(temp, duplicate: duplicate);
   SharedPreferences.setMockInitialValues({});
   final repo = _FakeRepository([
     ...(games ?? [_ownedGame()]),
   ]);
-  final vndb = _Vndb(results ?? _defaultResults());
+  final vndb = _Vndb(
+    results ?? _defaultResults(),
+    gate: gate,
+    gateQuery: gateQuery,
+  );
   final harness = _Harness(repo, root);
   await tester.pumpWidget(
     ProviderScope(
@@ -190,7 +204,8 @@ Future<_Harness> _open(
         libraryRepositoryProvider.overrideWithValue(repo),
         addGameHttpClientProvider.overrideWithValue(vndb.client),
         pathPickerProvider.overrideWithValue(
-          ({String? initialDirectory, PathPickMode? mode}) async => root,
+          ({String? initialDirectory, PathPickMode? mode}) async =>
+              picker != null ? picker.future : root,
         ),
       ],
       child: MaterialApp(
@@ -225,16 +240,19 @@ Future<_Harness> _openAndMatch(
   List<core.Game>? games,
   Map<String, List<Map<String, Object?>>>? results,
   Size surface = const Size(1400, 980),
+  bool duplicate = false,
+  int folders = 5,
 }) async {
   final harness = await _open(
     tester,
     games: games,
     results: results,
     surface: surface,
+    duplicate: duplicate,
   );
   for (var i = 0; i < 200; i++) {
     final done =
-        find.textContaining('5 folders · ').evaluate().isNotEmpty &&
+        find.textContaining('$folders folders · ').evaluate().isNotEmpty &&
         find.text('Matching…').evaluate().isEmpty;
     if (done) break;
     await tester.runAsync(
@@ -483,6 +501,141 @@ void main() {
     await tester.tap(find.byKey(const Key('add-game-import')));
     await _settle(tester);
     expect(find.text('Find on VNDB'), findsOneWidget);
+    expect(find.text('Import a folder'), findsNothing);
+  });
+
+  testWidgets('a row still matching cannot be ticked and Add is disabled', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    await _open(tester, gate: gate, gateQuery: 'DEMO');
+    for (var i = 0; i < 200 && find.text('Matching…').evaluate().isEmpty; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(find.text('Matching…'), findsWidgets);
+    expect(
+      tester
+          .widget<Checkbox>(find.byKey(const Key('import-check-0')))
+          .onChanged,
+      isNull,
+    );
+    await tester.tap(find.byKey(const Key('import-check-0')));
+    await tester.pump();
+    expect(find.text('Add 0 games'), findsOneWidget);
+    expect(
+      tester.widget<BrandButton>(find.byKey(const Key('import-add'))).onPressed,
+      isNull,
+    );
+    gate.complete();
+    for (
+      var i = 0;
+      i < 200 &&
+          !(find
+                  .textContaining('5 folders · 2 selected')
+                  .evaluate()
+                  .isNotEmpty &&
+              find.text('Matching…').evaluate().isEmpty);
+      i++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump(const Duration(seconds: 1));
+    }
+    await tester.pump();
+    expect(_checked(tester, 0), isTrue);
+    expect(find.text('5 folders · 2 selected'), findsOneWidget);
+  });
+
+  testWidgets(
+    'a second row for the same VNDB entry is a duplicate, not added',
+    (tester) async {
+      final h = await _openAndMatch(tester, duplicate: true, folders: 6);
+      expect(find.text('6 folders · 2 selected'), findsOneWidget);
+      expect(find.text('Duplicate'), findsOneWidget);
+      expect(_checked(tester, 1), isFalse);
+      expect(
+        tester
+            .widget<Checkbox>(find.byKey(const Key('import-check-1')))
+            .onChanged,
+        isNull,
+      );
+      expect(find.text('Add 2 games'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('import-add')));
+      await _waitForSave(tester, h.repo);
+      expect(_added(h).map((g) => g.title), [
+        'DEMO',
+        'Rena-sensei to Pool Ryokou',
+      ]);
+      await _drainToast(tester);
+    },
+  );
+
+  testWidgets(
+    'a click outside the import dialog while saving keeps the batch',
+    (tester) async {
+      final h = await _openAndMatch(tester);
+      h.repo.saveGate = Completer<void>();
+      await tester.tap(find.byKey(const Key('import-add')));
+      for (
+        var i = 0;
+        i < 200 && find.text('Adding 2 of 2…').evaluate().isEmpty;
+        i++
+      ) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump();
+      }
+      await tester.tapAt(const Offset(5, 5));
+      await _settle(tester);
+      expect(find.text('Import a folder'), findsOneWidget);
+      h.repo.saveGate!.complete();
+      await _waitForSave(tester, h.repo);
+      expect(_added(h), hasLength(2));
+      await _drainToast(tester);
+    },
+  );
+
+  testWidgets('a click outside the Add dialog while saving keeps the game', (
+    tester,
+  ) async {
+    final h = await _openAddDialog(tester, picked: true);
+    h.repo.saveGate = Completer<void>();
+    await tester.tap(find.byKey(const Key('add-game-manual')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('add-game-title')),
+      'Manual game',
+    );
+    await tester.enterText(
+      find.byKey(const Key('add-game-exe')),
+      '/games/manual/run.exe',
+    );
+    await tester.tap(find.byKey(const Key('add-game-add')));
+    await tester.pump();
+    await tester.tapAt(const Offset(5, 5));
+    await _settle(tester);
+    expect(find.text('Set it up'), findsOneWidget);
+    h.repo.saveGate!.complete();
+    await _waitForSave(tester, h.repo);
+    expect(h.repo.games.single.title, 'Manual game');
+    await _drainToast(tester);
+  });
+
+  testWidgets('the tag chip is hidden until a folder is chosen', (
+    tester,
+  ) async {
+    final picker = Completer<String?>();
+    await _open(tester, picker: picker);
+    expect(find.text('Choose a folder to import'), findsOneWidget);
+    expect(find.byKey(const Key('import-tag-chip')), findsNothing);
+    expect(find.textContaining('Tag each game'), findsNothing);
+    picker.complete(null);
+    await _settle(tester);
     expect(find.text('Import a folder'), findsNothing);
   });
 
