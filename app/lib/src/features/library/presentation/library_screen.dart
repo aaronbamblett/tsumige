@@ -123,8 +123,7 @@ class LibraryScreen extends HookConsumerWidget {
                       if (selected != null)
                         Container(
                           width: 400,
-                          margin: const EdgeInsets.only(
-                              top: 12, right: 12, bottom: 12),
+                          margin: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: Theme.of(context)
                                 .colorScheme

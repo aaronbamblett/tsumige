@@ -23,6 +23,8 @@ import 'package:vnl/src/features/library/data/library_repository.dart';
 import 'package:vnl/src/features/library/domain/cover_source.dart';
 import 'package:vnl/src/features/library/presentation/widgets/game_cover_grid_delegate.dart';
 import 'package:vnl/src/features/library/presentation/widgets/game_cover_tile.dart';
+import 'package:vnl/src/features/library/presentation/widgets/game_detail_pane.dart';
+import 'package:vnl/src/features/library/presentation/widgets/library_grid.dart';
 import 'package:vnl/src/utils/prefs/app_prefs.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
 
@@ -96,6 +98,39 @@ int firstRowColumns(WidgetTester tester) {
   ];
   final first = dys.reduce(min);
   return dys.where((dy) => (dy - first).abs() < 1).length;
+}
+
+/// The scrollbar's track lane, derived from the laid-out [Scrollbar] plus
+/// the theme margins [LibraryGrid] applies. The thumb hugs the trailing
+/// edge (no cross-axis inset), so the lane is the full bar minus the top
+/// and bottom [LibraryGrid.topInset].
+Rect scrollbarTrackRect(WidgetTester tester) {
+  final bar = tester.getRect(find.descendant(
+    of: find.byType(LibraryGrid),
+    matching: find.byType(Scrollbar),
+  ));
+  return Rect.fromLTRB(
+    bar.right - LibraryGrid.scrollbarThickness,
+    bar.top + LibraryGrid.topInset,
+    bar.right,
+    bar.bottom - LibraryGrid.topInset,
+  );
+}
+
+/// The first row of covers.
+List<Rect> firstRowCovers(WidgetTester tester) {
+  final tiles = find.byType(GameCoverTile);
+  final firstDy = tester.getTopLeft(tiles.first).dy;
+  final covers = <Rect>[];
+  for (var i = 0; i < tiles.evaluate().length; i++) {
+    if ((tester.getTopLeft(tiles.at(i)).dy - firstDy).abs() < 1) {
+      covers.add(tester.getRect(find.descendant(
+        of: tiles.at(i),
+        matching: find.byType(AspectRatio),
+      )));
+    }
+  }
+  return covers;
 }
 
 void main() {
@@ -261,6 +296,40 @@ void main() {
         moreOrLessEquals(coverRect.left, epsilon: 0.5));
     expect(ratingRect.right,
         lessThanOrEqualTo(coverRect.right + 0.5));
+  });
+
+  testWidgets('scrollbar track lines up with the covers and the pane',
+      (tester) async {
+    await pumpLibrary(tester, fakeGames(20));
+    await tester.tap(find.text('Game 0'));
+    await tester.pump();
+    await tester.pump();
+    final track = scrollbarTrackRect(tester);
+    final firstCover =
+        tester.getRect(find.byKey(const ValueKey('cover-game-0')));
+    final pane = tester.getRect(find.byType(GameDetailPane));
+    expect((track.top - firstCover.top).abs(), lessThanOrEqualTo(1.0));
+    expect((track.top - pane.top).abs(), lessThanOrEqualTo(1.0));
+  });
+
+  testWidgets('scrollbar keeps its distance from the covers and the pane',
+      (tester) async {
+    await pumpLibrary(tester, fakeGames(20));
+    // Pane closed: the scrollbar sits 8 px in from the window edge.
+    var track = scrollbarTrackRect(tester);
+    expect(1280 - track.right,
+        moreOrLessEquals(LibraryGrid.trailingGap, epsilon: 1.0));
+    // Last cover column to scrollbar: at least 8 px.
+    final rightmost =
+        firstRowCovers(tester).map((rect) => rect.right).reduce(max);
+    expect(track.left - rightmost, greaterThanOrEqualTo(8.0));
+    // Pane open: at least 12 px between scrollbar and pane.
+    await tester.tap(find.text('Game 0'));
+    await tester.pump();
+    await tester.pump();
+    track = scrollbarTrackRect(tester);
+    final pane = tester.getRect(find.byType(GameDetailPane));
+    expect(pane.left - track.right, greaterThanOrEqualTo(12.0));
   });
 
   testWidgets('neighbouring covers are spaced 20px apart', (tester) async {

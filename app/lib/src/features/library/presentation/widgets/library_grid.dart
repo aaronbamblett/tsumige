@@ -15,30 +15,60 @@ import 'game_cover_tile.dart';
 
 /// Lazy cover grid. The column width follows the slider live; the covers
 /// themselves follow the settled width (see [GameCoverTile]).
+///
+/// The grid, the scrollbar track and the detail pane share one 12 px top
+/// inset. Only the track is inset: the covers still scroll all the way up
+/// to the toolbar.
 class LibraryGrid extends HookConsumerWidget {
   const LibraryGrid({super.key, required this.games});
 
   final List<Game> games;
 
+  /// Inset shared by the grid's top padding, the scrollbar track's top and
+  /// the detail pane's top margin.
+  static const topInset = 12.0;
+
+  /// Scrollbar thumb thickness. With the 20 px grid padding this leaves at
+  /// least 8 px between the last cover column and the thumb.
+  static const scrollbarThickness = 8.0;
+
+  /// Breathing room between the scrollbar and whatever is right of the grid:
+  /// the detail pane when open, the window edge when closed.
+  static const trailingGap = 8.0;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final coverWidth = ref.watch(coverWidthProvider);
     final scrollController = useScrollController();
-    return Scrollbar(
-      controller: scrollController,
-      thumbVisibility: true,
-      child: GridView.builder(
-        controller: scrollController,
-        padding: const EdgeInsets.all(20),
-        gridDelegate: GameCoverGridDelegate(
-          maxCrossAxisExtent: coverWidth.toDouble(),
-          crossAxisSpacing: 20,
-          mainAxisSpacing: 24,
-          titleExtent: gameTitleBlockHeight(context),
+    return Padding(
+      padding: const EdgeInsets.only(right: trailingGap),
+      child: ScrollbarTheme(
+        data: const ScrollbarThemeData(
+          thickness: WidgetStatePropertyAll(scrollbarThickness),
+          mainAxisMargin: topInset,
         ),
-        itemCount: games.length,
-        itemBuilder: (context, index) =>
-            GameCoverTile(game: games[index]),
+        child: Scrollbar(
+          controller: scrollController,
+          thumbVisibility: true,
+          child: GridView.builder(
+            controller: scrollController,
+            padding: const EdgeInsets.only(
+              top: topInset,
+              left: 20,
+              right: 20,
+              bottom: 20,
+            ),
+            gridDelegate: GameCoverGridDelegate(
+              maxCrossAxisExtent: coverWidth.toDouble(),
+              crossAxisSpacing: 20,
+              mainAxisSpacing: 24,
+              titleExtent: gameTitleBlockHeight(context),
+            ),
+            itemCount: games.length,
+            itemBuilder: (context, index) =>
+                GameCoverTile(game: games[index]),
+          ),
+        ),
       ),
     );
   }
