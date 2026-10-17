@@ -10,6 +10,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../../core/launch/detect.dart';
 import '../../../../core/model.dart' as core;
 import '../../../../utils/prefs/app_prefs.dart';
+import '../../../../utils/theme/brand.dart';
 import '../../../library/domain/runner_detection.dart';
 import 'settings_widgets.dart';
 
@@ -221,14 +222,15 @@ class _PrefixField extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 8),
-          FilledButton(
+          BrandGlassButton(
             key: const Key('settings-prefix-choose'),
-            style: settingsSecondaryButtonStyle(context),
+            height: 40,
+            expand: false,
             onPressed: () async {
               final picked = await pickFolderOrNull(ref, context);
               if (picked != null) set(picked);
             },
-            child: const Text('Choose…'),
+            label: const Text('Choose…'),
           ),
         ],
       ),
@@ -309,14 +311,15 @@ class _ProtonVersionFieldState extends ConsumerState<_ProtonVersionField> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
+                BrandGlassButton(
                   key: const Key('settings-proton-version-choose'),
-                  style: settingsSecondaryButtonStyle(context),
+                  height: 40,
+                  expand: false,
                   onPressed: () async {
                     final picked = await pickFolderOrNull(ref, context);
                     if (picked != null) set(picked);
                   },
-                  child: const Text('Choose…'),
+                  label: const Text('Choose…'),
                 ),
               ],
             ),

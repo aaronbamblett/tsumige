@@ -28,6 +28,7 @@ import 'package:vnl/src/features/settings/widgets/app_theme_mode_tile/app_theme_
 import 'package:vnl/src/l10n/generated/app_localizations.dart';
 import 'package:vnl/src/utils/prefs/app_prefs.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
+import 'package:vnl/src/utils/theme/brand.dart';
 
 class SettingsFakeRepository implements LibraryRepository {
   SettingsFakeRepository({
@@ -284,7 +285,8 @@ void main() {
     await pumpLibrarySection(tester, repo);
     await tester.tap(refreshButton());
     await tester.pump();
-    expect(tester.widget<FilledButton>(refreshButton()).onPressed, isNull);
+    expect(tester.widget<BrandButton>(refreshButton()).onPressed, isNull);
+    expect(tester.widget<BrandButton>(refreshButton()).loading, isTrue);
     expect(repo.refreshCount, 1);
     await tester.tap(refreshButton());
     await tester.pump();
@@ -293,7 +295,8 @@ void main() {
     await tester.pump();
     await tester.pump();
     await tester.pump();
-    expect(tester.widget<FilledButton>(refreshButton()).onPressed, isNotNull);
+    expect(tester.widget<BrandButton>(refreshButton()).onPressed, isNotNull);
+    expect(tester.widget<BrandButton>(refreshButton()).loading, isFalse);
     expect(repo.refreshCount, 1);
     await tester.pump(const Duration(seconds: 6));
   });
@@ -391,28 +394,27 @@ void main() {
     expect(size.height, closeTo(40, 1));
   });
 
-  testWidgets('box buttons are flat', (tester) async {
+  testWidgets('action buttons use the brand styles', (tester) async {
     await pumpSettings(tester, SettingsFakeRepository());
     await openSection(tester, 'library');
-    for (final key in [
-      'settings-refresh-ratings',
-      'settings-open-data',
-      'settings-open-logs',
-    ]) {
-      final button = tester.widget<FilledButton>(find.byKey(Key(key)));
-      expect(button.style?.elevation?.resolve({}), 0, reason: key);
+    expect(tester.widget<BrandButton>(refreshButton()).height, 40);
+    for (final key in ['settings-open-data', 'settings-open-logs']) {
       expect(
-        button.style?.shadowColor?.resolve({}),
-        Colors.transparent,
+        tester.widget(find.byKey(Key(key))),
+        isA<BrandGlassButton>(),
+        reason: key,
+      );
+      expect(
+        tester.widget<BrandGlassButton>(find.byKey(Key(key))).height,
+        40,
         reason: key,
       );
     }
     await openSection(tester, 'launching');
-    final choose = tester.widget<FilledButton>(
-      find.byKey(const Key('settings-prefix-choose')),
+    expect(
+      tester.widget(find.byKey(const Key('settings-prefix-choose'))),
+      isA<BrandGlassButton>(),
     );
-    expect(choose.style?.elevation?.resolve({}), 0);
-    expect(choose.style?.shadowColor?.resolve({}), Colors.transparent);
   });
 
   testWidgets('setting rows stay one line at 1400x980', (tester) async {

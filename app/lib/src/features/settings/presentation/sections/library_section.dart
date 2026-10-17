@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../core/store.dart' as core;
+import '../../../../utils/theme/brand.dart';
 import '../../../../utils/toast.dart';
 import '../../../library/data/library_repository.dart';
 import 'settings_widgets.dart';
@@ -110,23 +111,14 @@ class _LibrarySectionState extends ConsumerState<LibrarySection> {
           rowKey: const Key('settings-row-vndb'),
           title: 'VNDB ratings',
           subtitle: 'Ratings are fetched for every game with a VNDB id.',
-          control: FilledButton(
-            key: const Key('settings-refresh-ratings'),
-            style: settingsPrimaryButtonStyle(context),
-            onPressed: _refreshing ? null : _refreshRatings,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (_refreshing) ...[
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                const Text('Refresh now'),
-              ],
+          control: IntrinsicWidth(
+            child: BrandButton(
+              key: const Key('settings-refresh-ratings'),
+              height: 40,
+              expand: false,
+              loading: _refreshing,
+              onPressed: _refreshing ? null : _refreshRatings,
+              label: const Text('Refresh now'),
             ),
           ),
         ),
@@ -139,11 +131,14 @@ class _LibrarySectionState extends ConsumerState<LibrarySection> {
               fontFamily: 'monospace',
             ),
           ),
-          control: FilledButton(
-            key: const Key('settings-open-data'),
-            style: settingsSecondaryButtonStyle(context),
-            onPressed: () => _openFolder(dataDir.root),
-            child: const Text('Open folder'),
+          control: IntrinsicWidth(
+            child: BrandGlassButton(
+              key: const Key('settings-open-data'),
+              height: 40,
+              expand: false,
+              onPressed: () => _openFolder(dataDir.root),
+              label: const Text('Open folder'),
+            ),
           ),
         ),
         SettingsGroup(
@@ -151,11 +146,14 @@ class _LibrarySectionState extends ConsumerState<LibrarySection> {
           title: 'Launch logs',
           subtitle: 'One log per launch.',
           divider: false,
-          control: FilledButton(
-            key: const Key('settings-open-logs'),
-            style: settingsSecondaryButtonStyle(context),
-            onPressed: () => _openFolder(dataDir.logs.path),
-            child: const Text('Open folder'),
+          control: IntrinsicWidth(
+            child: BrandGlassButton(
+              key: const Key('settings-open-logs'),
+              height: 40,
+              expand: false,
+              onPressed: () => _openFolder(dataDir.logs.path),
+              label: const Text('Open folder'),
+            ),
           ),
         ),
       ],
