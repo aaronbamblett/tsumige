@@ -56,6 +56,25 @@ bool Function(String path) coverExists(Ref ref) {
       cache.putIfAbsent(path, () => File(path).existsSync());
 }
 
+/// Version of a stored art file: its modification time and size.
+String artVersionOf(String path) {
+  final stat = File(path).statSync();
+  return '${stat.modified.microsecondsSinceEpoch}:${stat.size}';
+}
+
+/// The stat behind [artVersionProvider]; tests override it to count stats.
+@Riverpod(keepAlive: true)
+String Function(String path) artVersionStat(Ref ref) => artVersionOf;
+
+/// Memoised [artVersionOf], like [coverExists]: each path is stat'ed once,
+/// and the art stores invalidate this provider after they write files.
+@Riverpod(keepAlive: true)
+String Function(String path) artVersion(Ref ref) {
+  final stat = ref.watch(artVersionStatProvider);
+  final cache = <String, String>{};
+  return (String path) => cache.putIfAbsent(path, () => stat(path));
+}
+
 /// The cover width the grid decodes from. It follows [coverWidthProvider]
 /// 250 ms after the slider stops, so during a drag tiles keep their current
 /// image and scale it instead of re-decoding every step.

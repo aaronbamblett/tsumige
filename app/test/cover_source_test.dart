@@ -7,6 +7,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:vnl/src/core/covers.dart';
 import 'package:vnl/src/core/model.dart';
@@ -14,6 +15,8 @@ import 'package:vnl/src/core/paths.dart';
 import 'package:vnl/src/features/library/domain/cover_source.dart';
 
 void main() {
+  artVersionStatTests();
+
   late Directory temp;
   late DataDir dir;
 
@@ -75,5 +78,32 @@ void main() {
   test('no cover gives null', () {
     writeFiles();
     expect(coverSourceFor(Game(id: 'g1'), dir, 192, exists), isNull);
+  });
+}
+
+void artVersionStatTests() {
+  test('building twice stats a file once, and invalidation stats it again', () {
+    final temp = Directory.systemTemp.createTempSync('vnl_art_version_');
+    addTearDown(() => temp.deleteSync(recursive: true));
+    final file = File(p.join(temp.path, 'g1.png'))..writeAsBytesSync([1]);
+    final stats = <String>[];
+    final container = ProviderContainer(
+      overrides: [
+        artVersionStatProvider.overrideWithValue((path) {
+          stats.add(path);
+          return artVersionOf(path);
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final first = container.read(artVersionProvider)(file.path);
+    final second = container.read(artVersionProvider)(file.path);
+    expect(second, first);
+    expect(stats, [file.path]);
+
+    container.invalidate(artVersionProvider);
+    container.read(artVersionProvider)(file.path);
+    expect(stats, [file.path, file.path]);
   });
 }

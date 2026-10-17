@@ -8,16 +8,28 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:vnl/src/features/library/domain/cover_source.dart';
 import 'package:vnl/src/features/library/presentation/widgets/art_image.dart';
 
 void main() {
   test('a file rewritten at the same path gets a new image key', () {
     final temp = Directory.systemTemp.createTempSync('vnl_art_image_');
     addTearDown(() => temp.deleteSync(recursive: true));
-    final file = File(p.join(temp.path, 'g1.jpg'))..writeAsBytesSync([1, 2, 3]);
-    final before = artFileImage(file, cacheWidth: 512);
-    expect(artFileImage(file, cacheWidth: 512), before);
+    final file = File(p.join(temp.path, 'g1.jpg'))
+      ..writeAsBytesSync([1, 2, 3]);
+    final before = artFileImage(
+      file,
+      version: artVersionOf(file.path),
+      cacheWidth: 512,
+    );
+    expect(
+      artFileImage(file, version: artVersionOf(file.path), cacheWidth: 512),
+      before,
+    );
     file.writeAsBytesSync([1, 2, 3, 4, 5]);
-    expect(artFileImage(file, cacheWidth: 512), isNot(before));
+    expect(
+      artFileImage(file, version: artVersionOf(file.path), cacheWidth: 512),
+      isNot(before),
+    );
   });
 }

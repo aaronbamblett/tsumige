@@ -951,6 +951,9 @@ void main() {
     File(bgPath).writeAsBytesSync(
       img.encodeJpg(img.Image(width: 32, height: 24)),
     );
+    ProviderScope.containerOf(
+      tester.element(find.byType(GameDetailPane)),
+    ).invalidate(artVersionProvider);
     await tester.tap(find.byTooltip('Favourite'));
     await tester.pump();
     await tester.pump();

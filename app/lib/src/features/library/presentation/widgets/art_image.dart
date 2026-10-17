@@ -28,12 +28,13 @@ class VersionedFileImage extends FileImage {
 }
 
 /// Image provider for a cover or background file, decoded at [cacheWidth]
-/// when given. Use it everywhere a stored art file is drawn.
-ImageProvider artFileImage(File file, {int? cacheWidth}) {
-  final stat = file.statSync();
-  final image = VersionedFileImage(
-    file,
-    version: '${stat.modified.microsecondsSinceEpoch}:${stat.size}',
-  );
+/// when given. [version] comes from `artVersionProvider`, so builds do not
+/// stat the file.
+ImageProvider artFileImage(
+  File file, {
+  required String version,
+  int? cacheWidth,
+}) {
+  final image = VersionedFileImage(file, version: version);
   return cacheWidth == null ? image : ResizeImage(image, width: cacheWidth);
 }

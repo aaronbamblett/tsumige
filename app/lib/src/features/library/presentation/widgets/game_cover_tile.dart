@@ -35,6 +35,7 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
     final game = widget.game;
     final dir = ref.watch(dataDirProvider);
     final exists = ref.watch(coverExistsProvider);
+    final version = ref.watch(artVersionProvider);
     final settled = ref.watch(settledCoverWidthProvider);
     final settledPhysical = settled * MediaQuery.devicePixelRatioOf(context);
     final source = coverSourceFor(game, dir, settledPhysical, exists);
@@ -77,7 +78,7 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  _cover(source, settledPhysical),
+                  _cover(source, settledPhysical, version),
                   if (game.favourite)
                     const Positioned(
                       top: 8,
@@ -97,7 +98,11 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
     );
   }
 
-  Widget _cover(CoverSource? source, double settledPhysical) {
+  Widget _cover(
+    CoverSource? source,
+    double settledPhysical,
+    String Function(String) version,
+  ) {
     if (source == null) {
       return const Center(child: Text('No cover'));
     }
@@ -106,7 +111,7 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
     // while the slider moves. Only the original decodes at the settled width.
     final image = source.isThumbnail
         ? Image(
-            image: artFileImage(file),
+            image: artFileImage(file, version: version(source.path)),
             fit: BoxFit.cover,
             gaplessPlayback: true,
             errorBuilder: (_, _, _) => const Center(child: Text('No cover')),
@@ -114,6 +119,7 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
         : Image(
             image: artFileImage(
               file,
+              version: version(source.path),
               cacheWidth: settledPhysical.round().clamp(1, 1 << 16),
             ),
             fit: BoxFit.cover,

@@ -35,6 +35,7 @@ Future<void> storeCoverBytes(
   }, context: context);
   await generateThumbnails(dir, [(game.id, name)]);
   ref.invalidate(coverExistsProvider);
+  ref.invalidate(artVersionProvider);
 }
 
 Future<void> storeBackgroundBytes(
@@ -52,6 +53,7 @@ Future<void> storeBackgroundBytes(
     g.backgroundSource = source;
   }, context: context);
   ref.invalidate(coverExistsProvider);
+  ref.invalidate(artVersionProvider);
 }
 
 /// Drops the pane background: its file moves to the trash folder and the
@@ -69,4 +71,5 @@ Future<void> clearBackground(
     g.backgroundSource = null;
   }, context: context);
   ref.invalidate(coverExistsProvider);
+  ref.invalidate(artVersionProvider);
 }

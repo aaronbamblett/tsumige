@@ -210,13 +210,14 @@ class _OwnedCover extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final dir = ref.watch(dataDirProvider);
     final exists = ref.watch(coverExistsProvider);
+    final version = ref.watch(artVersionProvider);
     final settled =
         ref.watch(settledCoverWidthProvider) *
         MediaQuery.devicePixelRatioOf(context);
     final source = coverSourceFor(game, dir, settled, exists);
     if (source == null) return const _NoCover();
     return Image(
-      image: artFileImage(File(source.path)),
+      image: artFileImage(File(source.path), version: version(source.path)),
       fit: BoxFit.cover,
       gaplessPlayback: true,
       errorBuilder: (_, _, _) => const _NoCover(),

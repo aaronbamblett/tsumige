@@ -63,6 +63,113 @@ final class CoverExistsProvider
 
 String _$coverExistsHash() => r'64db10a28f6268e092315e223b08448c3e51baac';
 
+/// The stat behind [artVersionProvider]; tests override it to count stats.
+
+@ProviderFor(artVersionStat)
+final artVersionStatProvider = ArtVersionStatProvider._();
+
+/// The stat behind [artVersionProvider]; tests override it to count stats.
+
+final class ArtVersionStatProvider
+    extends
+        $FunctionalProvider<
+          String Function(String path),
+          String Function(String path),
+          String Function(String path)
+        >
+    with $Provider<String Function(String path)> {
+  /// The stat behind [artVersionProvider]; tests override it to count stats.
+  ArtVersionStatProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'artVersionStatProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$artVersionStatHash();
+
+  @$internal
+  @override
+  $ProviderElement<String Function(String path)> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  String Function(String path) create(Ref ref) {
+    return artVersionStat(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(String Function(String path) value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<String Function(String path)>(value),
+    );
+  }
+}
+
+String _$artVersionStatHash() => r'694c25af69cf098962d111db86b801706d69cfc9';
+
+/// Memoised [artVersionOf], like [coverExists]: each path is stat'ed once,
+/// and the art stores invalidate this provider after they write files.
+
+@ProviderFor(artVersion)
+final artVersionProvider = ArtVersionProvider._();
+
+/// Memoised [artVersionOf], like [coverExists]: each path is stat'ed once,
+/// and the art stores invalidate this provider after they write files.
+
+final class ArtVersionProvider
+    extends
+        $FunctionalProvider<
+          String Function(String path),
+          String Function(String path),
+          String Function(String path)
+        >
+    with $Provider<String Function(String path)> {
+  /// Memoised [artVersionOf], like [coverExists]: each path is stat'ed once,
+  /// and the art stores invalidate this provider after they write files.
+  ArtVersionProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'artVersionProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$artVersionHash();
+
+  @$internal
+  @override
+  $ProviderElement<String Function(String path)> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  String Function(String path) create(Ref ref) {
+    return artVersion(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(String Function(String path) value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<String Function(String path)>(value),
+    );
+  }
+}
+
+String _$artVersionHash() => r'ee89486212ea20f21dfbe7e77c0934a652b02b5f';
+
 /// The cover width the grid decodes from. It follows [coverWidthProvider]
 /// 250 ms after the slider stops, so during a drag tiles keep their current
 /// image and scale it instead of re-decoding every step.

@@ -18,6 +18,7 @@ import '../../../../core/vndb.dart';
 import '../../../../utils/theme/brand.dart';
 import '../../../../utils/toast.dart';
 import '../../data/library_repository.dart';
+import '../../domain/cover_source.dart';
 import '../../domain/add_game.dart';
 import '../../domain/game_editor.dart';
 import 'art_image.dart';
@@ -671,7 +672,10 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
   };
 
   Widget _storedImage(String path) => Image(
-    image: artFileImage(File(path)),
+    image: artFileImage(
+      File(path),
+      version: ref.watch(artVersionProvider)(path),
+    ),
     fit: BoxFit.cover,
     alignment: Alignment.topCenter,
     gaplessPlayback: true,

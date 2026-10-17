@@ -203,6 +203,7 @@ class GameDetailPane extends HookConsumerWidget {
   Widget _heroArt(BuildContext context, WidgetRef ref, double width) {
     final dir = ref.watch(dataDirProvider);
     final exists = ref.watch(coverExistsProvider);
+    final version = ref.watch(artVersionProvider);
     final physicalWidth = (width * MediaQuery.devicePixelRatioOf(context))
         .round()
         .clamp(1, 1 << 16);
@@ -211,7 +212,11 @@ class GameDetailPane extends HookConsumerWidget {
       final file = File(p.join(dir.coversBackground.path, background));
       if (exists(file.path)) {
         return Image(
-          image: artFileImage(file, cacheWidth: physicalWidth),
+          image: artFileImage(
+            file,
+            version: version(file.path),
+            cacheWidth: physicalWidth,
+          ),
           fit: BoxFit.cover,
           alignment: Alignment.topCenter,
           gaplessPlayback: true,
@@ -229,14 +234,18 @@ class GameDetailPane extends HookConsumerWidget {
       children: [
         if (exists(thumb))
           Image(
-            image: artFileImage(File(thumb)),
+            image: artFileImage(File(thumb), version: version(thumb)),
             fit: BoxFit.cover,
             alignment: Alignment.topCenter,
             gaplessPlayback: true,
             errorBuilder: (_, _, _) => const SizedBox.shrink(),
           ),
         Image(
-          image: artFileImage(original, cacheWidth: physicalWidth),
+          image: artFileImage(
+            original,
+            version: version(original.path),
+            cacheWidth: physicalWidth,
+          ),
           fit: BoxFit.cover,
           alignment: Alignment.topCenter,
           gaplessPlayback: true,
