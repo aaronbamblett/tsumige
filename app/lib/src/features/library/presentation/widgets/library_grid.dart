@@ -10,6 +10,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../core/model.dart';
 import '../../../../utils/prefs/app_prefs.dart';
+import '../../domain/selection.dart';
 import 'game_cover_grid_delegate.dart';
 import 'game_cover_tile.dart';
 
@@ -36,28 +37,37 @@ class LibraryGrid extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final coverWidth = ref.watch(coverWidthProvider);
     final scrollController = useScrollController();
+    if (games.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.only(top: topInset),
+        child: Center(child: Text('No games match')),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(top: topInset),
-      child: Scrollbar(
-        controller: scrollController,
-        thumbVisibility: true,
-        child: GridView.builder(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => ref.read(selectedGameIdProvider.notifier).clear(),
+        child: Scrollbar(
           controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(
-            horizontalPadding,
-            0,
-            horizontalPadding,
-            20,
+          thumbVisibility: true,
+          child: GridView.builder(
+            controller: scrollController,
+            padding: const EdgeInsets.fromLTRB(
+              horizontalPadding,
+              0,
+              horizontalPadding,
+              20,
+            ),
+            gridDelegate: GameCoverGridDelegate(
+              maxCrossAxisExtent: coverWidth.toDouble(),
+              crossAxisSpacing: 20,
+              mainAxisSpacing: 24,
+              titleExtent: gameTitleBlockHeight(context),
+            ),
+            itemCount: games.length,
+            itemBuilder: (context, index) => GameCoverTile(game: games[index]),
           ),
-          gridDelegate: GameCoverGridDelegate(
-            maxCrossAxisExtent: coverWidth.toDouble(),
-            crossAxisSpacing: 20,
-            mainAxisSpacing: 24,
-            titleExtent: gameTitleBlockHeight(context),
-          ),
-          itemCount: games.length,
-          itemBuilder: (context, index) =>
-              GameCoverTile(game: games[index]),
         ),
       ),
     );

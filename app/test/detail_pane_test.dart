@@ -504,8 +504,8 @@ void main() {
         (w) => w is Container && w.decoration is BoxDecoration,
       ),
     );
-    final decoration =
-        (tester.widget<Container>(frame).decoration as BoxDecoration);
+    final decoration = (tester.widget<Container>(frame).foregroundDecoration
+        as BoxDecoration);
     final border = decoration.border as Border;
     final primary = Theme.of(tester.element(cover)).colorScheme.primary;
     expect(border.top.color, primary);

@@ -10,12 +10,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
-import '../../../../core/format.dart';
 import '../../../../core/model.dart';
-import '../../../../utils/theme/brand.dart';
 import '../../data/library_repository.dart';
 import '../../domain/cover_source.dart';
 import '../../domain/selection.dart';
+import 'art_overlay.dart';
 import 'game_cover_grid_delegate.dart';
 
 class GameCoverTile extends ConsumerStatefulWidget {
@@ -36,15 +35,21 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
     final dir = ref.watch(dataDirProvider);
     final exists = ref.watch(coverExistsProvider);
     final settled = ref.watch(settledCoverWidthProvider);
-    final settledPhysical =
-        settled * MediaQuery.devicePixelRatioOf(context);
+    final settledPhysical = settled * MediaQuery.devicePixelRatioOf(context);
     final source = coverSourceFor(game, dir, settledPhysical, exists);
     final selected = ref.watch(selectedGameIdProvider) == game.id;
     final colorScheme = Theme.of(context).colorScheme;
+    const coverRadius = BorderRadius.all(Radius.circular(10));
     return InkWell(
-      borderRadius: const BorderRadius.all(Radius.circular(12)),
-      onTap: () =>
-          ref.read(selectedGameIdProvider.notifier).select(game.id),
+      borderRadius: coverRadius,
+      onTap: () {
+        final selection = ref.read(selectedGameIdProvider.notifier);
+        if (selected) {
+          selection.clear();
+        } else {
+          selection.select(game.id);
+        }
+      },
       onHover: (hovered) => setState(() => _hovered = hovered),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -54,53 +59,25 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
             aspectRatio: kGameCoverAspectRatio,
             child: Container(
               clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                borderRadius:
-                    const BorderRadius.all(Radius.circular(12)),
-                border: selected
-                    ? Border.all(color: colorScheme.primary, width: 3)
-                    : null,
-              ),
+              decoration: const BoxDecoration(borderRadius: coverRadius),
+              foregroundDecoration: selected || _hovered
+                  ? BoxDecoration(
+                      borderRadius: coverRadius,
+                      border: Border.all(
+                        color: colorScheme.primary,
+                        width: selected ? 3 : 2,
+                      ),
+                    )
+                  : null,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
                   _cover(source, settledPhysical),
                   if (game.favourite)
-                    Positioned(
-                      top: 4,
-                      left: 4,
-                      child: Container(
-                        width: 22,
-                        height: 22,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: OnImage.scrim,
-                        ),
-                        child: const Icon(
-                          Icons.star_rounded,
-                          size: 14,
-                          color: OnImage.text,
-                        ),
-                      ),
-                    ),
-                  if (_hovered)
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: Padding(
-                          padding: const EdgeInsets.all(1),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              borderRadius: const BorderRadius.all(
-                                Radius.circular(11),
-                              ),
-                              border: Border.all(
-                                color: colorScheme.primary,
-                                width: 2,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                    const Positioned(
+                      top: 8,
+                      right: 8,
+                      child: _FavouriteBadge(),
                     ),
                 ],
               ),
@@ -108,7 +85,7 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
           ),
           SizedBox(
             height: gameTitleBlockHeight(context),
-            child: _TitleBlock(game: game),
+            child: _TitleBlock(game: game, selected: selected),
           ),
         ],
       ),
@@ -127,76 +104,63 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
             file,
             fit: BoxFit.cover,
             gaplessPlayback: true,
-            errorBuilder: (_, _, _) =>
-                const Center(child: Text('No cover')),
+            errorBuilder: (_, _, _) => const Center(child: Text('No cover')),
           )
         : Image.file(
             file,
             fit: BoxFit.cover,
             gaplessPlayback: true,
             cacheWidth: settledPhysical.round().clamp(1, 1 << 16),
-            errorBuilder: (_, _, _) =>
-                const Center(child: Text('No cover')),
+            errorBuilder: (_, _, _) => const Center(child: Text('No cover')),
           );
     return image;
   }
 }
 
-class _TitleBlock extends StatelessWidget {
-  const _TitleBlock({required this.game});
-
-  final Game game;
+class _FavouriteBadge extends StatelessWidget {
+  const _FavouriteBadge();
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: ArtOverlay.badge,
+        border: Border.all(color: ArtOverlay.badgeRing),
+      ),
+      child: Icon(
+        Icons.favorite_rounded,
+        size: 16,
+        color: Theme.of(context).colorScheme.primary,
+      ),
+    );
+  }
+}
+
+class _TitleBlock extends StatelessWidget {
+  const _TitleBlock({required this.game, required this.selected});
+
+  final Game game;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final titleStyle =
-        (textTheme.bodyMedium ?? const TextStyle(fontSize: 14)).copyWith(
-      fontWeight: FontWeight.w600,
-    );
-    final ratingStyle =
-        (textTheme.bodySmall ?? const TextStyle(fontSize: 12)).copyWith(
-      color: colorScheme.onSurfaceVariant,
-    );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final rating = game.vndbRating == null
-            ? null
-            : formatVndbRating(game.vndbRating!);
-        var showRating = rating != null;
-        if (showRating) {
-          final probe = TextPainter(
-            text: TextSpan(text: rating, style: ratingStyle),
-            textScaler: MediaQuery.textScalerOf(context),
-            maxLines: 1,
-            textDirection: Directionality.of(context),
-          )..layout(maxWidth: constraints.maxWidth);
-          showRating = !probe.didExceedMaxLines;
-        }
-        return Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                game.title,
-                overflow: TextOverflow.ellipsis,
-                maxLines: 2,
-                style: titleStyle,
-              ),
-              if (showRating)
-                Text(
-                  rating!,
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                  style: ratingStyle,
-                ),
-            ],
-          ),
-        );
-      },
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Text(
+        game.title,
+        overflow: TextOverflow.ellipsis,
+        maxLines: 2,
+        style: TextStyle(
+          fontSize: kGameTitleFontSize,
+          height: kGameTitleHeight,
+          fontWeight: FontWeight.w600,
+          color: selected ? colorScheme.primary : colorScheme.onSurface,
+        ),
+      ),
     );
   }
 }

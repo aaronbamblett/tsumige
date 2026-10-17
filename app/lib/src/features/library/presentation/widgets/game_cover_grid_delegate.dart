@@ -13,22 +13,20 @@ import 'package:flutter/rendering.dart';
 /// Game covers are portrait art; 3:4 fits the library's covers.
 const kGameCoverAspectRatio = 3 / 4;
 
-/// 8dp of padding between the cover and the title.
+/// 8 px of padding between the cover and the title.
 const double _kTitleTopPadding = 8;
 
+/// Title type under each cover: 14 px, two lines at a 1.3 line height.
+const double kGameTitleFontSize = 14;
+const double kGameTitleHeight = 1.3;
+
 /// Height of the fixed title block under a cover at the current platform text
-/// scale: two title lines plus one rating line, so tiles with 1-line titles
-/// keep the same cover size as tiles with 2-line titles.
+/// scale: two title lines, so tiles with 1-line titles keep the same cover size
+/// as tiles with 2-line titles.
 double gameTitleBlockHeight(BuildContext context) {
-  final textTheme = Theme.of(context).textTheme;
   final scaler = MediaQuery.textScalerOf(context);
-  final titleStyle = textTheme.bodyMedium ?? const TextStyle(fontSize: 14);
-  final ratingStyle = textTheme.bodySmall ?? const TextStyle(fontSize: 12);
-  final titleLine =
-      scaler.scale(titleStyle.fontSize ?? 14) * (titleStyle.height ?? 1.5);
-  final ratingLine =
-      scaler.scale(ratingStyle.fontSize ?? 12) * (ratingStyle.height ?? 1.5);
-  return _kTitleTopPadding + titleLine * 2 + ratingLine;
+  return _kTitleTopPadding +
+      scaler.scale(kGameTitleFontSize) * kGameTitleHeight * 2;
 }
 
 /// Row height comes from the resolved column width, so the cover keeps its 3:4
@@ -72,18 +70,17 @@ class GameCoverGridDelegate extends SliverGridDelegate {
   final double titleExtent;
 
   @override
-  SliverGridLayout getLayout(SliverConstraints constraints) =>
-      _coverTileLayout(
-        constraints,
-        crossAxisCount: max(
-          1,
-          (constraints.crossAxisExtent / (maxCrossAxisExtent + crossAxisSpacing))
-              .ceil(),
-        ),
-        crossAxisSpacing: crossAxisSpacing,
-        mainAxisSpacing: mainAxisSpacing,
-        titleExtent: titleExtent,
-      );
+  SliverGridLayout getLayout(SliverConstraints constraints) => _coverTileLayout(
+    constraints,
+    crossAxisCount: max(
+      1,
+      (constraints.crossAxisExtent / (maxCrossAxisExtent + crossAxisSpacing))
+          .ceil(),
+    ),
+    crossAxisSpacing: crossAxisSpacing,
+    mainAxisSpacing: mainAxisSpacing,
+    titleExtent: titleExtent,
+  );
 
   @override
   bool shouldRelayout(GameCoverGridDelegate oldDelegate) =>
@@ -108,14 +105,13 @@ class GameCoverFixedCountGridDelegate extends SliverGridDelegate {
   final double titleExtent;
 
   @override
-  SliverGridLayout getLayout(SliverConstraints constraints) =>
-      _coverTileLayout(
-        constraints,
-        crossAxisCount: crossAxisCount,
-        crossAxisSpacing: crossAxisSpacing,
-        mainAxisSpacing: mainAxisSpacing,
-        titleExtent: titleExtent,
-      );
+  SliverGridLayout getLayout(SliverConstraints constraints) => _coverTileLayout(
+    constraints,
+    crossAxisCount: crossAxisCount,
+    crossAxisSpacing: crossAxisSpacing,
+    mainAxisSpacing: mainAxisSpacing,
+    titleExtent: titleExtent,
+  );
 
   @override
   bool shouldRelayout(GameCoverFixedCountGridDelegate oldDelegate) =>

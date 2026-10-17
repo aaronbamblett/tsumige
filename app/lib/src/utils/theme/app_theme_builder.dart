@@ -176,6 +176,17 @@ ThemeData buildAppTheme({
       overlayColor: primary.withValues(alpha: 0.18),
     ),
     progressIndicatorTheme: ProgressIndicatorThemeData(color: primary),
+    scrollbarTheme: ScrollbarThemeData(
+      thickness: const WidgetStatePropertyAll(8),
+      radius: const Radius.circular(4),
+      thumbVisibility: const WidgetStatePropertyAll(true),
+      thumbColor: WidgetStateProperty.resolveWith(
+        (s) =>
+            s.contains(WidgetState.hovered) || s.contains(WidgetState.dragged)
+            ? primary
+            : scheme.onSurface.withValues(alpha: 0.22),
+      ),
+    ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
       backgroundColor: primary,
       foregroundColor: scheme.onPrimary,
