@@ -46,7 +46,7 @@ class AppErrorApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final dir = ref.watch(dataDirProvider);
-    final appTheme = ref.watch(appThemeKeyProvider) ?? AppTheme.indigoNight;
+    final appTheme = ref.watch(appThemeKeyProvider) ?? kDefaultAppTheme;
     final customSeed = ref.watch(customThemeColorProvider) ?? 0xFF7C7BFF;
     final isTrueBlack = ref.watch(isTrueBlackProvider).ifNull();
     return MaterialApp(

@@ -33,7 +33,7 @@ class ThemeSelector extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selected = ref.watch(appThemeKeyProvider) ?? AppTheme.indigoNight;
+    final selected = ref.watch(appThemeKeyProvider) ?? kDefaultAppTheme;
     final controller = useScrollController();
     // Bumped on every scroll (controller listener) and on first layout or a
     // viewport resize (metrics notification), so the arrows track both ends.

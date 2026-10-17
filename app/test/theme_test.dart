@@ -52,11 +52,11 @@ MaterialApp appOf(WidgetTester tester) =>
     tester.widget<MaterialApp>(find.byType(MaterialApp));
 
 void main() {
-  testWidgets('empty prefs default to Indigo Night dark', (tester) async {
+  testWidgets('empty prefs default to Royal dark', (tester) async {
     await pumpApp(tester);
     expect(
       appOf(tester).darkTheme!.scaffoldBackgroundColor,
-      const Color(0xFF0B0D1A),
+      const Color(0xFF0D0B16),
     );
   });
 
@@ -87,7 +87,7 @@ void main() {
     expect(appOf(tester).themeMode, ThemeMode.system);
     expect(
       appOf(tester).theme!.scaffoldBackgroundColor,
-      const Color(0xFFEEECF9),
+      const Color(0xFFF1EBF9),
     );
     container.read(appThemeModeProvider.notifier).update(ThemeMode.light);
     await tester.pump();
