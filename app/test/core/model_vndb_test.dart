@@ -10,34 +10,34 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vnl/src/core/model.dart';
 
 Game _full() => Game(
-      id: 'g1',
-      title: 'Sample Game',
-      vndbId: 'v1',
-      vndbOriginalTitle: '相称',
-      developers: [
-        const Developer(id: 'p1', name: 'Hacca', original: 'ハッカ'),
-        const Developer(id: 'p2', name: 'Other'),
-      ],
-      lengthMinutes: 900,
-      lengthVotes: 42,
-      originalLanguage: 'ja',
-      vndbTags: [
-        const VndbTag(name: 'time loop', rating: 2.4, spoiler: 1, category: 'cont'),
-        const VndbTag(name: 'comedy', rating: 1.0, spoiler: 0, category: 'tech'),
-      ],
-      relations: [
-        const VnRelation(
-          vndbId: 'v2',
-          relation: 'seq',
-          title: 'Sequel',
-          imageUrl: 'https://t.vndb.org/cv/2.jpg',
-          official: true,
-        ),
-      ],
-      adultVndb: false,
-      adultOverride: true,
-      vndbDataFetchedAt: DateTime.utc(2026, 10, 17, 9),
-    );
+  id: 'g1',
+  title: 'Sample Game',
+  vndbId: 'v1',
+  vndbOriginalTitle: '相称',
+  developers: [
+    const Developer(id: 'p1', name: 'Hacca', original: 'ハッカ'),
+    const Developer(id: 'p2', name: 'Other'),
+  ],
+  lengthMinutes: 900,
+  lengthVotes: 42,
+  originalLanguage: 'ja',
+  vndbTags: [
+    const VndbTag(name: 'time loop', rating: 2.4, spoiler: 1, category: 'cont'),
+    const VndbTag(name: 'comedy', rating: 1.0, spoiler: 0, category: 'tech'),
+  ],
+  relations: [
+    const VnRelation(
+      vndbId: 'v2',
+      relation: 'seq',
+      title: 'Sequel',
+      imageUrl: 'https://t.vndb.org/cv/2.jpg',
+      official: true,
+    ),
+  ],
+  adultVndb: false,
+  adultOverride: true,
+  vndbDataFetchedAt: DateTime.utc(2026, 10, 17, 9),
+);
 
 void main() {
   test('new fields round-trip through toJson and fromJson', () {
@@ -130,8 +130,14 @@ void main() {
     expect(Game(id: 'a').isAdult, isFalse);
     expect(Game(id: 'a', adultVndb: true).isAdult, isTrue);
     expect(Game(id: 'a', adultVndb: false).isAdult, isFalse);
-    expect(Game(id: 'a', adultVndb: true, adultOverride: false).isAdult, isFalse);
-    expect(Game(id: 'a', adultVndb: false, adultOverride: true).isAdult, isTrue);
+    expect(
+      Game(id: 'a', adultVndb: true, adultOverride: false).isAdult,
+      isFalse,
+    );
+    expect(
+      Game(id: 'a', adultVndb: false, adultOverride: true).isAdult,
+      isTrue,
+    );
     expect(Game(id: 'a', adultOverride: true).isAdult, isTrue);
   });
 }
