@@ -34,8 +34,6 @@ final availableLaunchModesProvider = Provider<List<LaunchMode>>(
   (ref) => LaunchMode.values,
 );
 
-String localeDisplay(String locale) => locale.isEmpty ? 'System' : locale;
-
 Widget launchFieldLabel(BuildContext context, String label, bool isDefault) {
   final scheme = Theme.of(context).colorScheme;
   final style = Theme.of(context).textTheme.labelSmall
@@ -322,7 +320,7 @@ class _LaunchTextFieldState extends ConsumerState<_LaunchTextField> {
   bool _cancelled = false;
   bool _focused = false;
 
-  bool get _singleLine => (widget.maxLines ?? 1) == 1;
+  bool get _singleLine => widget.maxLines == 1;
 
   @override
   void initState() {
@@ -422,6 +420,9 @@ class _LaunchTextFieldState extends ConsumerState<_LaunchTextField> {
       maxLines: widget.maxLines,
       keyboardType: widget.keyboardType,
       style: theme.textTheme.bodyMedium,
+      textAlignVertical: _singleLine
+          ? TextAlignVertical.center
+          : TextAlignVertical.top,
       decoration:
           settingsInputDecoration(
             context,
@@ -434,19 +435,17 @@ class _LaunchTextFieldState extends ConsumerState<_LaunchTextField> {
           ),
       onSubmitted: _singleLine ? (_) => _submit() : null,
     );
-    final control = widget.isPath && _singleLine
-        ? SizedBox(
-            height: 40,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                field,
-                if (!_focused && _controller.text.isNotEmpty)
-                  MiddleEllipsisValue(text: _controller.text),
-              ],
-            ),
-          )
-        : field;
+    Widget control = field;
+    if (widget.isPath && !_focused && _controller.text.isNotEmpty) {
+      control = Stack(
+        fit: StackFit.expand,
+        children: [
+          field,
+          MiddleEllipsisValue(text: _controller.text),
+        ],
+      );
+    }
+    if (_singleLine) control = SizedBox(height: 40, child: control);
     final footer = widget.footerBuilder?.call(context, _controller.text);
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -501,7 +500,7 @@ class _ExecutableField extends ConsumerWidget {
         launchFieldLabel(context, 'Executable', false),
         const SizedBox(height: 6),
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
               child: _LaunchTextField(
@@ -591,7 +590,7 @@ class _WineRunnerFieldState extends ConsumerState<_WineRunnerField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        launchFieldLabel(context, 'Runner', stored == null),
+        launchFieldLabel(context, 'Wine build', stored == null),
         const SizedBox(height: 6),
         SettingsDropdown<String>(
           key: const Key('launch-runner'),
@@ -628,7 +627,7 @@ class _WineRunnerFieldState extends ConsumerState<_WineRunnerField> {
         if (_showCustom) ...[
           const SizedBox(height: 8),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: _LaunchTextField(
@@ -714,7 +713,7 @@ class _ProtonRunnerFieldState extends ConsumerState<_ProtonRunnerField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        launchFieldLabel(context, 'Runner', stored == null),
+        launchFieldLabel(context, 'Proton version', stored == null),
         const SizedBox(height: 6),
         SettingsDropdown<String>(
           key: const Key('launch-runner'),
@@ -748,7 +747,7 @@ class _ProtonRunnerFieldState extends ConsumerState<_ProtonRunnerField> {
         if (_showCustom) ...[
           const SizedBox(height: 8),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: _LaunchTextField(
@@ -871,7 +870,7 @@ class _PrefixFieldState extends ConsumerState<_PrefixField> {
         if (_showCustom) ...[
           const SizedBox(height: 8),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: _LaunchTextField(
@@ -948,16 +947,15 @@ class _LocaleFieldState extends ConsumerState<_LocaleField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        launchFieldLabel(context, 'Locale', stored == null),
+        launchFieldLabel(context, 'Game language', stored == null),
         const SizedBox(height: 6),
         SettingsDropdown<String>(
           key: const Key('launch-locale'),
           value: _showCustom ? _customKey : _selected(),
-          hint: Text(localeDisplay(widget.defaultLocale)),
+          hint: Text(localeLabel(widget.defaultLocale)),
           items: [
-            const DropdownMenuItem(value: '', child: Text('System')),
-            for (final preset in localePresets)
-              DropdownMenuItem(value: preset, child: Text(preset)),
+            for (final (value, label, _) in localeChoices)
+              DropdownMenuItem(value: value, child: Text(label)),
             const DropdownMenuItem(value: _customKey, child: Text('Custom…')),
           ],
           onChanged: (value) {
@@ -978,7 +976,7 @@ class _LocaleFieldState extends ConsumerState<_LocaleField> {
             key: const Key('launch-locale-custom'),
             gameId: widget.game.id,
             initial: _selected() == _customKey ? (stored ?? '') : '',
-            hint: localeDisplay(widget.defaultLocale),
+            hint: localeLabel(widget.defaultLocale),
             onSave: (editor, id, text) => editor.update(
               id,
               // A blank custom locale means the system locale.
@@ -1053,6 +1051,7 @@ class _ArgumentsField extends ConsumerWidget {
       key: const Key('launch-arguments'),
       gameId: game.id,
       label: 'Arguments',
+      hint: 'None',
       initial: game.launch.arguments ?? '',
       validate: (text) {
         try {
@@ -1099,6 +1098,7 @@ class _EnvironmentField extends ConsumerWidget {
       key: const Key('launch-environment'),
       gameId: game.id,
       label: 'Environment',
+      hint: 'KEY=value, one per line',
       initial: game.launch.environment ?? '',
       minLines: 3,
       maxLines: null,

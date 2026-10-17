@@ -278,6 +278,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     final searching = _step == 0;
     return DialogShell(
       frameKey: const Key('add-game-frame'),
+      autofocus: false,
       size: dialogShellSize(context),
       eyebrow: 'Add game',
       title: searching ? 'Find on VNDB' : 'Set it up',
@@ -561,12 +562,17 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   const SizedBox(height: 14),
                   launchFieldLabel(context, 'Steam App ID', false),
                   const SizedBox(height: 6),
-                  TextField(
-                    key: const Key('add-game-steam-app-id'),
-                    controller: _steamAppId,
-                    keyboardType: TextInputType.number,
-                    style: theme.textTheme.bodyMedium,
-                    decoration: settingsInputDecoration(context),
+                  SizedBox(
+                    height: 40,
+                    child: TextField(
+                      key: const Key('add-game-steam-app-id'),
+                      controller: _steamAppId,
+                      keyboardType: TextInputType.number,
+                      style: theme.textTheme.bodyMedium,
+                      textAlignVertical: TextAlignVertical.center,
+                      maxLines: 1,
+                      decoration: settingsInputDecoration(context),
+                    ),
                   ),
                 ],
                 const SizedBox(height: 14),
@@ -822,22 +828,36 @@ class _CoverThumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = imageUrl;
-    Widget art = const Center(child: Icon(Icons.image_not_supported_outlined));
-    if (url != null && url.isNotEmpty) {
-      art = Image.network(
-        url,
+    if (url == null || url.isEmpty) {
+      final scheme = Theme.of(context).colorScheme;
+      return Container(
         width: width,
         height: height,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) =>
-            const Icon(Icons.broken_image_outlined),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainer,
+          borderRadius: BorderRadius.circular(radius),
+          border: Border.all(color: scheme.outlineVariant),
+        ),
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          color: scheme.onSurfaceVariant,
+        ),
       );
-      if (sexual >= 1) {
-        art = ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-          child: art,
-        );
-      }
+    }
+    Widget art = Image.network(
+      url,
+      width: width,
+      height: height,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) =>
+          const Icon(Icons.broken_image_outlined),
+    );
+    if (sexual >= 1) {
+      art = ImageFiltered(
+        imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: art,
+      );
     }
     return SizedBox(
       width: width,

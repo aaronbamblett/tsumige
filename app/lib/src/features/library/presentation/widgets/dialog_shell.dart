@@ -24,6 +24,7 @@ class DialogShell extends StatelessWidget {
   const DialogShell({
     super.key,
     this.frameKey,
+    this.autofocus = true,
     required this.size,
     required this.eyebrow,
     required this.title,
@@ -41,6 +42,7 @@ class DialogShell extends StatelessWidget {
   final Widget footer;
   final Key? closeKey;
   final Key? frameKey;
+  final bool autofocus;
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +62,7 @@ class DialogShell extends StatelessWidget {
           border: Border.all(color: scheme.outlineVariant),
         ),
         child: Focus(
-          autofocus: true,
+          autofocus: autofocus,
           onKeyEvent: (node, event) {
             if (event is KeyDownEvent &&
                 event.logicalKey == LogicalKeyboardKey.escape) {

@@ -133,16 +133,17 @@ void main() {
       (tester) async {
     await pumpLaunch(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openLaunch(tester, 'Alpha');
-    expect(find.text('Runner'), findsOneWidget);
+    expect(find.text('Proton version'), findsOneWidget);
     expect(find.text('Prefix'), findsOneWidget);
     expect(find.text('Steam app id'), findsNothing);
 
     await tester.tap(find.byKey(const Key('mode-native')));
     await tester.pumpAndSettle();
     expect(find.text('Executable'), findsOneWidget);
-    expect(find.text('Runner'), findsNothing);
+    expect(find.text('Proton version'), findsNothing);
+    expect(find.text('Wine build'), findsNothing);
     expect(find.text('Prefix'), findsNothing);
-    expect(find.text('Locale'), findsNothing);
+    expect(find.text('Game language'), findsNothing);
 
     await tester.tap(find.byKey(const Key('mode-steam')));
     await tester.pumpAndSettle();
@@ -152,7 +153,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('mode-wine')));
     await tester.pumpAndSettle();
-    expect(find.text('Runner'), findsOneWidget);
+    expect(find.text('Wine build'), findsOneWidget);
     expect(find.text('Prefix'), findsOneWidget);
     expect(find.text('Steam app id'), findsNothing);
   });
@@ -318,7 +319,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(repo.games.first.launch.mode, core.LaunchMode.native);
     expect(find.text('Executable'), findsOneWidget);
-    expect(find.text('Runner'), findsNothing);
+    expect(find.text('Proton version'), findsNothing);
+    expect(find.text('Wine build'), findsNothing);
   });
 
   testWidgets('a stored mode missing from the list stays selected',
@@ -380,5 +382,69 @@ void main() {
     expect(
         tester.widget(find.byKey(const Key('launch-executable-choose'))),
         isA<BrandGlassButton>());
+  });
+
+  testWidgets('single-line boxes are 40 px and share a centre line with Choose',
+      (tester) async {
+    await pumpLaunch(tester, [
+      core.Game(
+          id: 'g1',
+          title: 'Alpha',
+          launch: core.LaunchOverrides(
+              mode: core.LaunchMode.proton,
+              executable: '/games/a.exe',
+              prefix: '/custom/prefix',
+              umuGameId: 'umu-1',
+              arguments: '--x')),
+    ]);
+    await openLaunch(tester, 'Alpha');
+    await openAdvanced(tester);
+    Finder boxOf(String key) => find.descendant(
+        of: find.byKey(Key(key)), matching: find.byType(TextField));
+    for (final key in [
+      'launch-executable',
+      'launch-prefix-custom',
+      'launch-umu',
+      'launch-arguments',
+    ]) {
+      expect(tester.getSize(boxOf(key)).height, closeTo(40, 1), reason: key);
+    }
+    for (final pair in [
+      ('launch-executable', 'launch-executable-choose'),
+      ('launch-prefix-custom', 'launch-prefix-choose'),
+    ]) {
+      final box = tester.getCenter(boxOf(pair.$1));
+      final choose = tester.getCenter(find.byKey(Key(pair.$2)));
+      expect((box.dy - choose.dy).abs(), lessThanOrEqualTo(1), reason: pair.$1);
+    }
+  });
+
+  testWidgets('environment is a top-aligned box of at least 72 px',
+      (tester) async {
+    await pumpLaunch(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openLaunch(tester, 'Alpha');
+    await openAdvanced(tester);
+    final env = find.descendant(
+        of: find.byKey(const Key('launch-environment')),
+        matching: find.byType(TextField));
+    expect(tester.getSize(env).height, greaterThanOrEqualTo(72));
+    expect(tester.widget<TextField>(env).textAlignVertical,
+        TextAlignVertical.top);
+    expect(find.text('KEY=value, one per line'), findsOneWidget);
+    expect(find.text('None'), findsOneWidget);
+  });
+
+  testWidgets('the locale dropdown uses the settings language names',
+      (tester) async {
+    await pumpLaunch(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openLaunch(tester, 'Alpha');
+    expect(find.text('Game language'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('launch-locale')));
+    await tester.tap(find.byKey(const Key('launch-locale')));
+    await tester.pumpAndSettle();
+    for (final name in ['System', 'Japanese', 'Chinese', 'Korean', 'English']) {
+      expect(find.text(name), findsWidgets);
+    }
+    expect(find.text('ja_JP.UTF-8'), findsNothing);
   });
 }

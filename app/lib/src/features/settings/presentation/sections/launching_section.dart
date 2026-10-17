@@ -178,14 +178,6 @@ class _ProtonVersionFieldState extends ConsumerState<_ProtonVersionField> {
   }
 }
 
-const List<(String, String, String)> _localeChoices = [
-  ('', 'System', 'system'),
-  ('ja_JP.UTF-8', 'Japanese', 'japanese'),
-  ('zh_CN.UTF-8', 'Chinese', 'chinese'),
-  ('ko_KR.UTF-8', 'Korean', 'korean'),
-  ('en_US.UTF-8', 'English', 'english'),
-];
-
 class _GameLanguageGroup extends ConsumerStatefulWidget {
   const _GameLanguageGroup();
 
@@ -218,7 +210,7 @@ class _GameLanguageGroupState extends ConsumerState<_GameLanguageGroup> {
           key: const Key('settings-locale'),
           value: showCustom ? _settingsCustomKey : selected,
           items: [
-            for (final (value, label, key) in _localeChoices)
+            for (final (value, label, key) in localeChoices)
               DropdownMenuItem(
                 value: value,
                 child: Text(label, key: Key('settings-locale-$key')),

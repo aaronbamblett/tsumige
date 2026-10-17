@@ -40,12 +40,12 @@ class HistoryTab extends StatelessWidget {
             spacing: 28,
             runSpacing: 12,
             children: [
-              _Fact(
+              DetailFact(
                 label: 'Total',
                 child: Text(total > 0 ? formatPlaytime(total) : 'Never'),
               ),
-              _Fact(label: 'Sessions', child: Text('${sessions.length}')),
-              _Fact(
+              DetailFact(label: 'Sessions', child: Text('${sessions.length}')),
+              DetailFact(
                 label: 'Last played',
                 child: Text(
                   lastPlayed == null ? 'Never' : formatPlayDay(lastPlayed, now),
@@ -173,36 +173,6 @@ class _SessionRowState extends State<_SessionRow> {
               ),
             ),
           ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Fact extends StatelessWidget {
-  const _Fact({required this.label, required this.child});
-
-  final String label;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: theme.textTheme.labelSmall?.copyWith(
-            fontSize: 11.5,
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 3),
-        DefaultTextStyle.merge(
-          style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
-          child: child,
         ),
       ],
     );

@@ -507,7 +507,7 @@ void main() {
     expect(find.textContaining('Proton', findRichText: true), findsWidgets);
     expect(find.text('Default'), findsWidgets);
     expect(find.text('Prefix'), findsOneWidget);
-    expect(find.text('Runner'), findsOneWidget);
+    expect(find.text('Proton version'), findsOneWidget);
     expect(find.textContaining('umu default', findRichText: true), findsOneWidget);
   });
 
@@ -561,7 +561,8 @@ void main() {
     );
     expect(tester.widget<TextField>(argsField).controller?.text, '--full');
     expect(find.text('Prefix'), findsNothing);
-    expect(find.text('Runner'), findsNothing);
+    expect(find.text('Proton version'), findsNothing);
+    expect(find.text('Wine build'), findsNothing);
   });
 
   testWidgets('long executable stays fully editable', (tester) async {

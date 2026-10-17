@@ -445,17 +445,22 @@ class _SettingsTextFieldState extends State<SettingsTextField> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
-      child: TextField(
-        controller: widget.controller,
-        focusNode: widget.focusNode,
-        autofocus: widget.autofocus,
-        style: Theme.of(context).textTheme.bodyMedium,
-        decoration: settingsInputDecoration(
-          context,
-          hint: widget.hint,
-          hovered: _hovered,
+      child: SizedBox(
+        height: 40,
+        child: TextField(
+          controller: widget.controller,
+          focusNode: widget.focusNode,
+          autofocus: widget.autofocus,
+          style: Theme.of(context).textTheme.bodyMedium,
+          textAlignVertical: TextAlignVertical.center,
+          maxLines: 1,
+          decoration: settingsInputDecoration(
+            context,
+            hint: widget.hint,
+            hovered: _hovered,
+          ),
+          onSubmitted: widget.onSubmitted,
         ),
-        onSubmitted: widget.onSubmitted,
       ),
     );
   }

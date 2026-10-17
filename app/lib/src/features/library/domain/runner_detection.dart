@@ -27,13 +27,29 @@ Future<List<ProtonRunner>> protonRunners(Ref ref) async =>
 Future<List<SteamPrefix>> steamPrefixes(Ref ref) async =>
     detectSteamPrefixes(Platform.environment);
 
-/// Locale presets shared by the launch tab and the settings defaults.
-const List<String> localePresets = [
-  'ja_JP.UTF-8',
-  'zh_CN.UTF-8',
-  'ko_KR.UTF-8',
-  'en_US.UTF-8',
+/// Game language choices shared by the launch tab and the settings defaults:
+/// stored value, option label, and a widget-key suffix.
+const List<(String, String, String)> localeChoices = [
+  ('', 'System', 'system'),
+  ('ja_JP.UTF-8', 'Japanese', 'japanese'),
+  ('zh_CN.UTF-8', 'Chinese', 'chinese'),
+  ('ko_KR.UTF-8', 'Korean', 'korean'),
+  ('en_US.UTF-8', 'English', 'english'),
 ];
+
+/// Locale presets: the non-empty stored values of [localeChoices].
+final List<String> localePresets = [
+  for (final (value, _, _) in localeChoices)
+    if (value.isNotEmpty) value,
+];
+
+/// The settings label for a stored locale, or the raw value when unknown.
+String localeLabel(String locale) {
+  for (final (value, label, _) in localeChoices) {
+    if (value == locale) return label;
+  }
+  return locale;
+}
 
 /// Toast shown when a picked path came through the Flatpak portal.
 const String portalPathMessage =

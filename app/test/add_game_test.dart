@@ -475,4 +475,43 @@ void main() {
     await _search(tester, 'zzz-no-such-game', http);
     expect(find.text('No matches on VNDB'), findsOneWidget);
   });
+
+  testWidgets('the search field has focus on open and after Back',
+      (tester) async {
+    final (_, http, _) = await _pump(tester,
+        rows: [_row('v900017', 'DEMO', imageUrl: null)]);
+    bool searchFocused() => tester
+        .widget<EditableText>(find.descendant(
+            of: find.byKey(const Key('add-game-search')),
+            matching: find.byType(EditableText)))
+        .focusNode
+        .hasFocus;
+    expect(searchFocused(), isTrue);
+    await _search(tester, 'DEMO', http);
+    await tester.tap(_resultRow('DEMO'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('add-game-back')));
+    await tester.pumpAndSettle();
+    expect(searchFocused(), isTrue);
+  });
+
+  testWidgets('manual setup boxes are 40 px and the placeholder cover is 220 by 293',
+      (tester) async {
+    await _pump(tester);
+    await tester.tap(find.byKey(const Key('add-game-manual')));
+    await tester.pumpAndSettle();
+    Finder boxOf(String key) => find.descendant(
+        of: find.byKey(Key(key)), matching: find.byType(TextField));
+    expect(tester.getSize(boxOf('add-game-title')).height, closeTo(40, 1));
+    expect(tester.getSize(boxOf('add-game-exe')).height, closeTo(40, 1));
+    final exe = tester.getCenter(boxOf('add-game-exe')).dy;
+    final choose =
+        tester.getCenter(find.byKey(const Key('add-game-exe-choose'))).dy;
+    expect((exe - choose).abs(), lessThanOrEqualTo(1));
+    final placeholder = find.ancestor(
+        of: find.byIcon(Icons.image_not_supported_outlined),
+        matching: find.byType(Container));
+    expect(tester.getSize(placeholder.first), const Size(220, 293));
+    expect(find.text('New game'), findsOneWidget);
+  });
 }

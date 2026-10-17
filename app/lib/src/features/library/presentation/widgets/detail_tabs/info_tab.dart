@@ -126,7 +126,7 @@ class InfoTab extends ConsumerWidget {
       runSpacing: 12,
       children: [
         if (game.developers.any((d) => d.name.isNotEmpty))
-          _Fact(
+          DetailFact(
             label: 'Developer',
             child: Wrap(
               crossAxisAlignment: WrapCrossAlignment.center,
@@ -140,10 +140,10 @@ class InfoTab extends ConsumerWidget {
             ),
           ),
         if (language != null)
-          _Fact(label: 'Language', child: Text(language)),
+          DetailFact(label: 'Language', child: Text(language)),
         if (lengthMinutes != null)
-          _Fact(label: 'Length', child: _lengthText(lengthMinutes, game.lengthVotes)),
-        _Fact(
+          DetailFact(label: 'Length', child: _lengthText(lengthMinutes, game.lengthVotes)),
+        DetailFact(
           label: 'Played',
           child: Text(seconds > 0 ? formatPlaytime(seconds) : 'Never'),
         ),
@@ -186,8 +186,9 @@ Widget _lengthText(int minutes, int? votes) {
   );
 }
 
-class _Fact extends StatelessWidget {
-  const _Fact({required this.label, required this.child});
+/// A label above a value, used in the detail tabs' facts rows.
+class DetailFact extends StatelessWidget {
+  const DetailFact({super.key, required this.label, required this.child});
 
   final String label;
   final Widget child;
