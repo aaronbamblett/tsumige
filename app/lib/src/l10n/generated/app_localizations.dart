@@ -154,12 +154,6 @@ abstract class AppLocalizations {
   /// **'Dark'**
   String get themeModeDark;
 
-  /// AMOLED dark variant toggle
-  ///
-  /// In en, this message translates to:
-  /// **'Pure black (AMOLED)'**
-  String get pureBlackAmoled;
-
   /// Tile to pick a custom seed color
   ///
   /// In en, this message translates to:

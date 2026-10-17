@@ -9,12 +9,10 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../constants/app_theme.dart';
 import '../../../../constants/pref_keys.dart' as keys;
-import '../../../../utils/extensions/bool.dart';
 import '../../../../utils/prefs/app_prefs.dart';
 import '../../widgets/app_theme_mode_tile/app_theme_mode_tile.dart';
 import '../appearance/widgets/app_theme_selector/app_theme_providers.dart';
 import '../appearance/widgets/app_theme_selector/app_theme_selector.dart';
-import '../appearance/widgets/is_true_black/is_true_black_tile.dart';
 import 'settings_widgets.dart';
 
 class AppearanceSection extends ConsumerWidget {
@@ -24,7 +22,6 @@ class AppearanceSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(appThemeModeProvider) ?? ThemeMode.system;
     final coverWidth = ref.watch(coverWidthProvider);
-    final trueBlack = ref.watch(isTrueBlackProvider).ifNull();
     final appTheme = ref.watch(appThemeKeyProvider) ?? kDefaultAppTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -62,17 +59,6 @@ class AppearanceSection extends ConsumerWidget {
             color: Theme.of(context).colorScheme.outlineVariant,
           ),
         ),
-        if (themeMode != ThemeMode.light)
-          SettingsGroup(
-            title: 'Pure black',
-            subtitle: 'Use true black backgrounds in dark mode.',
-            control: Switch(
-              key: const Key('settings-true-black'),
-              value: trueBlack,
-              onChanged: (value) =>
-                  ref.read(isTrueBlackProvider.notifier).update(value),
-            ),
-          ),
         SettingsGroup(
           title: 'Cover size',
           subtitle: 'Width of covers in the library grid.',

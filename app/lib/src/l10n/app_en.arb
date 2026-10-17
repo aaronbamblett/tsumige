@@ -22,10 +22,6 @@
   "@themeModeDark": {
     "description": "Radio button text for App theme - Dark"
   },
-  "pureBlackAmoled": "Pure black (AMOLED)",
-  "@pureBlackAmoled": {
-    "description": "AMOLED dark variant toggle"
-  },
   "customColor": "Custom color",
   "@customColor": {
     "description": "Tile to pick a custom seed color"

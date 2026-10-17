@@ -12,13 +12,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'src/constants/app_theme.dart';
 import 'src/features/library/data/library_repository.dart';
 import 'src/features/settings/presentation/appearance/widgets/app_theme_selector/app_theme_providers.dart';
-import 'src/features/settings/presentation/appearance/widgets/is_true_black/is_true_black_tile.dart';
 import 'src/features/settings/widgets/app_theme_mode_tile/app_theme_mode_tile.dart';
 import 'src/l10n/generated/app_localizations.dart';
 import 'src/routes/router.dart';
 import 'src/utils/app_scroll_behavior.dart';
 import 'src/utils/desktop/desktop_window.dart';
-import 'src/utils/extensions/bool.dart';
 import 'src/utils/prefs/prefs_mixin.dart';
 import 'src/utils/startup_time.dart';
 import 'src/utils/theme/app_theme_builder.dart';
@@ -52,18 +50,15 @@ class VnlApp extends ConsumerWidget {
     final library = ref.watch(libraryProvider);
     final appTheme = ref.watch(appThemeKeyProvider) ?? kDefaultAppTheme;
     final customSeed = ref.watch(customThemeColorProvider) ?? 0xFF7C7BFF;
-    final isTrueBlack = ref.watch(isTrueBlackProvider).ifNull();
     final theme = buildAppTheme(
       theme: appTheme,
       brightness: Brightness.light,
       customSeed: Color(customSeed),
-      amoled: false,
     );
     final darkTheme = buildAppTheme(
       theme: appTheme,
       brightness: Brightness.dark,
       customSeed: Color(customSeed),
-      amoled: isTrueBlack,
     );
     final themeMode = ref.watch(appThemeModeProvider) ?? ThemeMode.system;
     // Show the error screen while a retry is pending too: Riverpod re-runs a

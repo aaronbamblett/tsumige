@@ -16,7 +16,6 @@ import 'package:vnl/src/core/model.dart' as core;
 import 'package:vnl/src/core/paths.dart' as core;
 import 'package:vnl/src/features/library/data/library_repository.dart';
 import 'package:vnl/src/features/settings/presentation/appearance/widgets/app_theme_selector/app_theme_providers.dart';
-import 'package:vnl/src/features/settings/presentation/appearance/widgets/is_true_black/is_true_black_tile.dart';
 import 'package:vnl/src/features/settings/widgets/app_theme_mode_tile/app_theme_mode_tile.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
 
@@ -70,16 +69,6 @@ void main() {
     );
     final prefs = container.read(sharedPreferencesProvider);
     expect(prefs.getInt('appearance.appTheme'), AppTheme.dracula.index);
-  });
-
-  testWidgets('true black makes the dark background black', (tester) async {
-    final container = await pumpApp(tester);
-    container.read(isTrueBlackProvider.notifier).update(true);
-    await tester.pump();
-    expect(
-      appOf(tester).darkTheme!.scaffoldBackgroundColor,
-      Colors.black,
-    );
   });
 
   testWidgets('light theme uses the light tokens', (tester) async {

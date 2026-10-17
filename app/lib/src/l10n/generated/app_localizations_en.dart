@@ -40,9 +40,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get themeModeDark => 'Dark';
 
   @override
-  String get pureBlackAmoled => 'Pure black (AMOLED)';
-
-  @override
   String get customColor => 'Custom color';
 
   @override
