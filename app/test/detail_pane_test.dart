@@ -885,4 +885,79 @@ void main() {
     expect(find.textContaining('Flatpak portal'), findsOneWidget);
     await tester.pump(const Duration(seconds: 6));
   });
+
+  testWidgets('original title shows under the title only when it differs',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', vndbOriginalTitle: 'アルファ'),
+      core.Game(id: 'g2', title: 'Beta', vndbOriginalTitle: 'Beta'),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(paneText(tester, 'アルファ'), findsOneWidget);
+    await tester.tap(find.text('Beta').first);
+    await tester.pump();
+    await tester.pump();
+    expect(paneText(tester, 'Beta'), findsOneWidget);
+  });
+
+  testWidgets('facts show only the known values', (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openPane(tester, 'Alpha');
+    expect(paneText(tester, 'Developer'), findsNothing);
+    expect(paneText(tester, 'Language'), findsNothing);
+    expect(paneText(tester, 'Length'), findsNothing);
+    expect(paneText(tester, 'Played'), findsOneWidget);
+    expect(paneText(tester, 'Never'), findsOneWidget);
+  });
+
+  testWidgets('facts show language, rounded length and its tooltip',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        originalLanguage: 'ja',
+        lengthMinutes: 660,
+        lengthVotes: 14,
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(paneText(tester, 'Japanese'), findsOneWidget);
+    expect(paneText(tester, '~11 h'), findsOneWidget);
+    expect(find.byTooltip('VNDB average from 14 votes'), findsOneWidget);
+  });
+
+  testWidgets('a length under an hour reads <1 h', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', lengthMinutes: 45),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(paneText(tester, '<1 h'), findsOneWidget);
+  });
+
+  testWidgets('clicking a developer filters the library and shows a chip',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        developers: [core.Developer(id: 'p1', name: 'Azarashi Soft')],
+      ),
+      core.Game(
+        id: 'g2',
+        title: 'Beta',
+        developers: [core.Developer(id: 'p2', name: 'Other Soft')],
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    await tester.tap(paneText(tester, 'Azarashi Soft'));
+    await tester.pumpAndSettle();
+    expect(find.text('Developer: Azarashi Soft'), findsOneWidget);
+    expect(find.text('Beta'), findsNothing);
+    expect(find.text('Alpha'), findsWidgets);
+    await tester.tap(find.byTooltip('Clear developer filter'));
+    await tester.pumpAndSettle();
+    expect(find.text('Developer: Azarashi Soft'), findsNothing);
+    expect(find.text('Beta'), findsOneWidget);
+  });
 }

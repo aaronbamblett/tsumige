@@ -84,6 +84,16 @@ class LibrarySearch extends _$LibrarySearch {
   void set(String value) => state = value;
 }
 
+/// Developer filter from a developer link in the pane; null means no filter.
+/// Local state, not persisted, like the search text.
+@Riverpod(keepAlive: true)
+class DeveloperFilter extends _$DeveloperFilter {
+  @override
+  Developer? build() => null;
+
+  void set(Developer? value) => state = value;
+}
+
 /// `applyQuery` over the loaded library and every toolbar preference.
 @riverpod
 List<Game> visibleGames(Ref ref) {
@@ -92,6 +102,7 @@ List<Game> visibleGames(Ref ref) {
     search: ref.watch(librarySearchProvider),
     favouritesOnly: ref.watch(favouritesOnlyProvider),
     tag: ref.watch(tagFilterProvider),
+    developerId: ref.watch(developerFilterProvider)?.id,
     field: ref.watch(sortFieldProvider),
     ascending: ref.watch(sortAscendingProvider),
   );

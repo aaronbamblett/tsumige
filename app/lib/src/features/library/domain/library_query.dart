@@ -12,6 +12,7 @@ class LibraryQuery {
     this.search = '',
     this.favouritesOnly = false,
     this.tag,
+    this.developerId,
     this.field = SortField.added,
     this.ascending = true,
   });
@@ -19,6 +20,7 @@ class LibraryQuery {
   final String search;
   final bool favouritesOnly;
   final String? tag;
+  final String? developerId;
   final SortField field;
   final bool ascending;
 }
@@ -34,6 +36,10 @@ List<Game> applyQuery(List<Game> games, LibraryQuery q) {
     if (tag != null &&
         tag.isNotEmpty &&
         !g.tags.any((t) => t.toLowerCase() == tag)) {
+      return false;
+    }
+    if (q.developerId != null &&
+        !g.developers.any((d) => d.id == q.developerId)) {
       return false;
     }
     return true;

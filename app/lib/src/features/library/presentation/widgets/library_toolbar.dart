@@ -32,6 +32,7 @@ const double _kGap = 10;
 const double _kSortWidth = 180;
 const double _kSegmentsWidth = 170;
 const double _kTagWidth = 180;
+const double _kDeveloperWidth = 220;
 const double _kSearchMinWidth = 200;
 const double _kAddWidth = 104;
 const double _kRightInset = 12;
@@ -62,6 +63,7 @@ class LibraryToolbar extends ConsumerWidget {
     final ascending = ref.watch(sortAscendingProvider);
     final favouritesOnly = ref.watch(favouritesOnlyProvider);
     final tagFilter = ref.watch(tagFilterProvider);
+    final developer = ref.watch(developerFilterProvider);
     final scheme = Theme.of(context).colorScheme;
     return SizedBox(
       height: 64,
@@ -73,7 +75,8 @@ class LibraryToolbar extends ConsumerWidget {
           );
           final leftWidth = math.max(
             leftEnd - LibraryGrid.horizontalPadding,
-            _kLeftGroupMinWidth,
+            _kLeftGroupMinWidth +
+                (developer == null ? 0 : _kGap + _kDeveloperWidth),
           );
           return Stack(
             children: [
@@ -167,6 +170,39 @@ class LibraryToolbar extends ConsumerWidget {
                             ref.read(tagFilterProvider.notifier).set(value),
                       ),
                     ),
+                    if (developer != null) ...[
+                      const SizedBox(width: _kGap),
+                      _ToolbarBox(
+                        key: const ValueKey('toolbar-developer'),
+                        width: _kDeveloperWidth,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 14),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Developer: ${developer.name}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Tooltip(
+                                message: 'Clear developer filter',
+                                child: InkWell(
+                                  onTap: () => ref
+                                      .read(developerFilterProvider.notifier)
+                                      .set(null),
+                                  child: const SizedBox(
+                                    width: _kControlHeight,
+                                    child: Icon(Icons.close_rounded, size: 18),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

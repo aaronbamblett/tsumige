@@ -11,6 +11,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../../../core/format.dart';
 import '../../../../../core/model.dart';
 import '../../../../../utils/theme/brand.dart';
+import '../../../domain/cover_source.dart';
 import '../../../domain/game_editor.dart';
 import '../../../domain/vndb_markup.dart';
 
@@ -68,9 +69,8 @@ class InfoTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final blocks = <Widget>[];
-    blocks.add(_facts(theme));
+    blocks.add(_facts(context, ref));
     if (game.tags.isNotEmpty) {
       blocks.add(_TagsSection(game: game));
     }
@@ -104,25 +104,122 @@ class InfoTab extends ConsumerWidget {
     );
   }
 
-  Widget _facts(ThemeData theme) {
+  Widget _facts(BuildContext context, WidgetRef ref) {
     final seconds = game.totalPlaytimeSeconds;
+    final language = _languageName(game.originalLanguage);
+    final lengthMinutes = game.lengthMinutes;
+    return Wrap(
+      spacing: 28,
+      runSpacing: 12,
+      children: [
+        if (game.developers.any((d) => d.name.isNotEmpty))
+          _Fact(
+            label: 'Developer',
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                for (var i = 0; i < game.developers.length; i++)
+                  if (game.developers[i].name.isNotEmpty) ...[
+                    if (i > 0) const Text(', '),
+                    _DeveloperLink(developer: game.developers[i]),
+                  ],
+              ],
+            ),
+          ),
+        if (language != null)
+          _Fact(label: 'Language', child: Text(language)),
+        if (lengthMinutes != null)
+          _Fact(label: 'Length', child: _lengthText(lengthMinutes, game.lengthVotes)),
+        _Fact(
+          label: 'Played',
+          child: Text(seconds > 0 ? formatPlaytime(seconds) : 'Never'),
+        ),
+      ],
+    );
+  }
+}
+
+const Map<String, String> _languageNames = {
+  'ja': 'Japanese',
+  'en': 'English',
+  'zh': 'Chinese',
+  'zh-Hant': 'Chinese (Traditional)',
+  'ko': 'Korean',
+  'ru': 'Russian',
+  'de': 'German',
+  'fr': 'French',
+  'es': 'Spanish',
+  'it': 'Italian',
+  'pt-br': 'Portuguese (Brazil)',
+  'pl': 'Polish',
+  'uk': 'Ukrainian',
+  'vi': 'Vietnamese',
+  'th': 'Thai',
+  'id': 'Indonesian',
+};
+
+String? _languageName(String? code) {
+  if (code == null || code.isEmpty) return null;
+  return _languageNames[code] ?? code;
+}
+
+/// Whole hours, rounded to the nearest; under an hour reads "<1 h".
+Widget _lengthText(int minutes, int? votes) {
+  final label = minutes < 60 ? '<1 h' : '~${(minutes / 60).round()} h';
+  if (votes == null) return Text(label);
+  return Tooltip(
+    message: 'VNDB average from $votes votes',
+    child: Text(label),
+  );
+}
+
+class _Fact extends StatelessWidget {
+  const _Fact({required this.label, required this.child});
+
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Played',
+          label,
           style: theme.textTheme.labelSmall?.copyWith(
             fontSize: 11.5,
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 3),
-        Text(
-          seconds > 0 ? formatPlaytime(seconds) : 'Never',
+        DefaultTextStyle.merge(
           style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
+          child: child,
         ),
       ],
+    );
+  }
+}
+
+class _DeveloperLink extends ConsumerWidget {
+  const _DeveloperLink({required this.developer});
+
+  final Developer developer;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return InkWell(
+      onTap: () =>
+          ref.read(developerFilterProvider.notifier).set(developer),
+      child: Text(
+        developer.name,
+        style: const TextStyle(
+          decoration: TextDecoration.underline,
+          decorationStyle: TextDecorationStyle.dotted,
+        ),
+      ),
     );
   }
 }

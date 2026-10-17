@@ -252,6 +252,8 @@ class _HeroTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final original = game.vndbOriginalTitle;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -274,6 +276,26 @@ class _HeroTitle extends StatelessWidget {
             ],
           ),
         ),
+        if (original != null && original.isNotEmpty && original != game.title)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              original,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
+                fontSize: 15,
+                shadows: [
+                  Shadow(
+                    offset: const Offset(0, 1),
+                    blurRadius: 6,
+                    color: OnImage.shadow.withValues(alpha: 0.7),
+                  ),
+                ],
+              ),
+            ),
+          ),
         if (game.vndbRating != null ||
             (game.released?.isNotEmpty ?? false))
           Padding(

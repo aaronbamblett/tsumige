@@ -187,6 +187,68 @@ abstract class _$LibrarySearch extends $Notifier<String> {
   }
 }
 
+/// Developer filter from a developer link in the pane; null means no filter.
+/// Local state, not persisted, like the search text.
+
+@ProviderFor(DeveloperFilter)
+final developerFilterProvider = DeveloperFilterProvider._();
+
+/// Developer filter from a developer link in the pane; null means no filter.
+/// Local state, not persisted, like the search text.
+final class DeveloperFilterProvider
+    extends $NotifierProvider<DeveloperFilter, Developer?> {
+  /// Developer filter from a developer link in the pane; null means no filter.
+  /// Local state, not persisted, like the search text.
+  DeveloperFilterProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'developerFilterProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$developerFilterHash();
+
+  @$internal
+  @override
+  DeveloperFilter create() => DeveloperFilter();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(Developer? value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<Developer?>(value),
+    );
+  }
+}
+
+String _$developerFilterHash() => r'3d100f4f16cc4793481f774e3268849bdbc0dc24';
+
+/// Developer filter from a developer link in the pane; null means no filter.
+/// Local state, not persisted, like the search text.
+
+abstract class _$DeveloperFilter extends $Notifier<Developer?> {
+  Developer? build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<Developer?, Developer?>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<Developer?, Developer?>,
+              Developer?,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
 /// `applyQuery` over the loaded library and every toolbar preference.
 
 @ProviderFor(visibleGames)
@@ -231,4 +293,4 @@ final class VisibleGamesProvider
   }
 }
 
-String _$visibleGamesHash() => r'71c14eb16c6da8c05412cc5a5edc891917727508';
+String _$visibleGamesHash() => r'2d744a96aa3c36646eb5671efa8535c4e421638c';
