@@ -29,6 +29,23 @@ class GameCoverTile extends ConsumerStatefulWidget {
 
 class _GameCoverTileState extends ConsumerState<GameCoverTile> {
   var _hovered = false;
+  var _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    FocusManager.instance.addHighlightModeListener(_onHighlightModeChanged);
+  }
+
+  @override
+  void dispose() {
+    FocusManager.instance.removeHighlightModeListener(_onHighlightModeChanged);
+    super.dispose();
+  }
+
+  void _onHighlightModeChanged(FocusHighlightMode mode) {
+    if (_focused) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +59,9 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
     final selected = ref.watch(selectedGameIdProvider) == game.id;
     final colorScheme = Theme.of(context).colorScheme;
     const coverRadius = BorderRadius.all(Radius.circular(10));
+    final keyboardFocus =
+        _focused &&
+        FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
     return InkWell(
       borderRadius: coverRadius,
       hoverColor: Colors.transparent,
@@ -57,6 +77,7 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
         }
       },
       onHover: (hovered) => setState(() => _hovered = hovered),
+      onFocusChange: (focused) => setState(() => _focused = focused),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -66,7 +87,7 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
             child: Container(
               clipBehavior: Clip.antiAlias,
               decoration: const BoxDecoration(borderRadius: coverRadius),
-              foregroundDecoration: selected || _hovered
+              foregroundDecoration: selected || _hovered || keyboardFocus
                   ? BoxDecoration(
                       borderRadius: coverRadius,
                       border: Border.all(

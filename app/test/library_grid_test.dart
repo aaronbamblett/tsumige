@@ -545,4 +545,138 @@ void main() {
     );
     expect(bar.thumbVisibility, isTrue);
   });
+
+  group('keyboard focus', () {
+    setUp(() {
+      FocusManager.instance.highlightStrategy =
+          FocusHighlightStrategy.automatic;
+    });
+
+    String? focusedTileId() => FocusManager.instance.primaryFocus?.context
+        ?.findAncestorWidgetOfExactType<GameCoverTile>()
+        ?.game
+        .id;
+
+    Future<void> tabToTile(WidgetTester tester) async {
+      for (var i = 0; i < 10 && focusedTileId() == null; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+      }
+      expect(focusedTileId(), isNotNull, reason: 'tab never reached a tile');
+    }
+
+    Rect coverOf(WidgetTester tester, String id) =>
+        tester.getRect(find.byKey(ValueKey('cover-$id')));
+
+    BoxDecoration? coverDecoration(WidgetTester tester, String id) {
+      final containers = find.descendant(
+        of: find.byKey(ValueKey('cover-$id')),
+        matching: find.byType(Container),
+      );
+      return tester.widget<Container>(containers.first).foregroundDecoration
+          as BoxDecoration?;
+    }
+
+    testWidgets('tabbing to a tile draws a 2 px primary ring on its cover', (
+      tester,
+    ) async {
+      await pumpLibrary(tester, fakeGames(20));
+      expect(coverDecoration(tester, 'game-0'), isNull);
+      await tabToTile(tester);
+      final id = focusedTileId()!;
+      final context = tester.element(find.byType(LibraryGrid));
+      final border = coverDecoration(tester, id)!.border! as Border;
+      expect(border.top.color, Theme.of(context).colorScheme.primary);
+      expect(border.top.width, 2);
+    });
+
+    testWidgets('focus ring is not drawn in touch highlight mode', (
+      tester,
+    ) async {
+      FocusManager.instance.highlightStrategy =
+          FocusHighlightStrategy.alwaysTouch;
+      await pumpLibrary(tester, fakeGames(20));
+      await tabToTile(tester);
+      expect(coverDecoration(tester, focusedTileId()!), isNull);
+    });
+
+    testWidgets('a touch or mouse press leaves focus without a ring', (
+      tester,
+    ) async {
+      await pumpLibrary(tester, fakeGames(20));
+      final viewport = gridViewportRect(tester);
+      await tester.tap(find.byKey(const ValueKey('cover-game-0')));
+      await tester.pump();
+      await tester.tapAt(Offset(viewport.left + 5, viewport.top + 100));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(GameDetailPane), findsNothing);
+      final focus = Focus.of(
+        tester.element(find.byKey(const ValueKey('cover-game-0'))),
+      );
+      focus.requestFocus();
+      await tester.pump();
+      expect(focusedTileId(), 'game-0');
+      expect(coverDecoration(tester, 'game-0'), isNull);
+    });
+
+    testWidgets('Enter and Space toggle selection on a focused tile', (
+      tester,
+    ) async {
+      await pumpLibrary(tester, fakeGames(20));
+      await tabToTile(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(GameDetailPane), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(GameDetailPane), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(GameDetailPane), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(GameDetailPane), findsNothing);
+    });
+
+    testWidgets('arrow keys move focus to the tile beside and below', (
+      tester,
+    ) async {
+      await pumpLibrary(tester, fakeGames(20));
+      await tabToTile(tester);
+      final first = coverOf(tester, focusedTileId()!);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      final right = coverOf(tester, focusedTileId()!);
+      expect(right.top, first.top);
+      expect(right.left, greaterThan(first.left));
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      final below = coverOf(tester, focusedTileId()!);
+      expect(below.left, right.left);
+      expect(below.top, greaterThan(right.top));
+    });
+
+    testWidgets('a focused tile below the fold scrolls into view', (
+      tester,
+    ) async {
+      await pumpLibrary(tester, fakeGames(60));
+      await tabToTile(tester);
+      final top = coverOf(tester, focusedTileId()!).top;
+      for (var i = 0; i < 4; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.pump();
+      }
+      await tester.pumpAndSettle();
+      final viewport = gridViewportRect(tester);
+      final cover = coverOf(tester, focusedTileId()!);
+      expect(cover.top, greaterThan(top));
+      expect(cover.top, greaterThanOrEqualTo(viewport.top));
+      expect(cover.bottom, lessThanOrEqualTo(viewport.bottom));
+    });
+  });
 }
