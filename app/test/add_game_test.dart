@@ -532,15 +532,15 @@ void main() {
       final editable = find.descendant(
           of: find.byKey(Key(key)), matching: find.byType(EditableText));
       expect(tester.getCenter(editable).dy,
-          closeTo(tester.getCenter(box).dy, 2), reason: '$key unfocused');
+          closeTo(tester.getCenter(box).dy + 4, 2), reason: '$key unfocused');
       await tester.tap(editable);
       await tester.pump();
       expect(tester.getCenter(editable).dy,
-          closeTo(tester.getCenter(box).dy, 2), reason: '$key focused');
+          closeTo(tester.getCenter(box).dy + 4, 2), reason: '$key focused');
       await tester.enterText(find.byKey(Key(key)), 'typed value');
       await tester.pump();
       expect(tester.getCenter(editable).dy,
-          closeTo(tester.getCenter(box).dy, 2), reason: '$key typing');
+          closeTo(tester.getCenter(box).dy + 4, 2), reason: '$key typing');
     }
   });
 }

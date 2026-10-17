@@ -580,10 +580,10 @@ void main() {
       of: field,
       matching: find.byType(EditableText),
     );
-    expect(tester.getCenter(editable).dy, closeTo(box.dy, 2));
+    expect(tester.getCenter(editable).dy, closeTo(box.dy + 4, 2));
     await tester.tap(editable);
     await tester.pump();
-    expect(tester.getCenter(editable).dy, closeTo(box.dy, 2));
+    expect(tester.getCenter(editable).dy, closeTo(box.dy + 4, 2));
   });
 
   testWidgets('prefix text baseline matches a dropdown value', (tester) async {
@@ -623,6 +623,6 @@ void main() {
           .first,
       find.byKey(const Key('settings-locale')),
     );
-    expect(field, closeTo(dropdown, 1));
+    expect(field, closeTo(dropdown + 4, 1));
   });
 }

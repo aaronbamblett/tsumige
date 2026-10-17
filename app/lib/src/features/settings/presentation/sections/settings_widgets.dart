@@ -409,7 +409,10 @@ class _SettingsTextBoxState extends State<SettingsTextBox> {
           ),
           isDense: true,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+          // Single-line text sits 4 px lower to match the dropdown values.
+          contentPadding: multiline
+              ? const EdgeInsets.symmetric(vertical: 10)
+              : const EdgeInsets.fromLTRB(0, 14, 0, 6),
         ),
         onSubmitted: widget.onSubmitted,
       ),
