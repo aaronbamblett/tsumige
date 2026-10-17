@@ -107,65 +107,55 @@ class _LibrarySectionState extends ConsumerState<LibrarySection> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SettingsGroup(
+          rowKey: const Key('settings-row-vndb'),
           title: 'VNDB ratings',
           subtitle: 'Ratings are fetched for every game with a VNDB id.',
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton.tonal(
-              key: const Key('settings-refresh-ratings'),
-              style: settingsSecondaryButtonStyle(context),
-              onPressed: _refreshing ? null : _refreshRatings,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_refreshing) ...[
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  const Text('Refresh now'),
+          control: FilledButton(
+            key: const Key('settings-refresh-ratings'),
+            style: settingsPrimaryButtonStyle(context),
+            onPressed: _refreshing ? null : _refreshRatings,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_refreshing) ...[
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 8),
                 ],
-              ),
+                const Text('Refresh now'),
+              ],
             ),
           ),
         ),
         SettingsGroup(
+          rowKey: const Key('settings-row-data-folder'),
           title: 'Data folder',
-          child: Row(
-            children: [
-              Expanded(
-                child: MiddleEllipsisText(
-                  text: dataDir.root,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontFamily: 'monospace',
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              FilledButton.tonal(
-                key: const Key('settings-open-data'),
-                style: settingsSecondaryButtonStyle(context),
-                onPressed: () => _openFolder(dataDir.root),
-                child: const Text('Open folder'),
-              ),
-            ],
+          subtitleWidget: MiddleEllipsisText(
+            text: dataDir.root,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontFamily: 'monospace',
+            ),
+          ),
+          control: FilledButton(
+            key: const Key('settings-open-data'),
+            style: settingsSecondaryButtonStyle(context),
+            onPressed: () => _openFolder(dataDir.root),
+            child: const Text('Open folder'),
           ),
         ),
         SettingsGroup(
+          rowKey: const Key('settings-row-launch-logs'),
           title: 'Launch logs',
           subtitle: 'One log per launch.',
           divider: false,
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton.tonal(
-              key: const Key('settings-open-logs'),
-              style: settingsSecondaryButtonStyle(context),
-              onPressed: () => _openFolder(dataDir.logs.path),
-              child: const Text('Open folder'),
-            ),
+          control: FilledButton(
+            key: const Key('settings-open-logs'),
+            style: settingsSecondaryButtonStyle(context),
+            onPressed: () => _openFolder(dataDir.logs.path),
+            child: const Text('Open folder'),
           ),
         ),
       ],

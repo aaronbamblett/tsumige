@@ -31,38 +31,79 @@ Future<String?> pickFolderOrNull(WidgetRef ref, BuildContext context) async {
 }
 
 /// A titled block inside a settings section, separated by a thin rule.
+///
+/// With a [control] the title and subtitle form one row with the control on
+/// the right. Otherwise [child] sits under the heading at full width.
 class SettingsGroup extends StatelessWidget {
   const SettingsGroup({
     super.key,
     required this.title,
     this.subtitle,
-    required this.child,
+    this.subtitleWidget,
+    this.control,
+    this.footer,
+    this.child,
     this.divider = true,
+    this.rowKey,
   });
 
   final String title;
   final String? subtitle;
-  final Widget child;
+  final Widget? subtitleWidget;
+  final Widget? control;
+  final Widget? footer;
+  final Widget? child;
   final bool divider;
+  final Key? rowKey;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(title, style: theme.textTheme.titleMedium),
+        if (subtitle != null || subtitleWidget != null) ...[
+          const SizedBox(height: 2),
+          subtitleWidget ??
+              Text(
+                subtitle!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+        ],
+      ],
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(title, style: theme.textTheme.titleMedium),
-        if (subtitle != null) ...[
-          const SizedBox(height: 2),
-          Text(
-            subtitle!,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
+        if (control != null)
+          Row(
+            key: rowKey,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(child: heading),
+              const SizedBox(width: 24),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  widthFactor: 1,
+                  heightFactor: 1,
+                  child: control,
+                ),
+              ),
+            ],
+          )
+        else ...[
+          heading,
+          const SizedBox(height: 12),
+          child!,
         ],
-        const SizedBox(height: 12),
-        child,
+        if (footer != null)
+          Padding(padding: const EdgeInsets.only(top: 12), child: footer),
         if (divider)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
@@ -210,7 +251,7 @@ class SettingsRadioOption extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           hoverColor: scheme.onSurface.withValues(alpha: 0.06),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -238,7 +279,7 @@ class SettingsRadioOption extends StatelessWidget {
                         : null,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Text(
                   label,
                   style: Theme.of(context).textTheme.bodyMedium
@@ -253,14 +294,16 @@ class SettingsRadioOption extends StatelessWidget {
   }
 }
 
-/// Shared style for secondary buttons: 40 px, radius 10, outlined surface.
+/// Shared style for box buttons: 40 px, radius 10, outlined surface, no shadow.
 ButtonStyle settingsSecondaryButtonStyle(BuildContext context) {
   final scheme = Theme.of(context).colorScheme;
   return ButtonStyle(
     minimumSize: const WidgetStatePropertyAll(Size(0, 40)),
     padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 14)),
     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-    visualDensity: VisualDensity.compact,
+    elevation: const WidgetStatePropertyAll(0),
+    shadowColor: const WidgetStatePropertyAll(Colors.transparent),
+    surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
     backgroundColor: WidgetStateProperty.resolveWith(
       (states) => states.contains(WidgetState.disabled)
           ? scheme.surfaceContainer.withValues(alpha: 0.5)
@@ -286,6 +329,39 @@ ButtonStyle settingsSecondaryButtonStyle(BuildContext context) {
             : scheme.outlineVariant,
       ),
     ),
+  );
+}
+
+/// Shared style for the one primary action on a section: solid accent, no
+/// shadow.
+ButtonStyle settingsPrimaryButtonStyle(BuildContext context) {
+  final scheme = Theme.of(context).colorScheme;
+  return ButtonStyle(
+    minimumSize: const WidgetStatePropertyAll(Size(0, 40)),
+    padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 14)),
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    elevation: const WidgetStatePropertyAll(0),
+    shadowColor: const WidgetStatePropertyAll(Colors.transparent),
+    surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+    backgroundColor: WidgetStateProperty.resolveWith(
+      (states) => states.contains(WidgetState.disabled)
+          ? scheme.primary.withValues(alpha: 0.38)
+          : scheme.primary,
+    ),
+    foregroundColor: WidgetStateProperty.resolveWith(
+      (states) => states.contains(WidgetState.disabled)
+          ? scheme.onSurface.withValues(alpha: 0.38)
+          : scheme.onPrimary,
+    ),
+    overlayColor: WidgetStateProperty.resolveWith(
+      (states) => states.contains(WidgetState.hovered)
+          ? scheme.onPrimary.withValues(alpha: 0.08)
+          : null,
+    ),
+    shape: WidgetStatePropertyAll(
+      RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ),
+    side: const WidgetStatePropertyAll(BorderSide(color: Colors.transparent)),
   );
 }
 
@@ -316,6 +392,7 @@ class _SettingsControlBoxState extends State<SettingsControlBox> {
       child: Container(
         height: 40,
         padding: widget.padding,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: scheme.surfaceContainer,
           borderRadius: BorderRadius.circular(10),
@@ -353,11 +430,12 @@ InputDecoration settingsInputDecoration(
     hintStyle: theme.textTheme.bodyMedium?.copyWith(
       color: scheme.onSurfaceVariant,
     ),
-    isDense: true,
+    isCollapsed: true,
     filled: true,
     fillColor: scheme.surfaceContainer,
     contentPadding:
-        contentPadding ?? const EdgeInsets.symmetric(horizontal: 12),
+        contentPadding ??
+        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     constraints: const BoxConstraints.tightFor(height: 40),
     border: border,
     enabledBorder: border,
@@ -458,12 +536,16 @@ class PrefTextField extends ConsumerStatefulWidget {
     required this.initial,
     this.hint,
     this.isPath = false,
+    this.middleEllipsis = false,
     required this.onSave,
   });
 
   final String initial;
   final String? hint;
   final bool isPath;
+
+  /// Shows the value shortened from the middle while the field is unfocused.
+  final bool middleEllipsis;
   final void Function(String text) onSave;
 
   @override
@@ -475,6 +557,7 @@ class _PrefTextFieldState extends ConsumerState<PrefTextField> {
   late final FocusNode _focusNode;
   String _focusValue = '';
   bool _hovered = false;
+  bool _focused = false;
 
   @override
   void initState() {
@@ -503,6 +586,7 @@ class _PrefTextFieldState extends ConsumerState<PrefTextField> {
   }
 
   void _onFocus() {
+    setState(() => _focused = _focusNode.hasFocus);
     if (_focusNode.hasFocus) {
       _focusValue = _controller.text;
     } else {
@@ -532,6 +616,20 @@ class _PrefTextFieldState extends ConsumerState<PrefTextField> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final field = TextField(
+      controller: _controller,
+      focusNode: _focusNode,
+      style: theme.textTheme.bodyMedium,
+      textAlignVertical: TextAlignVertical.center,
+      maxLines: 1,
+      decoration: settingsInputDecoration(
+        context,
+        hint: widget.hint,
+        hovered: _hovered,
+      ),
+      onSubmitted: (_) => _submit(),
+    );
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
@@ -544,16 +642,41 @@ class _PrefTextFieldState extends ConsumerState<PrefTextField> {
           }
           return KeyEventResult.ignored;
         },
-        child: TextField(
-          controller: _controller,
-          focusNode: _focusNode,
-          style: Theme.of(context).textTheme.bodyMedium,
-          decoration: settingsInputDecoration(
-            context,
-            hint: widget.hint,
-            hovered: _hovered,
-          ),
-          onSubmitted: (_) => _submit(),
+        child: SizedBox(
+          height: 40,
+          child: widget.middleEllipsis
+              ? Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    field,
+                    if (!_focused && _controller.text.isNotEmpty)
+                      IgnorePointer(
+                        child: Padding(
+                          padding: const EdgeInsets.all(1),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(9),
+                            child: ColoredBox(
+                              color: theme.colorScheme.surfaceContainer,
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 12,
+                                  right: 8,
+                                ),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: MiddleEllipsisText(
+                                    text: _controller.text,
+                                    style: theme.textTheme.bodyMedium,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                )
+              : field,
         ),
       ),
     );

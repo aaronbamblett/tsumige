@@ -376,26 +376,86 @@ void main() {
     expect(container.read(launchModeProvider), core.LaunchMode.wine);
     expect(find.byKey(const Key('launch-mode-selected-wine')), findsOneWidget);
     expect(find.byKey(const Key('launch-mode-selected-proton')), findsNothing);
+
+    final heights = {
+      for (final mode in core.LaunchMode.values)
+        tester.getSize(find.byKey(Key('launch-mode-card-${mode.name}'))).height,
+    };
+    expect(heights, hasLength(1));
   });
 
-  testWidgets('game language presets and custom text write the pref', (
+  testWidgets('prefix field is 40 px tall', (tester) async {
+    await pumpSettings(tester, SettingsFakeRepository());
+    await openSection(tester, 'launching');
+    final size = tester.getSize(find.byKey(const Key('settings-prefix')));
+    expect(size.height, closeTo(40, 1));
+  });
+
+  testWidgets('box buttons are flat', (tester) async {
+    await pumpSettings(tester, SettingsFakeRepository());
+    await openSection(tester, 'library');
+    for (final key in [
+      'settings-refresh-ratings',
+      'settings-open-data',
+      'settings-open-logs',
+    ]) {
+      final button = tester.widget<FilledButton>(find.byKey(Key(key)));
+      expect(button.style?.elevation?.resolve({}), 0, reason: key);
+      expect(
+        button.style?.shadowColor?.resolve({}),
+        Colors.transparent,
+        reason: key,
+      );
+    }
+    await openSection(tester, 'launching');
+    final choose = tester.widget<FilledButton>(
+      find.byKey(const Key('settings-prefix-choose')),
+    );
+    expect(choose.style?.elevation?.resolve({}), 0);
+    expect(choose.style?.shadowColor?.resolve({}), Colors.transparent);
+  });
+
+  testWidgets('setting rows stay one line at 1400x980', (tester) async {
+    await pumpSettings(tester, SettingsFakeRepository());
+    await openSection(tester, 'library');
+    for (final key in ['vndb', 'data-folder', 'launch-logs']) {
+      final size = tester.getSize(find.byKey(Key('settings-row-$key')));
+      expect(size.height, lessThanOrEqualTo(72), reason: key);
+    }
+    await openSection(tester, 'launching');
+    for (final key in ['prefix', 'proton', 'locale']) {
+      final size = tester.getSize(find.byKey(Key('settings-row-$key')));
+      expect(size.height, lessThanOrEqualTo(72), reason: key);
+    }
+  });
+
+  testWidgets('game language dropdown stores presets and custom text', (
     tester,
   ) async {
     final container = await pumpSettings(tester, SettingsFakeRepository());
     await openSection(tester, 'launching');
-    final korean = find.byKey(const Key('settings-locale-korean'));
-    await tester.ensureVisible(korean);
+    final dropdown = find.byKey(const Key('settings-locale'));
+    expect(dropdown, findsOneWidget);
+    expect(
+      find.descendant(
+        of: dropdown,
+        matching: find.byType(DropdownButton<String>),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(dropdown);
     await tester.pumpAndSettle();
-    await tester.tap(korean);
-    await tester.pump();
-    expect(container.read(launchLocaleProvider), 'ko_KR.UTF-8');
-    await tester.tap(find.byKey(const Key('settings-locale-japanese')));
-    await tester.pump();
+    await tester.tap(find.text('Japanese').last);
+    await tester.pumpAndSettle();
     expect(container.read(launchLocaleProvider), 'ja_JP.UTF-8');
 
-    await tester.tap(find.byKey(const Key('settings-locale-custom')));
-    await tester.pump();
+    await tester.tap(dropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Custom…').last);
+    await tester.pumpAndSettle();
     final field = find.byKey(const Key('settings-locale-custom-field'));
+    expect(field, findsOneWidget);
     await tester.ensureVisible(field);
     await tester.pumpAndSettle();
     await tester.enterText(field, 'fr_FR.UTF-8');

@@ -33,22 +33,18 @@ class LaunchingSection extends StatelessWidget {
         const SizedBox(height: 20),
         const SettingsGroup(title: 'Default mode', child: _ModeCards()),
         const SettingsGroup(
+          rowKey: Key('settings-row-prefix'),
           title: 'Wine prefix',
           subtitle: 'Folder Proton and Wine games run in.',
-          child: _PrefixField(),
+          control: _PrefixField(),
         ),
         const SettingsGroup(
+          rowKey: Key('settings-row-proton'),
           title: 'Proton version',
           subtitle: 'Which Proton build umu uses.',
-          child: _ProtonVersionField(),
+          control: _ProtonVersionField(),
         ),
-        const SettingsGroup(
-          title: 'Game language',
-          subtitle:
-              'Locale passed to Windows games. Japanese fixes most VN text.',
-          divider: false,
-          child: _LocaleField(),
-        ),
+        const _GameLanguageGroup(),
       ],
     );
   }
@@ -150,6 +146,7 @@ class _ModeCard extends StatelessWidget {
               children: [
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
                       icon,
@@ -158,7 +155,7 @@ class _ModeCard extends StatelessWidget {
                           ? scheme.primary
                           : scheme.onSurfaceVariant,
                     ),
-                    const Spacer(),
+                    const SizedBox(height: 8),
                     Text(
                       name,
                       style: theme.textTheme.bodyLarge,
@@ -210,32 +207,30 @@ class _PrefixField extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final prefix = ref.watch(launchPrefixProvider);
     final set = ref.read(launchPrefixProvider.notifier).set;
-    return Align(
-      alignment: Alignment.centerRight,
-      child: SizedBox(
-        width: 280,
-        child: Row(
-          children: [
-            Expanded(
-              child: PrefTextField(
-                key: const Key('settings-prefix'),
-                initial: prefix,
-                isPath: true,
-                onSave: set,
-              ),
+    return SizedBox(
+      width: 320,
+      child: Row(
+        children: [
+          Expanded(
+            child: PrefTextField(
+              key: const Key('settings-prefix'),
+              initial: prefix,
+              isPath: true,
+              middleEllipsis: true,
+              onSave: set,
             ),
-            const SizedBox(width: 12),
-            FilledButton.tonal(
-              key: const Key('settings-prefix-choose'),
-              style: settingsSecondaryButtonStyle(context),
-              onPressed: () async {
-                final picked = await pickFolderOrNull(ref, context);
-                if (picked != null) set(picked);
-              },
-              child: const Text('Choose…'),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            key: const Key('settings-prefix-choose'),
+            style: settingsSecondaryButtonStyle(context),
+            onPressed: () async {
+              final picked = await pickFolderOrNull(ref, context);
+              if (picked != null) set(picked);
+            },
+            child: const Text('Choose…'),
+          ),
+        ],
       ),
     );
   }
@@ -266,94 +261,88 @@ class _ProtonVersionFieldState extends ConsumerState<_ProtonVersionField> {
     final showCustom =
         _forceCustom ?? _selected(stored, runners) == _settingsCustomKey;
     final set = ref.read(launchRunnerProvider.notifier).set;
-    return Align(
-      alignment: Alignment.centerRight,
-      child: SizedBox(
-        width: 280,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SettingsDropdown<String>(
-              key: const Key('settings-proton-version'),
-              value: showCustom
-                  ? _settingsCustomKey
-                  : _selected(stored, runners),
-              items: [
-                const DropdownMenuItem(
-                  value: '',
-                  child: Text('umu default (recommended)'),
-                ),
-                for (final runner in runners)
-                  DropdownMenuItem(
-                    value: runner.path,
-                    child: Text(runner.name),
-                  ),
-                const DropdownMenuItem(
-                  value: _settingsCustomKey,
-                  child: Text('Custom…'),
-                ),
-              ],
-              onChanged: (value) {
-                if (value == null) return;
-                if (value == _settingsCustomKey) {
-                  setState(() => _forceCustom = true);
-                } else {
-                  setState(() => _forceCustom = false);
-                  set(value.isEmpty ? null : value);
-                }
-              },
-            ),
-            if (showCustom) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: PrefTextField(
-                      key: const Key('settings-proton-version-custom'),
-                      initial: _selected(stored, runners) == _settingsCustomKey
-                          ? (stored ?? '')
-                          : '',
-                      hint: 'umu default',
-                      isPath: true,
-                      onSave: (text) => set(text.isEmpty ? null : text),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  FilledButton.tonal(
-                    key: const Key('settings-proton-version-choose'),
-                    style: settingsSecondaryButtonStyle(context),
-                    onPressed: () async {
-                      final picked = await pickFolderOrNull(ref, context);
-                      if (picked != null) set(picked);
-                    },
-                    child: const Text('Choose…'),
-                  ),
-                ],
+    return SizedBox(
+      width: 320,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SettingsDropdown<String>(
+            key: const Key('settings-proton-version'),
+            value: showCustom ? _settingsCustomKey : _selected(stored, runners),
+            items: [
+              const DropdownMenuItem(
+                value: '',
+                child: Text('umu default (recommended)'),
+              ),
+              for (final runner in runners)
+                DropdownMenuItem(value: runner.path, child: Text(runner.name)),
+              const DropdownMenuItem(
+                value: _settingsCustomKey,
+                child: Text('Custom…'),
               ),
             ],
+            onChanged: (value) {
+              if (value == null) return;
+              if (value == _settingsCustomKey) {
+                setState(() => _forceCustom = true);
+              } else {
+                setState(() => _forceCustom = false);
+                set(value.isEmpty ? null : value);
+              }
+            },
+          ),
+          if (showCustom) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: PrefTextField(
+                    key: const Key('settings-proton-version-custom'),
+                    initial: _selected(stored, runners) == _settingsCustomKey
+                        ? (stored ?? '')
+                        : '',
+                    hint: 'umu default',
+                    isPath: true,
+                    middleEllipsis: true,
+                    onSave: (text) => set(text.isEmpty ? null : text),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  key: const Key('settings-proton-version-choose'),
+                  style: settingsSecondaryButtonStyle(context),
+                  onPressed: () async {
+                    final picked = await pickFolderOrNull(ref, context);
+                    if (picked != null) set(picked);
+                  },
+                  child: const Text('Choose…'),
+                ),
+              ],
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
 }
 
-const List<(String, String)> _localeChoices = [
-  ('', 'System'),
-  ('ja_JP.UTF-8', 'Japanese'),
-  ('zh_CN.UTF-8', 'Chinese'),
-  ('ko_KR.UTF-8', 'Korean'),
-  ('en_US.UTF-8', 'English'),
+const List<(String, String, String)> _localeChoices = [
+  ('', 'System', 'system'),
+  ('ja_JP.UTF-8', 'Japanese', 'japanese'),
+  ('zh_CN.UTF-8', 'Chinese', 'chinese'),
+  ('ko_KR.UTF-8', 'Korean', 'korean'),
+  ('en_US.UTF-8', 'English', 'english'),
 ];
 
-class _LocaleField extends ConsumerStatefulWidget {
-  const _LocaleField();
+class _GameLanguageGroup extends ConsumerStatefulWidget {
+  const _GameLanguageGroup();
 
   @override
-  ConsumerState<_LocaleField> createState() => _LocaleFieldState();
+  ConsumerState<_GameLanguageGroup> createState() => _GameLanguageGroupState();
 }
 
-class _LocaleFieldState extends ConsumerState<_LocaleField> {
+class _GameLanguageGroupState extends ConsumerState<_GameLanguageGroup> {
   bool? _forceCustom;
 
   String _selected(String stored) {
@@ -364,56 +353,45 @@ class _LocaleFieldState extends ConsumerState<_LocaleField> {
   @override
   Widget build(BuildContext context) {
     final stored = ref.watch(launchLocaleProvider);
-    final showCustom = _forceCustom ?? _selected(stored) == _settingsCustomKey;
+    final selected = _selected(stored);
+    final showCustom = _forceCustom ?? selected == _settingsCustomKey;
     final set = ref.read(launchLocaleProvider.notifier).set;
-    return Align(
-      alignment: Alignment.centerRight,
-      child: SizedBox(
-        width: 280,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: 4,
-              children: [
-                for (final (value, label) in _localeChoices)
-                  SettingsRadioOption(
-                    key: Key(
-                      'settings-locale-${switch (value) {
-                        '' => 'system',
-                        'ja_JP.UTF-8' => 'japanese',
-                        'zh_CN.UTF-8' => 'chinese',
-                        'ko_KR.UTF-8' => 'korean',
-                        _ => 'english',
-                      }}',
-                    ),
-                    label: label,
-                    selected: !showCustom && _selected(stored) == value,
-                    onTap: () {
-                      setState(() => _forceCustom = false);
-                      set(value);
-                    },
-                  ),
-                SettingsRadioOption(
-                  key: const Key('settings-locale-custom'),
-                  label: 'Custom',
-                  selected: showCustom,
-                  onTap: () => setState(() => _forceCustom = true),
-                ),
-              ],
-            ),
-            if (showCustom) ...[
-              const SizedBox(height: 8),
-              PrefTextField(
-                key: const Key('settings-locale-custom-field'),
-                initial: _selected(stored) == _settingsCustomKey ? stored : '',
-                hint: 'e.g. fr_FR.UTF-8',
-                onSave: set,
+    return SettingsGroup(
+      rowKey: const Key('settings-row-locale'),
+      title: 'Game language',
+      subtitle: 'Locale passed to Windows games. Japanese fixes most VN text.',
+      divider: false,
+      control: SizedBox(
+        width: 160,
+        child: SettingsDropdown<String>(
+          key: const Key('settings-locale'),
+          value: showCustom ? _settingsCustomKey : selected,
+          items: [
+            for (final (value, label, key) in _localeChoices)
+              DropdownMenuItem(
+                value: value,
+                child: Text(label, key: Key('settings-locale-$key')),
               ),
-            ],
+            const DropdownMenuItem(
+              value: _settingsCustomKey,
+              child: Text('Custom…', key: Key('settings-locale-custom')),
+            ),
           ],
+          onChanged: (value) {
+            if (value == null) return;
+            setState(() => _forceCustom = value == _settingsCustomKey);
+            if (value != _settingsCustomKey) set(value);
+          },
         ),
       ),
+      footer: showCustom
+          ? PrefTextField(
+              key: const Key('settings-locale-custom-field'),
+              initial: selected == _settingsCustomKey ? stored : '',
+              hint: 'e.g. fr_FR.UTF-8',
+              onSave: set,
+            )
+          : null,
     );
   }
 }

@@ -32,8 +32,9 @@ class AppearanceSection extends ConsumerWidget {
         SettingsGroup(
           title: 'Theme mode',
           subtitle: 'Follow the system or pick light or dark.',
-          child: Wrap(
-            spacing: 4,
+          control: Row(
+            mainAxisSize: MainAxisSize.min,
+            spacing: 2,
             children: [
               for (final mode in ThemeMode.values)
                 SettingsRadioOption(
@@ -50,64 +51,59 @@ class AppearanceSection extends ConsumerWidget {
             ],
           ),
         ),
-        SettingsGroup(
-          title: 'Theme',
-          subtitle: 'Pick a colour theme.',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const ThemeSelector(title: SizedBox.shrink()),
-              if (appTheme == AppTheme.custom) const CustomColorTile(),
-            ],
+        ThemeSelector(
+          title: Text('Theme', style: Theme.of(context).textTheme.titleMedium),
+        ),
+        if (appTheme == AppTheme.custom) const CustomColorTile(),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Divider(
+            height: 1,
+            color: Theme.of(context).colorScheme.outlineVariant,
           ),
         ),
         if (themeMode != ThemeMode.light)
           SettingsGroup(
             title: 'Pure black',
-            child: SettingsRow(
-              hint: 'Use true black backgrounds in dark mode.',
-              control: Switch(
-                key: const Key('settings-true-black'),
-                value: trueBlack,
-                onChanged: (value) =>
-                    ref.read(isTrueBlackProvider.notifier).update(value),
-              ),
+            subtitle: 'Use true black backgrounds in dark mode.',
+            control: Switch(
+              key: const Key('settings-true-black'),
+              value: trueBlack,
+              onChanged: (value) =>
+                  ref.read(isTrueBlackProvider.notifier).update(value),
             ),
           ),
         SettingsGroup(
           title: 'Cover size',
           subtitle: 'Width of covers in the library grid.',
           divider: false,
-          child: SettingsRow(
-            control: Row(
-              children: [
-                Expanded(
-                  child: Slider(
-                    key: const Key('cover-size-slider'),
-                    value: coverWidth.toDouble(),
-                    min: keys.coverWidthMin.toDouble(),
-                    max: keys.coverWidthMax.toDouble(),
-                    label: '$coverWidth px',
-                    onChanged: (value) => ref
-                        .read(coverWidthProvider.notifier)
-                        .set(value.round()),
-                  ),
+          control: Row(
+            children: [
+              Expanded(
+                child: Slider(
+                  key: const Key('cover-size-slider'),
+                  value: coverWidth.toDouble(),
+                  min: keys.coverWidthMin.toDouble(),
+                  max: keys.coverWidthMax.toDouble(),
+                  label: '$coverWidth px',
+                  onChanged: (value) =>
+                      ref.read(coverWidthProvider.notifier).set(value.round()),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  '$coverWidth px',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                IconButton(
-                  key: const Key('cover-size-reset'),
-                  tooltip: 'Reset cover size',
-                  icon: const Icon(Icons.restart_alt_rounded, size: 20),
-                  onPressed: () => ref
-                      .read(coverWidthProvider.notifier)
-                      .set(keys.coverWidthDefault),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '$coverWidth px',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              IconButton(
+                key: const Key('cover-size-reset'),
+                tooltip: 'Reset cover size',
+                icon: const Icon(Icons.restart_alt_rounded, size: 20),
+                onPressed: () => ref
+                    .read(coverWidthProvider.notifier)
+                    .set(keys.coverWidthDefault),
+              ),
+            ],
           ),
         ),
       ],

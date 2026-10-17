@@ -23,15 +23,12 @@ class AdvancedSection extends ConsumerWidget {
           title: 'UMU game id',
           subtitle: 'Used by umu for game fixes. Leave as umu-default unless a fix needs a specific id.',
           divider: false,
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: SizedBox(
-              width: 280,
-              child: PrefTextField(
-                key: const Key('settings-umu-id'),
-                initial: umu,
-                onSave: ref.read(launchUmuGameIdProvider.notifier).set,
-              ),
+          control: SizedBox(
+            width: 320,
+            child: PrefTextField(
+              key: const Key('settings-umu-id'),
+              initial: umu,
+              onSave: ref.read(launchUmuGameIdProvider.notifier).set,
             ),
           ),
         ),
