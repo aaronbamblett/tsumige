@@ -121,8 +121,8 @@ install(CODE "
 install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime)
 
-# Window icon, loaded at runtime from data/ by my_application.cc.
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../assets/icon/tsumige.png"
+# Window icon, loaded at runtime from data/ by my_application.cc. X11 drops _NET_WM_ICON above 256 px.
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../assets/icon/tsumige-256.png"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime)
 
 # Install the AOT library on non-Debug builds only.

@@ -58,7 +58,7 @@ static void my_application_activate(GApplication* application) {
   if (exe_path != nullptr) {
     g_autofree gchar* exe_dir = g_path_get_dirname(exe_path);
     g_autofree gchar* icon_path =
-        g_build_filename(exe_dir, "data", "tsumige.png", nullptr);
+        g_build_filename(exe_dir, "data", "tsumige-256.png", nullptr);
     gtk_window_set_icon_from_file(window, icon_path, nullptr);
   }
 
