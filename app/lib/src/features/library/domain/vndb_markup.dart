@@ -146,6 +146,13 @@ class _Parser {
 List<MarkupNode> parseVndbMarkup(String text) =>
     _Parser(text).parseNodes(0, null).$1;
 
+bool isOpenableUrl(String url) {
+  final uri = Uri.tryParse(url);
+  if (uri == null) return false;
+  final scheme = uri.scheme.toLowerCase();
+  return scheme == 'http' || scheme == 'https';
+}
+
 /// Renders [parseVndbMarkup] output as text. Links open in the system browser;
 /// spoilers paint as a solid block until tapped.
 class VndbMarkupText extends StatefulWidget {
@@ -224,6 +231,7 @@ class _VndbMarkupTextState extends State<VndbMarkupText> {
                     decoration: TextDecoration.underline,
                   )),
                   _tapRecognizer(() {
+                    if (!isOpenableUrl(url)) return;
                     final uri = Uri.tryParse(url);
                     if (uri != null) {
                       launchUrl(uri,

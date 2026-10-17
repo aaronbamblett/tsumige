@@ -5,6 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -27,11 +28,13 @@ class SettingsFakeRepository implements LibraryRepository {
     this.report = const core.RatingReport(),
     this.saveError,
     this.gate,
+    this.skipped = const [],
   });
 
   core.RatingReport report;
   Object? saveError;
   Completer<core.RatingReport>? gate;
+  List<core.SkippedEntry> skipped;
   int loadCount = 0;
   int refreshCount = 0;
   int saveCount = 0;
@@ -43,6 +46,7 @@ class SettingsFakeRepository implements LibraryRepository {
       library: core.Library(games: [
         core.Game(id: 'g1', title: 'Alpha', vndbId: 'v1'),
       ]),
+      skipped: skipped,
     );
   }
 
@@ -128,6 +132,39 @@ void main() {
     final repo = SettingsFakeRepository(
       report: const core.RatingReport(updated: 2),
       saveError: core.ChangedOnDisk('x'),
+    );
+    await pumpSettings(tester, repo);
+    expect(repo.loadCount, 1);
+    await tester.tap(refreshTile());
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    expect(repo.saveCount, 1);
+    expect(repo.loadCount, 2);
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('skipped entries never fetch ratings', (tester) async {
+    final repo = SettingsFakeRepository(
+      report: const core.RatingReport(updated: 2),
+      skipped: const [core.SkippedEntry(index: 0, reason: 'bad id')],
+    );
+    await pumpSettings(tester, repo);
+    expect(repo.loadCount, 1);
+    await tester.tap(refreshTile());
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    expect(repo.refreshCount, 0);
+    expect(repo.saveCount, 0);
+    expect(repo.loadCount, 1);
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('generic save failure reloads', (tester) async {
+    final repo = SettingsFakeRepository(
+      report: const core.RatingReport(updated: 2),
+      saveError: const FileSystemException('disk gone'),
     );
     await pumpSettings(tester, repo);
     expect(repo.loadCount, 1);

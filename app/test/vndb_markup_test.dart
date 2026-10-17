@@ -70,4 +70,13 @@ void main() {
     expect(nodes.first, isA<TextNode>());
     expect((nodes.first as TextNode).text, 'hello world');
   });
+
+  test('isOpenableUrl allows only http and https', () {
+    expect(isOpenableUrl('https://vndb.org'), isTrue);
+    expect(isOpenableUrl('http://x'), isTrue);
+    expect(isOpenableUrl('file:///etc/passwd'), isFalse);
+    expect(isOpenableUrl('smb://h/s'), isFalse);
+    expect(isOpenableUrl('javascript:alert(1)'), isFalse);
+    expect(isOpenableUrl('not a url'), isFalse);
+  });
 }

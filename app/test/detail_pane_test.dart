@@ -318,6 +318,6 @@ void main() {
     expect(find.textContaining('2024-05-06'), findsOneWidget);
     expect(find.text('Action'), findsOneWidget);
     expect(find.text('Romance'), findsOneWidget);
-    expect(find.textContaining('Total playtime'), findsOneWidget);
+    expect(find.textContaining('Total '), findsOneWidget);
   });
 }

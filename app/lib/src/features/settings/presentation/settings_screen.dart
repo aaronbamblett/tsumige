@@ -34,6 +34,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final notifier = ref.read(libraryProvider.notifier);
     try {
       if (loaded == null) return;
+      if (loaded.skipped.isNotEmpty) {
+        if (mounted) {
+          Toast(context).showError(
+            'Some library entries could not be read, so ratings cannot be saved. Fix library.json first.',
+          );
+        }
+        return;
+      }
       final report = await repository.refreshRatings(loaded);
       if (report.updated > 0) {
         try {
@@ -46,6 +54,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             );
           }
           return;
+        } catch (_) {
+          await notifier.reload();
+          rethrow;
         }
       }
       await notifier.reload();
@@ -82,47 +93,53 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         leading: const BackButton(),
         title: Text(context.l10n.settings),
       ),
-      body: ListView(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-            child: Text('Appearance', style: headingStyle),
+      body: Align(
+        alignment: Alignment.topLeft,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: ListView(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                child: Text('Appearance', style: headingStyle),
+              ),
+              SliderSettingTile(
+                title: 'Cover size',
+                icon: Icons.photo_size_select_large_rounded,
+                value: coverWidth.toDouble(),
+                defaultValue: keys.coverWidthDefault.toDouble(),
+                min: keys.coverWidthMin.toDouble(),
+                max: keys.coverWidthMax.toDouble(),
+                getSliderLabel: (value) => '${value.round()} px',
+                onChanged: (value) =>
+                    ref.read(coverWidthProvider.notifier).set(value.round()),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                child: Text('Library', style: headingStyle),
+              ),
+              ListTile(
+                title: const Text('Refresh VNDB ratings'),
+                subtitle: const Text(
+                  'Fetch the latest VNDB Rating for every game with a VNDB id',
+                ),
+                enabled: !_refreshing,
+                onTap: _refreshing ? null : _refreshRatings,
+                trailing: _refreshing
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh_rounded),
+              ),
+              ListTile(
+                title: const Text('Data folder'),
+                subtitle: SelectionArea(child: Text(dataDir.root)),
+              ),
+            ],
           ),
-          SliderSettingTile(
-            title: 'Cover size',
-            icon: Icons.photo_size_select_large_rounded,
-            value: coverWidth.toDouble(),
-            defaultValue: keys.coverWidthDefault.toDouble(),
-            min: keys.coverWidthMin.toDouble(),
-            max: keys.coverWidthMax.toDouble(),
-            getSliderLabel: (value) => '${value.round()} px',
-            onChanged: (value) =>
-                ref.read(coverWidthProvider.notifier).set(value.round()),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-            child: Text('Library', style: headingStyle),
-          ),
-          ListTile(
-            title: const Text('Refresh VNDB ratings'),
-            subtitle: const Text(
-              'Fetch the latest VNDB Rating for every game with a VNDB id',
-            ),
-            enabled: !_refreshing,
-            onTap: _refreshing ? null : _refreshRatings,
-            trailing: _refreshing
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh_rounded),
-          ),
-          ListTile(
-            title: const Text('Data folder'),
-            subtitle: SelectionArea(child: Text(dataDir.root)),
-          ),
-        ],
+        ),
       ),
     );
   }

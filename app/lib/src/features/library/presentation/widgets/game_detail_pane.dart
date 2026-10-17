@@ -87,7 +87,7 @@ class GameDetailPane extends ConsumerWidget {
                     ],
                     _heading(context, 'Play time'),
                     Text(
-                      'Total playtime '
+                      'Total '
                       '${formatPlaytime(game.totalPlaytimeSeconds)}',
                     ),
                     for (final session in _newestFirst(game.playSessions))
