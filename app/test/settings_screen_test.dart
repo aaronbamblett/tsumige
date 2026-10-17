@@ -8,7 +8,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -75,11 +74,6 @@ Future<ProviderContainer> pumpSettings(
   SettingsFakeRepository repo, {
   core.DataDir? dir,
 }) async {
-  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-      .setMockMethodCallHandler(
-    const MethodChannel('PonnamKarthik/fluttertoast'),
-    (call) async => null,
-  );
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
   await tester.pumpWidget(ProviderScope(
@@ -125,7 +119,7 @@ void main() {
     await tester.pump();
     expect(tester.widget<ListTile>(refreshTile()).enabled, isTrue);
     expect(repo.refreshCount, 1);
-    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(seconds: 6));
   });
 
   testWidgets('changed on disk reloads', (tester) async {
@@ -141,7 +135,7 @@ void main() {
     await tester.pump();
     expect(repo.saveCount, 1);
     expect(repo.loadCount, 2);
-    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(seconds: 6));
   });
 
   testWidgets('skipped entries never fetch ratings', (tester) async {
@@ -158,7 +152,7 @@ void main() {
     expect(repo.refreshCount, 0);
     expect(repo.saveCount, 0);
     expect(repo.loadCount, 1);
-    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(seconds: 6));
   });
 
   testWidgets('generic save failure reloads', (tester) async {
@@ -174,7 +168,7 @@ void main() {
     await tester.pump();
     expect(repo.saveCount, 1);
     expect(repo.loadCount, 2);
-    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(seconds: 6));
   });
 
   testWidgets('zero updates skips save', (tester) async {
@@ -188,7 +182,7 @@ void main() {
     await tester.pump();
     expect(repo.saveCount, 0);
     expect(repo.loadCount, 2);
-    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(seconds: 6));
   });
 
   testWidgets('slider writes cover width', (tester) async {

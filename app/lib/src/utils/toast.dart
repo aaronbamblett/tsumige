@@ -7,32 +7,68 @@
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 
-/// Short-lived messages. Info sinks to the bottom, errors hang at the top.
 class Toast {
-  Toast(this._context);
+  Toast(this._context) {
+    _fToast = FToast().init(_context);
+  }
 
   final BuildContext _context;
+  late FToast _fToast;
 
   void show(String msg) {
     final scheme = Theme.of(_context).colorScheme;
-    Fluttertoast.showToast(
-      msg: msg,
+    _fToast.showToast(
+      child: _ToastBody(
+        text: msg,
+        backgroundColor: scheme.inverseSurface,
+        textColor: scheme.onInverseSurface,
+      ),
       gravity: ToastGravity.BOTTOM,
-      backgroundColor: scheme.inverseSurface,
-      textColor: scheme.onInverseSurface,
+      toastDuration: const Duration(seconds: 3),
     );
   }
 
   void showError(String error) {
     final text = error.trim().isEmpty ? 'Something went wrong' : error.trim();
     final scheme = Theme.of(_context).colorScheme;
-    Fluttertoast.showToast(
-      msg: text,
+    _fToast.showToast(
+      child: _ToastBody(
+        text: text,
+        backgroundColor: scheme.error,
+        textColor: scheme.onError,
+      ),
       gravity: ToastGravity.TOP,
-      backgroundColor: scheme.error,
-      textColor: scheme.onError,
+      toastDuration: const Duration(seconds: 5),
     );
   }
 
-  void close() => Fluttertoast.cancel();
+  void close() => _fToast.removeCustomToast();
+}
+
+class _ToastBody extends StatelessWidget {
+  const _ToastBody({
+    required this.text,
+    required this.backgroundColor,
+    required this.textColor,
+  });
+
+  final String text;
+  final Color backgroundColor;
+  final Color textColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        color: backgroundColor,
+      ),
+      child: Text(
+        text,
+        style: TextStyle(color: textColor),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
 }

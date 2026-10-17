@@ -5,6 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -57,6 +58,7 @@ class VnlApp extends ConsumerWidget {
       ),
       error: (error, _) => AppErrorApp(error: error),
       data: (_) => MaterialApp.router(
+        builder: FToastBuilder(),
         theme:
             buildAppTheme(theme: AppTheme.vnl, brightness: Brightness.light),
         darkTheme:
