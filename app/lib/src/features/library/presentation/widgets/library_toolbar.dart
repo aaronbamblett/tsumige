@@ -177,7 +177,7 @@ class LibraryToolbar extends ConsumerWidget {
             IconButton(
               tooltip: 'Settings',
               icon: const Icon(Icons.settings_rounded),
-              onPressed: () => context.go('/settings'),
+              onPressed: () => context.push('/settings'),
             ),
           ],
         ),
