@@ -258,6 +258,49 @@ void main() {
     expect(find.byIcon(Icons.check_rounded), findsOneWidget);
   });
 
+  testWidgets('rating without a votecount shows no votes fallback',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', vndbRating: 85.0),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(find.textContaining('VNDB Rating 8.5'), findsNWidgets(2));
+    expect(find.textContaining('votes'), findsNothing);
+  });
+
+  testWidgets('release shows the Released label', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', released: '2021-08-26'),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(find.text('Released 2021-08-26'), findsOneWidget);
+  });
+
+  testWidgets('description heading follows the description',
+      (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openPane(tester, 'Alpha');
+    expect(find.text('Description'), findsNothing);
+    expect(find.text('Play time'), findsOneWidget);
+    expect(find.text('Routes'), findsNothing);
+  });
+
+  testWidgets('description, play time and routes headings show with content',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        description: 'A story',
+        routes: [core.Route(name: 'Rin')],
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(find.text('Description'), findsOneWidget);
+    expect(find.text('Play time'), findsOneWidget);
+    expect(find.text('Routes'), findsOneWidget);
+  });
+
   testWidgets('rating, release and tags render', (tester) async {
     await pumpLibrary(tester, [
       core.Game(

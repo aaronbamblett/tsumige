@@ -66,11 +66,13 @@ class GameDetailPane extends ConsumerWidget {
                     _cover(context, ref, maxCoverHeight, contentWidth - 32),
                     if (game.vndbRating != null)
                       Text(
-                        '${formatVndbRating(game.vndbRating!)} '
-                        '(${game.vndbVotecount ?? 0} votes)',
+                        game.vndbVotecount == null
+                            ? formatVndbRating(game.vndbRating!)
+                            : '${formatVndbRating(game.vndbRating!)} '
+                                '(${game.vndbVotecount} votes)',
                       ),
                     if (game.released != null && game.released!.isNotEmpty)
-                      Text(game.released!),
+                      Text('Released ${game.released!}'),
                     if (game.tags.isNotEmpty)
                       Wrap(
                         spacing: 8,
@@ -79,18 +81,35 @@ class GameDetailPane extends ConsumerWidget {
                           for (final tag in game.tags) Chip(label: Text(tag)),
                         ],
                       ),
-                    if (game.description.isNotEmpty)
+                    if (game.description.isNotEmpty) ...[
+                      _heading(context, 'Description'),
                       VndbMarkupText(text: game.description),
+                    ],
+                    _heading(context, 'Play time'),
                     Text(
                       'Total playtime '
                       '${formatPlaytime(game.totalPlaytimeSeconds)}',
                     ),
                     for (final session in _newestFirst(game.playSessions))
-                      Text(
-                        '${DateFormat('yyyy-MM-dd HH:mm').format(session.startedAt.toLocal())} '
-                        '${formatPlaytime(session.durationSeconds)}',
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              DateFormat('yyyy-MM-dd HH:mm').format(
+                                session.startedAt.toLocal(),
+                              ),
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ),
+                          Text(
+                            formatPlaytime(session.durationSeconds),
+                            textAlign: TextAlign.right,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ],
                       ),
-                    if (game.routes.isNotEmpty)
+                    if (game.routes.isNotEmpty) ...[
+                      _heading(context, 'Routes'),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         spacing: 4,
@@ -110,6 +129,7 @@ class GameDetailPane extends ConsumerWidget {
                             ),
                         ],
                       ),
+                    ],
                   ],
                 ),
               ),
@@ -117,6 +137,15 @@ class GameDetailPane extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+
+  Widget _heading(BuildContext context, String text) {
+    final theme = Theme.of(context);
+    return Text(
+      text,
+      style: theme.textTheme.titleSmall
+          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
     );
   }
 
@@ -156,13 +185,13 @@ class GameDetailPane extends ConsumerWidget {
             if (exists(thumb))
               Image.file(
                 File(thumb),
-                fit: BoxFit.cover,
+                fit: BoxFit.contain,
                 gaplessPlayback: true,
                 errorBuilder: (_, _, _) => const SizedBox.shrink(),
               ),
             Image.file(
               original,
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
               gaplessPlayback: true,
               cacheWidth: physicalWidth,
               frameBuilder: (context, child, frame, _) =>
