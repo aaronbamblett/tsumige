@@ -102,3 +102,26 @@ Future<String?> pickCoverFile() async {
   if (picked.isEmpty) return null;
   return picked.first.path;
 }
+
+enum PathPickMode { file, folder }
+
+/// Path picker seam: tests override this so no real dialog ever opens.
+@riverpod
+Future<String?> Function(
+        {String? initialDirectory, PathPickMode mode})
+    pathPicker(Ref ref) => pickPath;
+
+Future<String?> pickPath(
+    {String? initialDirectory, PathPickMode mode = PathPickMode.file}) async {
+  switch (mode) {
+    case PathPickMode.folder:
+      return FilePicker.getDirectoryPath(initialDirectory: initialDirectory);
+    case PathPickMode.file:
+      final picked = await FilePicker.pickFiles(
+        initialDirectory: initialDirectory,
+        type: FileType.any,
+      );
+      if (picked.isEmpty) return null;
+      return picked.first.path;
+  }
+}

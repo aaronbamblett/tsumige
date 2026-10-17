@@ -384,8 +384,12 @@ void main() {
     await openPane(tester, 'Alpha');
     await openTab(tester, 'Launch');
     expect(find.text('Steam app id'), findsOneWidget);
-    expect(find.textContaining('123', findRichText: true), findsOneWidget);
-    expect(find.text('Mode'), findsNothing);
+    final appIdField = find.descendant(
+      of: find.byKey(const Key('launch-steam-app-id')),
+      matching: find.byType(TextField),
+    );
+    expect(tester.widget<TextField>(appIdField).controller?.text, '123');
+    expect(find.text('Mode'), findsOneWidget);
     expect(find.text('Prefix'), findsNothing);
   });
 
@@ -403,15 +407,23 @@ void main() {
     await openPane(tester, 'Alpha');
     await openTab(tester, 'Launch');
     expect(find.text('Executable'), findsOneWidget);
-    expect(find.text('/games/alpha/run.sh'), findsOneWidget);
+    final exeField = find.descendant(
+      of: find.byKey(const Key('launch-executable')),
+      matching: find.byType(TextField),
+    );
+    expect(tester.widget<TextField>(exeField).controller?.text,
+        '/games/alpha/run.sh');
     expect(find.text('Arguments'), findsOneWidget);
-    expect(find.textContaining('--full', findRichText: true), findsOneWidget);
+    final argsField = find.descendant(
+      of: find.byKey(const Key('launch-arguments')),
+      matching: find.byType(TextField),
+    );
+    expect(tester.widget<TextField>(argsField).controller?.text, '--full');
     expect(find.text('Prefix'), findsNothing);
     expect(find.text('Runner'), findsNothing);
   });
 
-  testWidgets('long executable truncates with a full-path tooltip',
-      (tester) async {
+  testWidgets('long executable stays fully editable', (tester) async {
     final path =
         '/very/long/prefix/drive_c/Program Files/Visual Novels/Alpha Game/game/alpha-visual-novel-launcher.exe';
     await pumpLibrary(tester, [
@@ -422,11 +434,14 @@ void main() {
     ]);
     await openPane(tester, 'Alpha');
     await openTab(tester, 'Launch');
-    expect(find.byTooltip(path), findsOneWidget);
-    expect(find.text(path), findsNothing);
+    final exeField = find.descendant(
+      of: find.byKey(const Key('launch-executable')),
+      matching: find.byType(TextField),
+    );
+    expect(tester.widget<TextField>(exeField).controller?.text, path);
   });
 
-  testWidgets('routes tab shows completion and the active label',
+  testWidgets('routes tab shows completion state and the active dropdown',
       (tester) async {
     await pumpLibrary(tester, [
       core.Game(id: 'g1', title: 'Alpha', activeRoute: 'Rin', routes: [
