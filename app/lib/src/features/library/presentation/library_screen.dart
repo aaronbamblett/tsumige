@@ -7,12 +7,15 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../utils/startup_time.dart';
 import '../data/library_repository.dart';
 import '../domain/cover_source.dart';
+import '../domain/selection.dart';
+import 'widgets/game_detail_pane.dart';
 import 'widgets/library_grid.dart';
 import 'widgets/library_toolbar.dart';
 import 'widgets/skipped_banner.dart';
@@ -51,6 +54,7 @@ class LibraryScreen extends HookConsumerWidget {
     }, [libraryAsync.hasValue]);
     final total =
         libraryAsync.value?.library.games.length ?? games.length;
+    final selected = ref.watch(selectedGameProvider);
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -60,7 +64,33 @@ class LibraryScreen extends HookConsumerWidget {
               skipped:
                   libraryAsync.value?.skipped ?? const [],
             ),
-            Expanded(child: LibraryGrid(games: games)),
+            Expanded(
+              child: Focus(
+                autofocus: true,
+                onKeyEvent: (node, event) {
+                  if (event is KeyDownEvent &&
+                      event.logicalKey == LogicalKeyboardKey.escape) {
+                    ref.read(selectedGameIdProvider.notifier).clear();
+                    return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
+                },
+                child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: LibraryGrid(games: games)),
+                      if (selected != null)
+                        SizedBox(
+                          width: 440,
+                          child: GameDetailPane(
+                            key: ValueKey(selected.id),
+                            game: selected,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+            ),
           ],
         ),
       ),

@@ -47,6 +47,7 @@ dependencies:
   riverpod_annotation: ^4.0.0
   shared_preferences: ^2.0.15
   fluttertoast: ^10.0.0
+  url_launcher: ^6.3.3
   uuid: ^4.6.0
   window_manager: ^0.5.2
 

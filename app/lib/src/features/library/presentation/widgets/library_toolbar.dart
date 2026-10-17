@@ -46,6 +46,7 @@ class LibraryToolbar extends ConsumerWidget {
     final countText =
         shown == total ? _count(total) : '$shown of $total';
     final width = MediaQuery.sizeOf(context).width;
+    final searchWidth = (width * 0.25).clamp(160.0, 360.0);
     return SizedBox(
       height: 56,
       child: Padding(
@@ -54,19 +55,14 @@ class LibraryToolbar extends ConsumerWidget {
           spacing: 8,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 360),
-                  child: SearchField(
-                    autofocus: false,
-                    onClose: () {},
-                    onChanged: (value) => ref
-                        .read(librarySearchProvider.notifier)
-                        .set(value ?? ''),
-                  ),
-                ),
+            SizedBox(
+              width: searchWidth,
+              child: SearchField(
+                autofocus: false,
+                onClose: () {},
+                onChanged: (value) => ref
+                    .read(librarySearchProvider.notifier)
+                    .set(value ?? ''),
               ),
             ),
             Expanded(

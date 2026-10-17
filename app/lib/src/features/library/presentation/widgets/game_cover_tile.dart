@@ -14,6 +14,7 @@ import '../../../../core/format.dart';
 import '../../../../core/model.dart';
 import '../../data/library_repository.dart';
 import '../../domain/cover_source.dart';
+import '../../domain/selection.dart';
 import 'game_cover_grid_delegate.dart';
 
 /// One library tile: cover, title, favourite star, up to 3 tags and the
@@ -32,21 +33,27 @@ class GameCoverTile extends ConsumerWidget {
     final settledPhysical =
         settled * MediaQuery.devicePixelRatioOf(context);
     final source = coverSourceFor(game, dir, settledPhysical, exists);
+    final selected = ref.watch(selectedGameIdProvider) == game.id;
+    final colorScheme = Theme.of(context).colorScheme;
     return Card(
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: const BorderRadius.all(Radius.circular(12)),
         side: BorderSide(
-          color: Theme.of(context).colorScheme.outlineVariant,
-          width: 1,
+          color: selected ? colorScheme.primary : colorScheme.outlineVariant,
+          width: selected ? 2 : 1,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: _cover(context, source, settledPhysical)),
-          _info(context),
-        ],
+      child: InkWell(
+        onTap: () =>
+            ref.read(selectedGameIdProvider.notifier).select(game.id),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: _cover(context, source, settledPhysical)),
+            _info(context),
+          ],
+        ),
       ),
     );
   }
