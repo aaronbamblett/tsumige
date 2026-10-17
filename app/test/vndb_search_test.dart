@@ -187,4 +187,17 @@ void main() {
     expect(result.developers, isEmpty);
     expect(result.tags, isEmpty);
   });
+
+  test('every titles.title entry parses into titles', () async {
+    final client = VndbClient(
+      client: MockClient((request) async => http.Response(
+          _page([
+            _row('v5', 'Main Title', altTitles: ['Romaji', 'Second Latin']),
+          ]),
+          200)),
+      retryDelay: Duration.zero,
+    );
+    final result = (await client.search('Main Title')).single;
+    expect(result.titles, ['Romaji', 'Second Latin']);
+  });
 }

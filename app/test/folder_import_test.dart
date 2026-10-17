@@ -1,0 +1,251 @@
+// Copyright (c) 2026 Aaron Bamblett
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
+import 'package:vnl/src/core/vndb.dart';
+import 'package:vnl/src/features/library/domain/folder_import.dart';
+
+VnSearchResult _vn(String id, String title, {List<String> titles = const []}) =>
+    VnSearchResult(id: id, title: title, titles: titles);
+
+void _exe(String root, String relative, {int size = 10}) {
+  final file = File(p.join(root, relative));
+  file.parent.createSync(recursive: true);
+  file.writeAsBytesSync(List.filled(size, 0));
+}
+
+void main() {
+  late Directory temp;
+
+  setUp(() {
+    temp = Directory.systemTemp.createTempSync('vnl_folder_import_test_');
+  });
+
+  tearDown(() => temp.deleteSync(recursive: true));
+
+  group('scanImportFolder', () {
+    test('skips hidden subfolders and lists the rest by name', () async {
+      _exe(temp.path, '.Hidden/Game.exe');
+      _exe(temp.path, 'beta/Beta.exe');
+      _exe(temp.path, 'Alpha/Alpha.exe');
+      final folders = await scanImportFolder(temp.path);
+      expect([for (final f in folders) f.name], ['Alpha', 'beta']);
+    });
+
+    test(
+      'picks the game exe over installers, crash handlers and redist',
+      () async {
+        _exe(temp.path, 'Alpha/Game.exe');
+        _exe(temp.path, 'Alpha/unins000.exe');
+        _exe(temp.path, 'Alpha/setup.exe');
+        _exe(temp.path, 'Alpha/UnityCrashHandler64.exe');
+        _exe(temp.path, 'Alpha/redist/vc_redist.exe');
+        final folder = (await scanImportFolder(temp.path)).single;
+        expect([for (final e in folder.exes) e.relative], ['Game.exe']);
+        expect(chooseExe(folder, const [])!.relative, 'Game.exe');
+      },
+    );
+
+    test('prefers top-level, non-patch and non-launcher exes', () async {
+      _exe(temp.path, 'Beta/Launcher.exe', size: 900);
+      _exe(temp.path, 'Beta/Beta.exe', size: 100);
+      _exe(temp.path, 'Beta/Beta_patch.exe', size: 800);
+      _exe(temp.path, 'Beta/bin/Beta.exe', size: 700);
+      final folder = (await scanImportFolder(temp.path)).single;
+      expect(
+        [for (final e in folder.exes) e.relative],
+        ['Beta.exe', p.join('bin', 'Beta.exe')],
+      );
+      expect(chooseExe(folder, const [])!.relative, 'Beta.exe');
+    });
+
+    test('a launcher is kept when it is the only exe', () async {
+      _exe(temp.path, 'Epsilon/Launcher.exe');
+      final folder = (await scanImportFolder(temp.path)).single;
+      expect([for (final e in folder.exes) e.relative], ['Launcher.exe']);
+    });
+
+    test('stops below depth 3', () async {
+      _exe(temp.path, 'Gamma/a/b/c/Deep.exe');
+      _exe(temp.path, 'Gamma/a/b/c/d/TooDeep.exe');
+      final folder = (await scanImportFolder(temp.path)).single;
+      expect(
+        [for (final e in folder.exes) e.relative],
+        [p.join('a', 'b', 'c', 'Deep.exe')],
+      );
+    });
+
+    test('candidate lists are relative to the subfolder', () async {
+      _exe(temp.path, 'Delta/Delta.exe');
+      _exe(temp.path, 'Delta/bin/Other.exe');
+      final folder = (await scanImportFolder(temp.path)).single;
+      expect(
+        [for (final e in folder.exes) e.relative],
+        ['Delta.exe', p.join('bin', 'Other.exe')],
+      );
+      expect(folder.exes.every((e) => p.isAbsolute(e.path)), isTrue);
+    });
+
+    test('a folder with no exe has no candidates', () async {
+      _exe(temp.path, 'Empty/readme.txt');
+      final folder = (await scanImportFolder(temp.path)).single;
+      expect(folder.exes, isEmpty);
+      expect(chooseExe(folder, const []), isNull);
+    });
+
+    test('the choice prefers the title match over the size', () async {
+      _exe(temp.path, 'Zeta/bin/Other.exe', size: 500);
+      _exe(temp.path, 'Zeta/bin/Zeta Quest.exe', size: 10);
+      final folder = (await scanImportFolder(temp.path)).single;
+      expect(
+        chooseExe(folder, const [])!.relative,
+        p.join('bin', 'Zeta Quest.exe'),
+      );
+    });
+
+    test('a top-level exe wins over a better title match', () async {
+      _exe(temp.path, 'Zeta/bin/Zeta Quest.exe', size: 10);
+      _exe(temp.path, 'Zeta/Other.exe', size: 5);
+      final folder = (await scanImportFolder(temp.path)).single;
+      expect(chooseExe(folder, const ['Zeta Quest'])!.relative, 'Other.exe');
+    });
+  });
+
+  group('sequenceRatio', () {
+    // Expected values from Python's difflib.SequenceMatcher(None, a, b).ratio().
+    const pairs = <(String, String, double)>[
+      ('abcd', 'bcde', 0.75),
+      ('kitten', 'sitting', 0.6153846153846154),
+      ('rena sensei', 'rena sensei to pool ryokou', 0.5945945945945946),
+      ('atrium', 'a tri um', 0.8571428571428571),
+      ('crack trick', 'crack trick ryokou', 0.7586206896551724),
+      ('my game v1', 'my game v2 final', 0.6923076923076923),
+      ('ab', 'xyz', 0.0),
+    ];
+    for (final (a, b, expected) in pairs) {
+      test('$a vs $b matches Python', () {
+        expect(sequenceRatio(a, b), closeTo(expected, 1e-12));
+      });
+    }
+
+    test('two empty strings are identical', () {
+      expect(sequenceRatio('', ''), 1.0);
+    });
+  });
+
+  group('normalise and similarity', () {
+    test('case, punctuation and spacing are ignored', () {
+      expect(normalise('  CRACK≡TRICK!  '), 'crack trick');
+      expect(normalise('a(t)rium'), 'a t rium');
+      expect(similarity('DEMO', 'demo'), 1.0);
+    });
+
+    test('a substring match scores at least 0.85', () {
+      expect(
+        similarity('Rena sensei', 'Rena-sensei to Pool Ryokou'),
+        closeTo(0.85 + 0.14 * 11 / 26, 1e-12),
+      );
+    });
+  });
+
+  group('matchFolder', () {
+    test('an exact unique title is a match', () {
+      final m = matchFolder('DEMO', [_vn('v1', 'DEMO'), _vn('v2', 'Other')]);
+      expect(m.state, ImportMatchState.matched);
+      expect(m.vn!.id, 'v1');
+    });
+
+    test('a tie at 1.0 is a check', () {
+      final m = matchFolder('DEMO', [_vn('v1', 'DEMO'), _vn('v2', 'DEMO')]);
+      expect(m.state, ImportMatchState.check);
+      expect(m.vn!.id, 'v1');
+    });
+
+    test('a clear lead at 0.78 or better is a match', () {
+      final m = matchFolder('Rena sensei', [
+        _vn('v1', 'Rena-sensei to Pool Ryokou'),
+      ]);
+      expect(m.state, ImportMatchState.matched);
+      expect(m.vn!.id, 'v1');
+    });
+
+    test('a close second place makes a check even above 0.78', () {
+      final m = matchFolder('Solo Quest', [
+        _vn('v1', 'Solo Quest Remake'),
+        _vn('v2', 'Solo Quest Remaster'),
+      ]);
+      expect(m.state, ImportMatchState.check);
+      expect(m.vn!.id, 'v1');
+    });
+
+    test('a score from 0.65 to 0.78 is a check', () {
+      final m = matchFolder('my game v1', [_vn('v1', 'my game v2 final')]);
+      expect(m.state, ImportMatchState.check);
+      expect(m.vn!.id, 'v1');
+    });
+
+    test('a score below 0.65 is no match with no entry', () {
+      final m = matchFolder('abcd', [_vn('v1', 'xyz')]);
+      expect(m.state, ImportMatchState.none);
+      expect(m.vn, isNull);
+    });
+
+    test('no results is no match', () {
+      final m = matchFolder('DEMO', const []);
+      expect(m.state, ImportMatchState.none);
+      expect(m.vn, isNull);
+    });
+
+    test('alternative and romanised titles count', () {
+      final m = matchFolder('Atrium', [
+        _vn('v1', 'a(t)rium', titles: ['Atrium']),
+        _vn('v2', 'Other'),
+      ]);
+      expect(m.state, ImportMatchState.matched);
+      expect(m.vn!.id, 'v1');
+    });
+  });
+
+  group('shortenedQuery and lookupFolder', () {
+    test('drops a subtitle after " - " or a colon', () {
+      expect(shortenedQuery('Game Title - Subtitle Here'), 'Game Title');
+      expect(shortenedQuery('Game: Sub'), 'Game');
+    });
+
+    test('drops the last two words of a long name', () {
+      expect(shortenedQuery('One Two Three Four'), 'One Two');
+    });
+
+    test('a short name with nothing to drop has no retry', () {
+      expect(shortenedQuery('DEMO'), isNull);
+    });
+
+    test(
+      'retries the shortened query only when the first search is empty',
+      () async {
+        final asked = <String>[];
+        final results = await lookupFolder('Game Title - Subtitle Here', (
+          query,
+        ) async {
+          asked.add(query);
+          return query == 'Game Title' ? [_vn('v1', 'Game Title')] : const [];
+        });
+        expect(asked, ['Game Title - Subtitle Here', 'Game Title']);
+        expect(results.single.id, 'v1');
+
+        asked.clear();
+        await lookupFolder('Game Title - Subtitle Here', (query) async {
+          asked.add(query);
+          return [_vn('v2', 'Other')];
+        });
+        expect(asked, ['Game Title - Subtitle Here']);
+      },
+    );
+  });
+}

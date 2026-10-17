@@ -5,14 +5,11 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:uuid/uuid.dart';
 
-import '../../../../core/covers.dart';
 import '../../../../core/model.dart';
 import '../../../../core/vndb.dart';
 import '../../../../utils/theme/brand.dart';
@@ -27,6 +24,8 @@ import '../widgets/dialog_shell.dart';
 import '../widgets/detail_tabs/info_tab.dart';
 import '../widgets/detail_tabs/launch_tab.dart';
 import '../widgets/library_toolbar.dart';
+import 'import_folder_dialog.dart';
+import 'vn_result_widgets.dart';
 
 Future<void> showAddGameDialog(BuildContext context) {
   return showDialog<void>(
@@ -199,6 +198,12 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     _exe.text = picked;
   }
 
+  Future<void> _importFolder() async {
+    final result = await showImportFolderDialog(context);
+    if (!mounted || result == null || result == ImportFolderResult.back) return;
+    Navigator.of(context).pop();
+  }
+
   Future<void> _add() async {
     if (_tagInput.text.trim().isNotEmpty) _addTag(_tagInput.text);
     final title = _title.text.trim();
@@ -233,43 +238,31 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     });
     final picked = _manual ? null : _picked;
     final Game game;
+    var coverFailed = false;
     if (picked != null) {
-      game = gameFromVn(picked, exe: exe, mode: _mode);
-      game.title = title;
-      game.description = _description.text;
-      game.tags = [..._tagList];
-      await fillVndbMetadata(game, ref.read(vndbSearchClientProvider));
-    } else {
-      game = Game(
-        id: const Uuid().v4(),
+      final built = await buildVnGame(
+        result: picked,
         title: title,
         description: _description.text,
-        tags: [..._tagList],
-        addedAt: DateTime.now().toUtc(),
-        launch: LaunchOverrides(
-          mode: _mode,
-          executable: exe.isEmpty ? null : exe,
-        ),
+        tags: _tagList,
+        exe: exe,
+        mode: _mode,
+        steamAppId: steamAppId,
+        vndb: ref.read(vndbSearchClientProvider),
+        httpClient: ref.read(addGameHttpClientProvider),
+        dataDir: ref.read(dataDirProvider),
       );
-    }
-    game.launch.steamAppId = steamAppId;
-    var coverFailed = false;
-    final imageUrl = picked?.imageUrl;
-    if (imageUrl != null && imageUrl.isNotEmpty) {
-      try {
-        final response = await ref
-            .read(addGameHttpClientProvider)
-            .get(Uri.parse(imageUrl));
-        if (response.statusCode != 200) {
-          throw StateError('HTTP ${response.statusCode}');
-        }
-        final dir = ref.read(dataDirProvider);
-        final name = await storeOriginal(dir, game.id, response.bodyBytes);
-        game.cover = name;
-        await generateThumbnails(dir, [(game.id, name)]);
-      } catch (_) {
-        coverFailed = true;
-      }
+      game = built.game;
+      coverFailed = built.coverFailed;
+    } else {
+      game = plainGame(
+        title: title,
+        description: _description.text,
+        tags: _tagList,
+        exe: exe,
+        mode: _mode,
+      );
+      game.launch.steamAppId = steamAppId;
     }
     if (!mounted) return;
     await ref.read(gameEditorProvider).add(game, context: context);
@@ -404,7 +397,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
       itemBuilder: (context, index) {
         final result = _results[index];
         final owned = inLibrary.contains(result.id);
-        return _ResultRow(
+        return VnResultRow(
           result: result,
           owned: owned,
           onPick: owned ? null : () => _pick(result),
@@ -423,6 +416,15 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
           expand: false,
           onPressed: _startManual,
           label: const Text('Add without VNDB'),
+        ),
+        const SizedBox(width: 10),
+        BrandGlassButton(
+          key: const Key('add-game-import'),
+          height: 40,
+          expand: false,
+          onPressed: _importFolder,
+          icon: const Icon(Icons.folder_outlined),
+          label: const Text('Import a folder…'),
         ),
         const Spacer(),
         BrandGlassButton(
@@ -475,8 +477,8 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
         ? null
         : '★ ${(picked!.rating! / 10).toStringAsFixed(1)}';
     final meta = [
-      if (picked != null && _year(picked.released).isNotEmpty)
-        _year(picked.released),
+      if (picked != null && vnYear(picked.released).isNotEmpty)
+        vnYear(picked.released),
       if (picked != null && picked.developers.isNotEmpty)
         picked.developers.join(', '),
       ?rating,
@@ -496,7 +498,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
               children: [
                 launchFieldLabel(context, 'Cover', false),
                 const SizedBox(height: 10),
-                _CoverThumb(
+                VnCoverThumb(
                   imageUrl: picked?.imageUrl,
                   sexual: picked?.imageSexual ?? 0,
                   width: 220,
@@ -680,176 +682,6 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
             ),
           ),
       ],
-    );
-  }
-}
-
-class _ResultRow extends StatelessWidget {
-  const _ResultRow({required this.result, required this.owned, this.onPick});
-
-  final VnSearchResult result;
-  final bool owned;
-  final VoidCallback? onPick;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final muted = theme.textTheme.bodySmall?.copyWith(
-      fontSize: 13,
-      color: scheme.onSurfaceVariant,
-    );
-    final year = _year(result.released);
-    final meta = [
-      if (year.isNotEmpty) year,
-      if (result.developers.isNotEmpty) result.developers.join(', '),
-    ].join(' · ');
-    final rating = result.rating == null
-        ? null
-        : '★ ${(result.rating! / 10).toStringAsFixed(1)}';
-    final alt = result.alttitle;
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      hoverColor: scheme.onSurface.withValues(alpha: 0.04),
-      onTap: onPick,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Row(
-          children: [
-            _CoverThumb(
-              imageUrl: result.imageUrl,
-              sexual: result.imageSexual,
-              width: 54,
-              height: 72,
-              radius: 8,
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Opacity(
-                opacity: owned ? 0.55 : 1,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      result.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (alt != null && alt.isNotEmpty) Text(alt, style: muted),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            meta,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: muted,
-                          ),
-                        ),
-                        if (rating != null) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            rating,
-                            style: muted?.copyWith(color: scheme.primary),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (owned) ...[
-              const SizedBox(width: 10),
-              Container(
-                height: 24,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: scheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  'In library',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: scheme.primary,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-String _year(String? released) {
-  if (released == null || released.isEmpty) return '';
-  final match = RegExp(r'^\d{4}').firstMatch(released);
-  return match?.group(0) ?? released;
-}
-
-class _CoverThumb extends StatelessWidget {
-  const _CoverThumb({
-    required this.imageUrl,
-    required this.sexual,
-    required this.width,
-    required this.height,
-    required this.radius,
-  });
-
-  final String? imageUrl;
-  final int sexual;
-  final double width;
-  final double height;
-  final double radius;
-
-  @override
-  Widget build(BuildContext context) {
-    final url = imageUrl;
-    if (url == null || url.isEmpty) {
-      final scheme = Theme.of(context).colorScheme;
-      return Container(
-        width: width,
-        height: height,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainer,
-          borderRadius: BorderRadius.circular(radius),
-          border: Border.all(color: scheme.outlineVariant),
-        ),
-        child: Icon(
-          Icons.image_not_supported_outlined,
-          color: scheme.onSurfaceVariant,
-        ),
-      );
-    }
-    Widget art = Image.network(
-      url,
-      width: width,
-      height: height,
-      fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) =>
-          const Icon(Icons.broken_image_outlined),
-    );
-    if (sexual >= 1) {
-      art = ImageFiltered(
-        imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-        child: art,
-      );
-    }
-    return SizedBox(
-      width: width,
-      height: height,
-      child: ClipRRect(borderRadius: BorderRadius.circular(radius), child: art),
     );
   }
 }

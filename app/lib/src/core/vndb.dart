@@ -119,6 +119,7 @@ class VnSearchResult {
   final String id;
   final String title;
   final String? alttitle;
+  final List<String> titles;
   final String? released;
   final double? rating;
   final int votecount;
@@ -132,6 +133,7 @@ class VnSearchResult {
     required this.id,
     required this.title,
     this.alttitle,
+    List<String>? titles,
     this.released,
     this.rating,
     this.votecount = 0,
@@ -140,7 +142,8 @@ class VnSearchResult {
     this.description = '',
     List<String>? developers,
     List<String>? tags,
-  })  : developers = developers ?? const [],
+  })  : titles = titles ?? const [],
+        developers = developers ?? const [],
         tags = tags ?? const [];
 }
 
@@ -216,10 +219,17 @@ VnSearchResult _parseSearchResult(Map raw) {
   final votecountRaw = raw['votecount'];
   final releasedRaw = raw['released'];
   final alttitleRaw = raw['alttitle'];
+  final titlesRaw = raw['titles'];
+  final titles = <String>[
+    if (titlesRaw is List)
+      for (final entry in titlesRaw)
+        if (entry is Map && entry['title'] is String) entry['title'] as String,
+  ];
   return VnSearchResult(
     id: raw['id'] as String,
     title: raw['title'] is String ? raw['title'] as String : '',
     alttitle: alttitleRaw is String ? alttitleRaw : null,
+    titles: titles,
     released: releasedRaw is String ? releasedRaw : null,
     rating: ratingRaw is num ? ratingRaw.toDouble() : null,
     votecount: votecountRaw is int ? votecountRaw : 0,

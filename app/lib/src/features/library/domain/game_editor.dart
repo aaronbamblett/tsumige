@@ -56,10 +56,14 @@ class GameEditor {
   }
 
   /// Appends a new game (the add dialog's save path) and saves.
-  Future<void> add(Game game, {BuildContext? context}) async {
+  Future<void> add(Game game, {BuildContext? context}) =>
+      addAll([game], context: context);
+
+  /// Appends new games and saves once for the whole batch.
+  Future<void> addAll(List<Game> games, {BuildContext? context}) async {
     final loaded = _ref.read(libraryProvider).value;
     if (loaded == null) return;
-    loaded.library.games.add(game);
+    loaded.library.games.addAll(games);
     try {
       await _ref.read(libraryRepositoryProvider).save(loaded);
     } on ChangedOnDisk {
