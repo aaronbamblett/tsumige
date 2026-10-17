@@ -13,10 +13,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
-import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vnl/main.dart';
 import 'package:vnl/src/core/covers.dart' as core;
+import 'package:vnl/src/core/format.dart';
 import 'package:vnl/src/core/model.dart' as core;
 import 'package:vnl/src/core/paths.dart' as core;
 import 'package:vnl/src/core/launch/game_runner.dart';
@@ -319,10 +319,42 @@ void main() {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
     await openTab(tester, 'History');
-    expect(find.text('Total playtime'), findsOneWidget);
-    expect(find.text('0 min'), findsOneWidget);
-    expect(find.text('Sessions'), findsOneWidget);
-    expect(find.text('Not played yet'), findsOneWidget);
+    expect(paneText(tester, 'Total'), findsOneWidget);
+    expect(paneText(tester, 'Never'), findsNWidgets(2));
+    expect(paneText(tester, 'Sessions'), findsNWidgets(2));
+    expect(paneText(tester, 'Not played yet'), findsOneWidget);
+  });
+
+  testWidgets('history facts, short sessions and proportional bars',
+      (tester) async {
+    final now = DateTime.now();
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', playSessions: [
+        core.PlaySession(
+            startedAt: now.subtract(const Duration(days: 2)),
+            durationSeconds: 3600),
+        core.PlaySession(startedAt: now, durationSeconds: 1800),
+        core.PlaySession(
+            startedAt: now.subtract(const Duration(days: 5)),
+            durationSeconds: 19),
+      ]),
+    ]);
+    await openPane(tester, 'Alpha');
+    await openTab(tester, 'History');
+    expect(paneText(tester, '1.5 hrs'), findsOneWidget);
+    expect(paneText(tester, '3'), findsOneWidget);
+    expect(paneText(tester, 'Today'), findsNWidgets(2));
+    expect(paneText(tester, '<1 min'), findsOneWidget);
+    expect(
+        paneText(tester, formatPlayDay(now.subtract(const Duration(days: 2)), now)),
+        findsOneWidget);
+    double barWidth(int index) => tester
+        .widget<FractionallySizedBox>(
+            find.byKey(Key('session-bar-$index')))
+        .widthFactor!;
+    expect(barWidth(0), closeTo(0.5, 1e-9));
+    expect(barWidth(1), closeTo(1.0, 1e-9));
+    expect(barWidth(2), closeTo(19 / 3600, 1e-9));
   });
 
   testWidgets('history lists the newer session first', (tester) async {
@@ -336,12 +368,12 @@ void main() {
     ]);
     await openPane(tester, 'Alpha');
     await openTab(tester, 'History');
-    final format = DateFormat('yyyy-MM-dd HH:mm');
-    final newerText = find.textContaining(format.format(newer.toLocal()));
-    final olderText = find.textContaining(format.format(older.toLocal()));
-    expect(newerText, findsOneWidget);
+    final now = DateTime.now();
+    final newerText = paneText(tester, formatPlayDay(newer, now));
+    final olderText = paneText(tester, formatPlayDay(older, now));
+    expect(newerText, findsNWidgets(2));
     expect(olderText, findsOneWidget);
-    expect(tester.getTopLeft(newerText).dy,
+    expect(tester.getTopLeft(newerText.last).dy,
         lessThan(tester.getTopLeft(olderText).dy));
   });
 
