@@ -14,6 +14,7 @@ import '../../data/library_repository.dart';
 import '../../domain/cover_source.dart';
 import '../../domain/library_query.dart';
 import '../../../../utils/prefs/app_prefs.dart';
+import '../../../../utils/theme/brand.dart';
 import '../../../settings/presentation/settings_dialog.dart';
 import '../add_game/add_game_dialog.dart';
 import 'library_grid.dart';
@@ -176,24 +177,14 @@ class LibraryToolbar extends ConsumerWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _ToolbarBox(
-                      width: _kAddWidth,
-                      child: Tooltip(
-                        message: 'Add game',
-                        child: InkWell(
-                          onTap: () => showAddGameDialog(context),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: const [
-                                Icon(Icons.add_rounded, size: 18),
-                                SizedBox(width: 8),
-                                Text('Add'),
-                              ],
-                            ),
-                          ),
-                        ),
+                    Tooltip(
+                      message: 'Add game',
+                      child: BrandGlassButton(
+                        height: 40,
+                        expand: false,
+                        onPressed: () => showAddGameDialog(context),
+                        icon: const Icon(Icons.add_rounded),
+                        label: const Text('Add'),
                       ),
                     ),
                     const SizedBox(width: _kGap),

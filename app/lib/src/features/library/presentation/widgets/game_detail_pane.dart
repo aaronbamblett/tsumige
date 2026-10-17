@@ -565,70 +565,42 @@ class _Footer extends ConsumerWidget {
           if (showRunExe)
             Tooltip(
               message: _phaseLabel(phase),
-              child: SizedBox(
-                width: double.infinity,
+              child: BrandGlassButton(
                 height: 44,
-                child: OutlinedButton.icon(
-                  onPressed: busy
-                      ? null
-                      : () => actions.runExeInPrefix(context, game),
-                  icon: const Icon(Icons.terminal_rounded, size: 18),
-                  label: const Text('Run .exe inside prefix…'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: scheme.onSurface,
-                    side: BorderSide(
-                      color: OnImage.text.withValues(alpha: 0.16),
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
+                onPressed: busy
+                    ? null
+                    : () => actions.runExeInPrefix(context, game),
+                icon: const Icon(Icons.terminal_rounded),
+                label: const Text('Run .exe inside prefix…'),
               ),
             ),
           Tooltip(
             message: launchTip ?? '',
-            child: SizedBox(
-              width: double.infinity,
+            child: BrandButton(
               height: 52,
-              child: FilledButton(
-                onPressed: launchTip == null
-                    ? () => actions.launch(context, game)
-                    : null,
-                style: FilledButton.styleFrom(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+              onPressed: launchTip == null
+                  ? () => actions.launch(context, game)
+                  : null,
+              icon: switch (phase) {
+                LaunchPhase.starting => SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: BrandColors.of(context).onGradient,
                   ),
                 ),
-                child: switch (phase) {
-                  LaunchPhase.starting => const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    spacing: 8,
-                    children: [
-                      SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      Text('Launching…'),
-                    ],
-                  ),
-                  LaunchPhase.running => const Text('Running'),
-                  // `ended` entries are removed, so this is unreachable.
-                  LaunchPhase.ended || null => const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    spacing: 8,
-                    children: [
-                      Icon(Icons.play_arrow_rounded, size: 22),
-                      Text('Play'),
-                    ],
-                  ),
-                },
-              ),
+                LaunchPhase.running => null,
+                // `ended` entries are removed, so this is unreachable.
+                LaunchPhase.ended || null => const Icon(
+                  Icons.play_arrow_rounded,
+                  size: 22,
+                ),
+              },
+              label: Text(switch (phase) {
+                LaunchPhase.starting => 'Launching…',
+                LaunchPhase.running => 'Running',
+                LaunchPhase.ended || null => 'Play',
+              }),
             ),
           ),
         ],

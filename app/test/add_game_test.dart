@@ -25,6 +25,7 @@ import 'package:vnl/src/features/library/domain/add_game.dart';
 import 'package:vnl/src/features/library/domain/selection.dart';
 import 'package:vnl/src/features/library/presentation/add_game/add_game_dialog.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
+import 'package:vnl/src/utils/theme/brand.dart';
 
 class _FakeRepository implements LibraryRepository {
   _FakeRepository(this.games);
@@ -272,6 +273,8 @@ void main() {
             .controller!
             .text,
         'Romance');
+    expect(find.widgetWithText(BrandButton, 'Add'), findsOneWidget);
+    expect(find.widgetWithText(BrandGlassButton, 'Back'), findsOneWidget);
   });
 
   testWidgets('Add with no exe and a non-Steam mode needs an executable',

@@ -25,6 +25,7 @@ import 'package:vnl/src/features/library/data/library_repository.dart';
 import 'package:vnl/src/features/library/domain/cover_source.dart';
 import 'package:vnl/src/features/library/domain/launch_actions.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
+import 'package:vnl/src/utils/theme/brand.dart';
 
 class FakeRepository implements LibraryRepository {
   FakeRepository(this.games);
@@ -162,8 +163,8 @@ Future<void> openPane(WidgetTester tester, String title) async {
   await tester.pump();
 }
 
-Finder launchButton() => find.widgetWithText(FilledButton, 'Play');
-Finder runningButton() => find.widgetWithText(FilledButton, 'Running');
+Finder launchButton() => find.widgetWithText(BrandButton, 'Play');
+Finder runningButton() => find.widgetWithText(BrandButton, 'Running');
 
 String launchTooltip(WidgetTester tester) {
   final tip = find.ancestor(of: launchButton(), matching: find.byType(Tooltip));
@@ -193,13 +194,13 @@ core.Game steamGame(String id, String title) => core.Game(
           mode: core.LaunchMode.steam, steamAppId: 1230140),
     );
 
-Finder launchingButton() => find.widgetWithText(FilledButton, 'Launching…');
+Finder launchingButton() => find.widgetWithText(BrandButton, 'Launching…');
 
 void main() {
   testWidgets('launch is disabled with no executable set', (tester) async {
     await pumpLaunch(tester, [nativeGame('g1', 'Alpha')]);
     await openPane(tester, 'Alpha');
-    expect(tester.widget<FilledButton>(launchButton()).onPressed, isNull);
+    expect(tester.widget<BrandButton>(launchButton()).onPressed, isNull);
     expect(launchTooltip(tester), 'No executable set');
     expect(find.text('Run .exe inside prefix…'), findsNothing);
   });
@@ -214,14 +215,14 @@ void main() {
       ),
     ]);
     await openPane(tester, 'Alpha');
-    expect(tester.widget<FilledButton>(launchButton()).onPressed, isNull);
+    expect(tester.widget<BrandButton>(launchButton()).onPressed, isNull);
     expect(launchTooltip(tester), 'Steam App ID is not set');
   });
 
   testWidgets('proton launch is disabled without umu-run', (tester) async {
     await pumpLaunch(tester, [protonGame('g1', 'Alpha')], umu: null);
     await openPane(tester, 'Alpha');
-    expect(tester.widget<FilledButton>(launchButton()).onPressed, isNull);
+    expect(tester.widget<BrandButton>(launchButton()).onPressed, isNull);
     expect(launchTooltip(tester), 'umu-run not found on PATH');
     expect(find.text('Run .exe inside prefix…'), findsOneWidget);
   });
@@ -231,7 +232,7 @@ void main() {
         umu: '/usr/bin/umu-run');
     await openPane(tester, 'Alpha');
     expect(
-        tester.widget<FilledButton>(launchButton()).onPressed, isNotNull);
+        tester.widget<BrandButton>(launchButton()).onPressed, isNotNull);
   });
 
   testWidgets('pressing launch calls the runner once', (tester) async {
@@ -328,7 +329,7 @@ void main() {
     expect(runningButton(), findsOneWidget);
     final tip = find.ancestor(of: runningButton(), matching: find.byType(Tooltip));
     expect(tester.widget<Tooltip>(tip).message, 'Running');
-    expect(tester.widget<FilledButton>(runningButton()).onPressed, isNull);
+    expect(tester.widget<BrandButton>(runningButton()).onPressed, isNull);
     runner.gate!.complete();
     await tester.pump();
     await tester.pump();
@@ -369,7 +370,7 @@ void main() {
     await tester.tap(find.byTooltip('Close'));
     await tester.pump();
     await tester.pump();
-    expect(find.byType(FilledButton), findsNothing);
+    expect(find.byType(BrandButton), findsNothing);
     await openPane(tester, 'Alpha');
     await tester.pump();
     expect(runningButton(), findsOneWidget);
@@ -399,7 +400,7 @@ void main() {
     await tester.pump();
     expect(launchingButton(), findsOneWidget);
     expect(
-        tester.widget<FilledButton>(launchingButton()).onPressed, isNull);
+        tester.widget<BrandButton>(launchingButton()).onPressed, isNull);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(runningButton(), findsNothing);
     appear.complete();

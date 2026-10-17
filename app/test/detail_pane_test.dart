@@ -28,6 +28,7 @@ import 'package:vnl/src/features/library/domain/running_games.dart';
 import 'package:vnl/src/features/library/presentation/widgets/game_cover_tile.dart';
 import 'package:vnl/src/features/library/presentation/widgets/game_detail_pane.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
+import 'package:vnl/src/utils/theme/brand.dart';
 
 class DetailFakeRepository implements LibraryRepository {
   DetailFakeRepository(this.games);
@@ -232,19 +233,19 @@ void main() {
   testWidgets('Play label follows the launch phase', (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
-    expect(find.widgetWithText(FilledButton, 'Play'), findsOneWidget);
+    expect(find.widgetWithText(BrandButton, 'Play'), findsOneWidget);
     final container =
         ProviderScope.containerOf(tester.element(find.byType(GameDetailPane)));
     container
         .read(runningGamesProvider.notifier)
         .setPhase('g1', LaunchPhase.starting);
     await tester.pump();
-    expect(find.widgetWithText(FilledButton, 'Launching…'), findsOneWidget);
+    expect(find.widgetWithText(BrandButton, 'Launching…'), findsOneWidget);
     container
         .read(runningGamesProvider.notifier)
         .setPhase('g1', LaunchPhase.running);
     await tester.pump();
-    expect(find.widgetWithText(FilledButton, 'Running'), findsOneWidget);
+    expect(find.widgetWithText(BrandButton, 'Running'), findsOneWidget);
   });
 
   testWidgets('hero buttons are 38 px circles', (tester) async {
@@ -393,9 +394,9 @@ void main() {
           id: 'g1', title: 'Alpha', description: 'A very long tale. ' * 500),
     ]);
     await openPane(tester, 'Alpha');
-    final launch = find.widgetWithText(FilledButton, 'Play');
+    final launch = find.widgetWithText(BrandButton, 'Play');
     expect(launch, findsOneWidget);
-    expect(tester.widget<FilledButton>(launch).onPressed, isNull);
+    expect(tester.widget<BrandButton>(launch).onPressed, isNull);
     final launchRect = tester.getRect(launch);
     expect(launchRect.top, greaterThanOrEqualTo(0));
     expect(launchRect.bottom, lessThanOrEqualTo(800));
@@ -411,15 +412,15 @@ void main() {
     ]);
     await openPane(tester, 'Alpha');
     expect(
-        find.widgetWithText(OutlinedButton, 'Run .exe inside prefix…'),
+        find.widgetWithText(BrandGlassButton, 'Run .exe inside prefix…'),
         findsNothing);
-    expect(find.widgetWithText(FilledButton, 'Play'), findsOneWidget);
+    expect(find.widgetWithText(BrandButton, 'Play'), findsOneWidget);
   });
 
   testWidgets('run exe button shows for a Proton game', (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
-    expect(find.widgetWithText(OutlinedButton, 'Run .exe inside prefix…'),
+    expect(find.widgetWithText(BrandGlassButton, 'Run .exe inside prefix…'),
         findsOneWidget);
   });
 

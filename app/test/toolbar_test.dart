@@ -26,6 +26,7 @@ import 'package:vnl/src/features/library/presentation/widgets/game_detail_pane.d
 import 'package:vnl/src/features/library/presentation/widgets/library_toolbar.dart';
 import 'package:vnl/src/utils/prefs/app_prefs.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
+import 'package:vnl/src/utils/theme/brand.dart';
 import 'package:vnl/src/widgets/desktop/desktop_window_scaffold.dart';
 
 class ToolbarFakeRepository implements LibraryRepository {
@@ -165,6 +166,11 @@ void main() {
     await tester.tap(find.text('All tags').last);
     await tester.pump();
     expect(container.read(tagFilterProvider), isNull);
+  });
+
+  testWidgets('add is a glass brand button', (tester) async {
+    await pumpToolbar(tester, taggedGames());
+    expect(find.widgetWithText(BrandGlassButton, 'Add'), findsOneWidget);
   });
 
   testWidgets('search is a plain hinted field with no label', (tester) async {

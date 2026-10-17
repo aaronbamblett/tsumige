@@ -15,6 +15,7 @@ import '../../../../core/covers.dart';
 import '../../../../core/model.dart';
 import '../../../../core/vndb.dart';
 import '../../../../utils/prefs/app_prefs.dart' hide LaunchMode;
+import '../../../../utils/theme/brand.dart';
 import '../../../../utils/toast.dart';
 import '../../data/library_repository.dart';
 import '../../domain/add_game.dart';
@@ -476,16 +477,20 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
         const SizedBox(height: 8),
         Row(
           children: [
-            TextButton(
+            BrandGlassButton(
               key: const Key('add-game-back'),
+              height: 40,
+              expand: false,
               onPressed: _saving ? null : () => setState(() => _step = 0),
-              child: const Text('Back'),
+              label: const Text('Back'),
             ),
             const Spacer(),
-            FilledButton(
+            BrandButton(
               key: const Key('add-game-add'),
+              height: 40,
+              expand: false,
               onPressed: _saving ? null : _add,
-              child: const Text('Add'),
+              label: const Text('Add'),
             ),
           ],
         ),
