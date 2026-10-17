@@ -6,22 +6,17 @@
 
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:path/path.dart' as p;
 
-import 'package:http/http.dart' as http;
-
 import '../../../../core/covers.dart';
 import '../../../../core/launch/game_runner.dart';
 import '../../../../core/model.dart';
 import '../../../../core/trash.dart';
-import '../../../../core/vndb.dart';
 import '../../../../utils/theme/brand.dart';
-import '../../../../utils/toast.dart';
 import '../../data/library_repository.dart';
 import '../../domain/cover_source.dart';
 import '../../domain/game_editor.dart';
@@ -29,6 +24,7 @@ import '../../domain/launch_actions.dart';
 import '../../domain/running_games.dart';
 import '../../domain/selection.dart';
 import 'art_overlay.dart';
+import 'art_picker_dialog.dart';
 import 'detail_tabs/history_tab.dart';
 import 'detail_tabs/info_tab.dart';
 import 'detail_tabs/launch_tab.dart';
@@ -463,10 +459,8 @@ class _HeroControls extends ConsumerWidget {
           child: const _HeroButton(icon: Icons.more_vert_rounded),
           onSelected: (value) {
             switch (value) {
-              case 'cover':
-                _changeCover(context, ref, game);
-              case 'refetch':
-                _refetchCover(context, ref, game);
+              case 'art':
+                showArtPickerDialog(context, game);
               case 'adult':
                 ref
                     .read(gameEditorProvider)
@@ -488,12 +482,7 @@ class _HeroControls extends ConsumerWidget {
             }
           },
           itemBuilder: (context) => [
-            const PopupMenuItem(value: 'cover', child: Text('Change cover…')),
-            if (game.vndbId != null)
-              const PopupMenuItem(
-                value: 'refetch',
-                child: Text('Re-fetch cover from VNDB'),
-              ),
+            const PopupMenuItem(value: 'art', child: Text('Change art…')),
             PopupMenuItem(
               value: 'adult',
               child: Text(game.isAdult ? 'Mark as not adult' : 'Mark as adult'),
@@ -513,79 +502,6 @@ class _HeroControls extends ConsumerWidget {
         ),
       ],
     );
-  }
-}
-
-Future<void> _storeCoverBytes(
-  BuildContext context,
-  WidgetRef ref,
-  Game game,
-  List<int> bytes,
-) async {
-  final dir = ref.read(dataDirProvider);
-  final name = await storeOriginal(dir, game.id, Uint8List.fromList(bytes));
-  if (!context.mounted) return;
-  await ref
-      .read(gameEditorProvider)
-      .update(game.id, (g) => g.cover = name, context: context);
-  await generateThumbnails(dir, [(game.id, name)]);
-  ref.invalidate(coverExistsProvider);
-  for (final width in thumbWidths) {
-    await FileImage(File(thumbPath(dir, game.id, width))).evict();
-  }
-  await FileImage(File(p.join(dir.coversOriginal.path, name))).evict();
-}
-
-
-Future<void> _changeCover(
-  BuildContext context,
-  WidgetRef ref,
-  Game game,
-) async {
-  final picked = await ref.read(coverPickerProvider)();
-  if (picked == null || picked.isEmpty) return;
-  if (!context.mounted) return;
-  if (picked.startsWith('/run/user/')) {
-    Toast(context).show(
-      'That file came through the Flatpak portal. '
-      'Pick it from its real location.',
-    );
-    return;
-  }
-  try {
-    final bytes = await File(picked).readAsBytes();
-    if (!context.mounted) return;
-    await _storeCoverBytes(context, ref, game, bytes);
-  } catch (e) {
-    if (context.mounted) Toast(context).showError('Could not use cover: $e');
-  }
-}
-
-Future<void> _refetchCover(
-  BuildContext context,
-  WidgetRef ref,
-  Game game,
-) async {
-  final vndbId = game.vndbId;
-  if (vndbId == null) return;
-  try {
-    final url = await VndbClient().fetchCoverUrl(vndbId);
-    if (url == null) {
-      if (context.mounted) {
-        Toast(context).showError('VNDB has no cover for this game.');
-      }
-      return;
-    }
-    final response = await http.get(Uri.parse(url));
-    if (response.statusCode != 200) {
-      throw VndbException('HTTP ${response.statusCode}');
-    }
-    if (!context.mounted) return;
-    await _storeCoverBytes(context, ref, game, response.bodyBytes);
-  } catch (e) {
-    if (context.mounted) {
-      Toast(context).showError('Cover re-fetch failed: $e');
-    }
   }
 }
 

@@ -116,7 +116,7 @@ Future<String?> Function() coverPicker(Ref ref) => pickCoverFile;
 
 Future<String?> pickCoverFile() async {
   final picked = await FilePicker.pickFiles(
-    dialogTitle: 'Change cover',
+    dialogTitle: 'Choose image',
     type: FileType.custom,
     allowedExtensions: ['png', 'jpg', 'jpeg', 'webp'],
   );

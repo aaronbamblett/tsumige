@@ -854,26 +854,28 @@ void main() {
         File(p.join(folders.single.path, 'game.json')).existsSync(), isTrue);
   });
 
-  testWidgets('re-fetch cover is hidden with no vndbId', (tester) async {
+  testWidgets('the More menu offers Change art and no re-fetch', (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
     await tester.tap(find.byTooltip('More'));
     await tester.pumpAndSettle();
-    expect(find.text('Change cover…'), findsOneWidget);
+    expect(find.text('Change art…'), findsOneWidget);
+    expect(find.text('Change cover…'), findsNothing);
     expect(find.text('Re-fetch cover from VNDB'), findsNothing);
   });
 
-  testWidgets('re-fetch cover shows with a vndbId', (tester) async {
+  testWidgets('a game with a vndbId still has no re-fetch item', (tester) async {
     await pumpLibrary(tester, [
       core.Game(id: 'g1', title: 'Alpha', vndbId: 'v900017'),
     ]);
     await openPane(tester, 'Alpha');
     await tester.tap(find.byTooltip('More'));
     await tester.pumpAndSettle();
-    expect(find.text('Re-fetch cover from VNDB'), findsOneWidget);
+    expect(find.text('Change art…'), findsOneWidget);
+    expect(find.text('Re-fetch cover from VNDB'), findsNothing);
   });
 
-  testWidgets('change cover stores the picked file and thumbnails',
+  testWidgets('Change art stores a picked file as the cover and thumbnails',
       (tester) async {
     late Directory temp;
     String? pickPath;
@@ -890,8 +892,12 @@ void main() {
     await runRealFlow(tester, () async {
       await tester.tap(find.byTooltip('More'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Change cover…'));
+      await tester.tap(find.text('Change art…'));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('From file…'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pump();
     }, () => File(core.thumbPath(dir, 'g1', 512)).existsSync());
     expect(File(p.join(dir.coversOriginal.path, 'g1.png')).existsSync(),
         isTrue);
@@ -940,7 +946,9 @@ void main() {
     await openPane(tester, 'Alpha');
     await tester.tap(find.byTooltip('More'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Change cover…'));
+    await tester.tap(find.text('Change art…'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('From file…'));
     await tester.pump();
     await tester.pump();
     expect(find.textContaining('Flatpak portal'), findsOneWidget);

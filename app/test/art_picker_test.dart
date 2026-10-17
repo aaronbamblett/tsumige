@@ -1,0 +1,505 @@
+// Copyright (c) 2026 Aaron Bamblett
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:image/image.dart' as img;
+import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:vnl/src/core/covers.dart' as core;
+import 'package:vnl/src/core/model.dart' as core;
+import 'package:vnl/src/core/paths.dart' as core;
+import 'package:vnl/src/core/vndb.dart' as core;
+import 'package:vnl/src/features/library/data/library_repository.dart';
+import 'package:vnl/src/features/library/domain/add_game.dart';
+import 'package:vnl/src/features/library/domain/game_editor.dart';
+import 'package:vnl/src/features/library/presentation/widgets/art_picker_dialog.dart';
+import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
+import 'package:vnl/src/utils/theme/brand.dart';
+
+const _main = {
+  'url': 'https://t.vndb.org/cv/16/98416.jpg',
+  'thumbnail': 'https://t.vndb.org/cv.t/16/98416.jpg',
+  'dims': [411, 560],
+};
+const _portrait = {
+  'type': 'pkgfront',
+  'url': 'https://t.vndb.org/cv/66/98366.jpg',
+  'thumbnail': 'https://t.vndb.org/cv.t/66/98366.jpg',
+  'dims': [350, 500],
+};
+const _landscape = {
+  'type': 'dig',
+  'url': 'https://t.vndb.org/cv/64/98364.jpg',
+  'thumbnail': 'https://t.vndb.org/cv.t/64/98364.jpg',
+  'dims': [1368, 770],
+};
+const _shotOne = {
+  'url': 'https://t.vndb.org/sf/86/101386.jpg',
+  'thumbnail': 'https://t.vndb.org/sf.t/86/101386.jpg',
+  'dims': [1024, 768],
+};
+const _shotTwo = {
+  'url': 'https://t.vndb.org/sf/87/101387.jpg',
+  'thumbnail': 'https://t.vndb.org/sf.t/87/101387.jpg',
+  'dims': [1024, 768],
+};
+
+/// Canned VNDB answers for `/vn` and `/release`; every other host gets a PNG.
+/// [vndbFails] makes the `/vn` call answer 500.
+http.Client _fakeHttp({required bool Function() vndbFails}) {
+  final png = Uint8List.fromList(
+    img.encodePng(img.Image(width: 16, height: 16)),
+  );
+  return MockClient((request) async {
+    if (request.url.host != 'api.vndb.org') {
+      return http.Response.bytes(
+        png,
+        200,
+        headers: {'content-type': 'image/png'},
+      );
+    }
+    if (request.url.path.endsWith('/vn')) {
+      if (vndbFails()) return http.Response('boom', 500);
+      return http.Response(
+        jsonEncode({
+          'results': [
+            {
+              'image': _main,
+              'screenshots': [_shotOne, _shotTwo],
+            },
+          ],
+          'more': false,
+        }),
+        200,
+      );
+    }
+    if (request.url.path.endsWith('/release')) {
+      return http.Response(
+        jsonEncode({
+          'results': [
+            {
+              'images': [
+                {..._main, 'type': 'main'},
+                _landscape,
+                _portrait,
+              ],
+            },
+          ],
+          'more': false,
+        }),
+        200,
+      );
+    }
+    return http.Response('not found', 404);
+  });
+}
+
+class PickerFakeRepository implements LibraryRepository {
+  PickerFakeRepository(this.loaded);
+
+  final core.LoadedLibrary loaded;
+
+  @override
+  Future<core.LoadedLibrary> load() async => loaded;
+
+  @override
+  Future<void> save(core.LoadedLibrary loaded) async {}
+
+  @override
+  Future<core.VndbRefreshReport> refreshVndbData(
+    core.LoadedLibrary loaded,
+  ) async => const core.VndbRefreshReport();
+
+  @override
+  Future<core.ThumbReport> ensureThumbnails(core.Library library) async =>
+      core.ThumbReport();
+}
+
+/// Real file work never finishes inside the fake-async test zone, so these
+/// flows run in `runAsync`, polling for the file effect before asserting.
+Future<void> runRealFlow(
+  WidgetTester tester,
+  Future<void> Function() flow,
+  bool Function() done,
+) async {
+  await tester.runAsync(() async {
+    await flow();
+    for (var i = 0; i < 200 && !done(); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+    }
+  });
+  expect(done(), isTrue);
+  await tester.pumpAndSettle();
+}
+
+/// Lets the fake VNDB answer land; the progress spinner keeps animating, so
+/// `pumpAndSettle` is not usable until the grid is up.
+Future<void> settleVndb(WidgetTester tester) async {
+  for (var i = 0; i < 10; i++) {
+    await tester.pump(const Duration(milliseconds: 20));
+  }
+}
+
+class _Harness {
+  _Harness(this.tester, this.temp, this.loaded);
+
+  final WidgetTester tester;
+  final Directory temp;
+  final core.LoadedLibrary loaded;
+
+  core.DataDir get dir => core.DataDir(temp.path);
+  core.Game get game => loaded.library.games.single;
+
+  Future<void> open({
+    core.Game? game,
+    http.Client? http,
+    Future<String?> Function()? picker,
+    Size size = const Size(1400, 980),
+  }) async {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(
+            await SharedPreferences.getInstance(),
+          ),
+          dataDirProvider.overrideWithValue(dir),
+          libraryRepositoryProvider.overrideWithValue(
+            PickerFakeRepository(loaded),
+          ),
+          addGameHttpClientProvider.overrideWithValue(
+            http ?? _fakeHttp(vndbFails: () => false),
+          ),
+          if (picker != null) coverPickerProvider.overrideWithValue(picker),
+        ],
+        child: MaterialApp(
+          home: Consumer(
+            builder: (context, ref, _) {
+              ref.watch(libraryProvider);
+              return Scaffold(
+                body: Builder(
+                  builder: (context) => Center(
+                    child: ElevatedButton(
+                      onPressed: () =>
+                          showArtPickerDialog(context, game ?? this.game),
+                      child: const Text('open'),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('open'));
+    await tester.pump();
+    await tester.pump();
+  }
+}
+
+Finder _tile(String url) => find.byKey(ValueKey('art-$url'));
+
+List<String> _tileUrls(WidgetTester tester) => [
+  for (final w in tester.widgetList(
+    find.byWidgetPredicate(
+      (w) =>
+          w.key is ValueKey<String> &&
+          (w.key as ValueKey<String>).value.startsWith('art-https'),
+    ),
+  ))
+    (w.key as ValueKey<String>).value.substring('art-'.length),
+];
+
+Future<_Harness> _pumpDialog(
+  WidgetTester tester, {
+  core.Game? game,
+  String? vndbId = 'v900016',
+  String? background,
+  String? cover,
+  bool Function()? vndbFails,
+  Future<String?> Function()? picker,
+}) async {
+  final temp = Directory.systemTemp.createTempSync('vnl_art_picker_');
+  addTearDown(() => temp.deleteSync(recursive: true));
+  final g =
+      game ??
+      core.Game(
+        id: 'g1',
+        title: 'Sample Game',
+        vndbId: vndbId,
+        cover: cover,
+        background: background,
+      );
+  final loaded = core.LoadedLibrary(library: core.Library(games: [g]));
+  final harness = _Harness(tester, temp, loaded);
+  await harness.open(
+    game: g,
+    http: _fakeHttp(vndbFails: vndbFails ?? () => false),
+    picker: picker,
+  );
+  await settleVndb(tester);
+  return harness;
+}
+
+Uint8List _png() =>
+    Uint8List.fromList(img.encodePng(img.Image(width: 16, height: 16)));
+
+void main() {
+  testWidgets(
+    'cover tab lists main, then portrait, then landscape release images',
+    (tester) async {
+      await _pumpDialog(tester);
+      expect(_tileUrls(tester), [
+        _main['url'],
+        _portrait['url'],
+        _landscape['url'],
+      ]);
+      expect(find.text('VNDB covers and packages'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'background tab shows screenshots, then artwork without portrait images',
+    (tester) async {
+      await _pumpDialog(tester);
+      await tester.tap(find.text('Background'));
+      await tester.pump();
+      expect(_tileUrls(tester), [
+        _shotOne['url'],
+        _shotTwo['url'],
+        _main['url'],
+        _landscape['url'],
+      ]);
+      expect(find.text('VNDB screenshots'), findsOneWidget);
+      expect(find.text('VNDB artwork'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Save stores the picked cover and background and sets the field',
+    (tester) async {
+      final harness = await _pumpDialog(tester);
+      final dir = harness.dir;
+      await tester.tap(_tile(_portrait['url'] as String));
+      await tester.pump();
+      await tester.tap(find.text('Background'));
+      await tester.pump();
+      await tester.tap(_tile(_shotOne['url'] as String));
+      await tester.pump();
+      await runRealFlow(
+        tester,
+        () async {
+          await tester.tap(find.text('Save'));
+          await tester.pump();
+        },
+        () =>
+            harness.game.background == 'g1.png' &&
+            harness.game.cover == 'g1.png',
+      );
+      expect(
+        File(p.join(dir.coversOriginal.path, 'g1.png')).existsSync(),
+        isTrue,
+      );
+      expect(
+        File(p.join(dir.coversBackground.path, 'g1.png')).existsSync(),
+        isTrue,
+      );
+      expect(find.byType(ArtPickerDialog), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'From file… makes the file the pending cover and Save stores it',
+    (tester) async {
+      final temp = Directory.systemTemp.createTempSync('vnl_art_picker_');
+      addTearDown(() => temp.deleteSync(recursive: true));
+      final source = File(p.join(temp.path, 'picked.png'))
+        ..writeAsBytesSync(_png());
+      final game = core.Game(id: 'g1', title: 'Sample Game');
+      final loaded = core.LoadedLibrary(library: core.Library(games: [game]));
+      final harness = _Harness(tester, temp, loaded);
+      await harness.open(picker: () async => source.path);
+      await tester.tap(find.text('From file…'));
+      await tester.pump();
+      await tester.pump();
+      await runRealFlow(tester, () async {
+        await tester.tap(find.text('Save'));
+        await tester.pump();
+      }, () => harness.game.cover == 'g1.png');
+      expect(
+        File(p.join(harness.dir.coversOriginal.path, 'g1.png')).existsSync(),
+        isTrue,
+      );
+      expect(harness.game.background, isNull);
+    },
+  );
+
+  testWidgets(
+    'Use the cover clears the background and moves its file to trash',
+    (tester) async {
+      final temp = Directory.systemTemp.createTempSync('vnl_art_picker_');
+      addTearDown(() => temp.deleteSync(recursive: true));
+      final dir = core.DataDir(temp.path);
+      dir.coversBackground.createSync(recursive: true);
+      File(p.join(dir.coversBackground.path, 'g1.png'))
+          .writeAsBytesSync(_png());
+      final game = core.Game(
+        id: 'g1',
+        title: 'Sample Game',
+        vndbId: 'v900016',
+        background: 'g1.png',
+      );
+      final loaded = core.LoadedLibrary(library: core.Library(games: [game]));
+      final harness = _Harness(tester, temp, loaded);
+      await harness.open(
+        game: game,
+        http: _fakeHttp(vndbFails: () => false),
+      );
+      await settleVndb(tester);
+      await tester.tap(find.text('Background'));
+      await tester.pump();
+      await tester.tap(find.text('Use the cover'));
+      await tester.pump();
+      await runRealFlow(tester, () async {
+        await tester.tap(find.text('Save'));
+        await tester.pump();
+      }, () => harness.game.background == null);
+      expect(
+        File(p.join(dir.coversBackground.path, 'g1.png')).existsSync(),
+        isFalse,
+      );
+      expect(
+        dir.trash
+            .listSync(recursive: true)
+            .any((e) => e.path.endsWith('background-g1.png')),
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets('Cancel discards pending choices', (tester) async {
+    final harness = await _pumpDialog(tester);
+    await tester.tap(_tile(_portrait['url'] as String));
+    await tester.pump();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ArtPickerDialog), findsNothing);
+    expect(harness.game.cover, isNull);
+    expect(harness.game.background, isNull);
+    expect(harness.dir.coversOriginal.existsSync(), isFalse);
+  });
+
+  testWidgets('no VNDB id shows only the file option', (tester) async {
+    await _pumpDialog(tester, vndbId: null);
+    expect(find.text('No VNDB id, so pick a file.'), findsOneWidget);
+    expect(find.text('VNDB covers and packages'), findsNothing);
+    expect(find.text('From file…'), findsOneWidget);
+    expect(find.text('Use VNDB cover'), findsNothing);
+  });
+
+  testWidgets('a VNDB failure shows the message and Try again recovers', (
+    tester,
+  ) async {
+    var failing = true;
+    await _pumpDialog(tester, vndbFails: () => failing);
+    expect(find.text("Couldn't reach VNDB."), findsOneWidget);
+    expect(find.text('Try again'), findsOneWidget);
+    failing = false;
+    await tester.tap(find.text('Try again'));
+    await settleVndb(tester);
+    expect(find.text("Couldn't reach VNDB."), findsNothing);
+    expect(_tileUrls(tester), contains(_main['url']));
+  });
+
+  testWidgets('a portal file path is rejected with a toast', (tester) async {
+    await _pumpDialog(
+      tester,
+      vndbId: null,
+      picker: () async => '/run/user/1000/docs/c.png',
+    );
+    await tester.tap(find.text('From file…'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('Flatpak portal'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 6));
+  });
+
+  testWidgets('the Background note shows until a background is picked', (
+    tester,
+  ) async {
+    await _pumpDialog(tester);
+    await tester.tap(find.text('Background'));
+    await tester.pump();
+    expect(
+      find.text('No background picked, so the pane uses the cover.'),
+      findsOneWidget,
+    );
+    expect(find.text('Use the cover'), findsNothing);
+    await tester.tap(_tile(_shotOne['url'] as String));
+    await tester.pump();
+    expect(
+      find.text('No background picked, so the pane uses the cover.'),
+      findsNothing,
+    );
+    expect(find.text('Use the cover'), findsOneWidget);
+  });
+
+  testWidgets('buttons are Brand buttons by type', (tester) async {
+    await _pumpDialog(tester);
+    expect(find.widgetWithText(BrandButton, 'Save'), findsOneWidget);
+    expect(find.widgetWithText(BrandGlassButton, 'Cancel'), findsOneWidget);
+    expect(find.widgetWithText(BrandGlassButton, 'From file…'), findsOneWidget);
+    expect(
+      find.widgetWithText(BrandGlassButton, 'Use VNDB cover'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the dialog is 960 by 720 at 1400 by 980', (tester) async {
+    await _pumpDialog(tester);
+    expect(
+      tester.getSize(find.byKey(const Key('art-picker'))),
+      const Size(960, 720),
+    );
+  });
+
+  testWidgets('nothing overflows at 1000 by 640', (tester) async {
+    final temp = Directory.systemTemp.createTempSync('vnl_art_picker_');
+    addTearDown(() => temp.deleteSync(recursive: true));
+    final game = core.Game(id: 'g1', title: 'Sample Game', vndbId: 'v900016');
+    final loaded = core.LoadedLibrary(library: core.Library(games: [game]));
+    final harness = _Harness(tester, temp, loaded);
+    await harness.open(
+      game: game,
+      http: _fakeHttp(vndbFails: () => false),
+      size: const Size(1000, 640),
+    );
+    await settleVndb(tester);
+    await tester.tap(find.text('Background'));
+    await tester.pump();
+    expect(
+      tester.getSize(find.byKey(const Key('art-picker'))),
+      const Size(900, 576),
+    );
+    expect(tester.takeException(), isNull);
+  });
+}

@@ -97,7 +97,7 @@ class LibraryToolbar extends ConsumerWidget {
                   children: [
                     const Expanded(child: _ToolbarSearchField()),
                     const SizedBox(width: _kGap),
-                    _ToolbarBox(
+                    ToolbarBox(
                       width: _kSortWidth,
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -138,14 +138,14 @@ class LibraryToolbar extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(width: _kGap),
-                    _ToolbarBox(
+                    ToolbarBox(
                       width: _kSegmentsWidth,
                       child: Padding(
                         padding: const EdgeInsets.all(3),
                         child: Row(
                           children: [
                             Expanded(
-                              child: _Segment(
+                              child: ToolbarSegment(
                                 label: 'All',
                                 selected: !favouritesOnly,
                                 onTap: () => ref
@@ -155,7 +155,7 @@ class LibraryToolbar extends ConsumerWidget {
                             ),
                             const SizedBox(width: 2),
                             Expanded(
-                              child: _Segment(
+                              child: ToolbarSegment(
                                 label: 'Favourites',
                                 selected: favouritesOnly,
                                 onTap: () => ref
@@ -190,7 +190,7 @@ class LibraryToolbar extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(width: _kGap),
-                    _ToolbarBox(
+                    ToolbarBox(
                       key: const ValueKey('toolbar-settings'),
                       width: _kControlHeight,
                       child: Tooltip(
@@ -215,8 +215,8 @@ class LibraryToolbar extends ConsumerWidget {
 /// The shared control chrome: a 40 px box, 10 px radius, `surfaceContainer`
 /// fill and an `outlineVariant` border that brightens on hover. A
 /// [borderColor] replaces the border while it is set.
-class _ToolbarBox extends StatefulWidget {
-  const _ToolbarBox({
+class ToolbarBox extends StatefulWidget {
+  const ToolbarBox({
     super.key,
     this.width,
     this.borderColor,
@@ -228,10 +228,10 @@ class _ToolbarBox extends StatefulWidget {
   final Widget child;
 
   @override
-  State<_ToolbarBox> createState() => _ToolbarBoxState();
+  State<ToolbarBox> createState() => _ToolbarBoxState();
 }
 
-class _ToolbarBoxState extends State<_ToolbarBox> {
+class _ToolbarBoxState extends State<ToolbarBox> {
   var _hovered = false;
 
   @override
@@ -351,7 +351,7 @@ class _FilterButtonState extends ConsumerState<_FilterButton> {
         controller: _controller,
         overlayChildBuilder: (context) =>
             _FilterPanelOverlay(link: _link, onClose: _close),
-        child: _ToolbarBox(
+        child: ToolbarBox(
           key: const ValueKey('toolbar-filter'),
           width: _kFilterWidth,
           borderColor: count > 0 ? scheme.primary : null,
@@ -533,7 +533,7 @@ class _FilterPanelState extends ConsumerState<_FilterPanel> {
                   children: [
                     _PanelSection(
                       title: 'Adult',
-                      child: _ToolbarBox(
+                      child: ToolbarBox(
                         child: Padding(
                           padding: const EdgeInsets.all(3),
                           child: Row(
@@ -543,7 +543,7 @@ class _FilterPanelState extends ConsumerState<_FilterPanel> {
                                 if (entry.key != keys.AdultFilter.all)
                                   const SizedBox(width: 2),
                                 Expanded(
-                                  child: _Segment(
+                                  child: ToolbarSegment(
                                     label: entry.value,
                                     selected: adult == entry.key,
                                     onTap: () => ref
@@ -578,7 +578,7 @@ class _FilterPanelState extends ConsumerState<_FilterPanel> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _ToolbarBox(
+                          ToolbarBox(
                             child: Padding(
                               padding: const EdgeInsets.only(
                                 left: 14,
@@ -768,8 +768,9 @@ class _TagOption extends StatelessWidget {
   }
 }
 
-class _Segment extends StatelessWidget {
-  const _Segment({
+class ToolbarSegment extends StatelessWidget {
+  const ToolbarSegment({
+    super.key,
     required this.label,
     required this.selected,
     required this.onTap,
@@ -834,7 +835,7 @@ class _ToolbarSearchFieldState extends ConsumerState<_ToolbarSearchField> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return _ToolbarBox(
+    return ToolbarBox(
       key: const ValueKey('toolbar-search'),
       child: Padding(
         padding: const EdgeInsets.only(left: 14, right: 6),
