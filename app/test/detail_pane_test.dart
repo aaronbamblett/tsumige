@@ -236,11 +236,19 @@ void main() {
       (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
-    final card = tester.widget<Card>(find.byType(Card));
-    final side = (card.shape as RoundedRectangleBorder).side;
-    final primary =
-        Theme.of(tester.element(find.byType(Card))).colorScheme.primary;
-    expect(side.color, primary);
+    final cover = find.byKey(const ValueKey('cover-g1'));
+    final frame = find.descendant(
+      of: cover,
+      matching: find.byWidgetPredicate(
+        (w) => w is Container && w.decoration is BoxDecoration,
+      ),
+    );
+    final decoration =
+        (tester.widget<Container>(frame).decoration as BoxDecoration);
+    final border = decoration.border as Border;
+    final primary = Theme.of(tester.element(cover)).colorScheme.primary;
+    expect(border.top.color, primary);
+    expect(border.top.width, 3);
   });
 
   testWidgets('routes show completion and the active label',

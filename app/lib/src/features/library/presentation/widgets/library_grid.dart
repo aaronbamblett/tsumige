@@ -29,9 +29,12 @@ class LibraryGrid extends HookConsumerWidget {
       thumbVisibility: true,
       child: GridView.builder(
         controller: scrollController,
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(20),
         gridDelegate: GameCoverGridDelegate(
           maxCrossAxisExtent: coverWidth.toDouble(),
+          crossAxisSpacing: 20,
+          mainAxisSpacing: 24,
+          titleExtent: gameTitleBlockHeight(context),
         ),
         itemCount: games.length,
         itemBuilder: (context, index) =>

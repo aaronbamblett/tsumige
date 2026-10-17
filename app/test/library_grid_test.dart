@@ -198,31 +198,38 @@ void main() {
     }
   });
 
-  testWidgets('tile is exactly the cover plus the card margin', (tester) async {
+  testWidgets('tile is exactly the cover plus the title block',
+      (tester) async {
     await pumpLibrary(tester, fakeGames(6));
+    final block =
+        gameTitleBlockHeight(tester.element(find.byType(GameCoverTile).first));
     final tileRect = tester.getRect(find.byType(GameCoverTile).first);
     final coverRect =
         tester.getRect(find.byKey(const ValueKey('cover-game-0')));
     expect(
-      tileRect.height,
+      coverRect.height,
       moreOrLessEquals(
-          coverRect.width / kGameCoverAspectRatio + 8.0, epsilon: 0.5),
+          coverRect.width / kGameCoverAspectRatio, epsilon: 0.5),
     );
+    expect(tileRect.height,
+        moreOrLessEquals(coverRect.height + block, epsilon: 0.5));
     expect(tileRect.bottom - coverRect.bottom,
-        moreOrLessEquals(4.0, epsilon: 0.5));
+        moreOrLessEquals(block, epsilon: 0.5));
   });
 
-  testWidgets('title sits inside the cover rect', (tester) async {
+  testWidgets('title sits below the cover', (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha Title')]);
     final coverRect = tester.getRect(find.byKey(const ValueKey('cover-g1')));
     final titleRect = tester.getRect(find.text('Alpha Title'));
-    expect(titleRect.left, greaterThanOrEqualTo(coverRect.left - 0.5));
-    expect(titleRect.right, lessThanOrEqualTo(coverRect.right + 0.5));
-    expect(titleRect.top, greaterThanOrEqualTo(coverRect.top - 0.5));
-    expect(titleRect.bottom, lessThanOrEqualTo(coverRect.bottom + 0.5));
+    expect(titleRect.top,
+        greaterThanOrEqualTo(coverRect.bottom - 0.5));
+    expect(titleRect.left,
+        moreOrLessEquals(coverRect.left, epsilon: 0.5));
+    expect(titleRect.right,
+        lessThanOrEqualTo(coverRect.right + 0.5));
   });
 
-  testWidgets('rating shows inside the tile', (tester) async {
+  testWidgets('rating shows below the cover', (tester) async {
     await pumpLibrary(tester, [
       core.Game(id: 'g1', title: 'Alpha', vndbRating: 75.0),
     ]);
@@ -233,10 +240,34 @@ void main() {
     await tester.pump();
     final coverRect = tester.getRect(find.byKey(const ValueKey('cover-g1')));
     final ratingRect = tester.getRect(find.text('VNDB Rating 7.5'));
-    expect(ratingRect.left, greaterThanOrEqualTo(coverRect.left - 0.5));
-    expect(ratingRect.right, lessThanOrEqualTo(coverRect.right + 0.5));
-    expect(ratingRect.top, greaterThanOrEqualTo(coverRect.top - 0.5));
-    expect(ratingRect.bottom, lessThanOrEqualTo(coverRect.bottom + 0.5));
+    expect(ratingRect.top,
+        greaterThanOrEqualTo(coverRect.bottom - 0.5));
+    expect(ratingRect.left,
+        moreOrLessEquals(coverRect.left, epsilon: 0.5));
+    expect(ratingRect.right,
+        lessThanOrEqualTo(coverRect.right + 0.5));
+  });
+
+  testWidgets('neighbouring covers are spaced 20px apart', (tester) async {
+    await pumpLibrary(tester, fakeGames(20));
+    final tiles = find.byType(GameCoverTile);
+    final firstDy = tester.getTopLeft(tiles.first).dy;
+    final row = <Rect>[];
+    for (var i = 0; i < tiles.evaluate().length; i++) {
+      if ((tester.getTopLeft(tiles.at(i)).dy - firstDy).abs() < 1) {
+        final cover = find.descendant(
+          of: tiles.at(i),
+          matching: find.byType(AspectRatio),
+        );
+        row.add(tester.getRect(cover));
+      }
+    }
+    expect(row.length, greaterThan(1));
+    row.sort((a, b) => a.left.compareTo(b.left));
+    for (var i = 1; i < row.length; i++) {
+      expect(row[i].left - row[i - 1].right,
+          moreOrLessEquals(20.0, epsilon: 0.5));
+    }
   });
 
   testWidgets('rating never ellipsizes at small or large cover widths',
