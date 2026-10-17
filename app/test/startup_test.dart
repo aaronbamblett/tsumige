@@ -142,6 +142,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.loads, 1);
-    expect(find.text('0 games'), findsOneWidget);
+    expect(find.text('Search visual novels…'), findsOneWidget);
   });
 }

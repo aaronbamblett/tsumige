@@ -20,6 +20,9 @@ import 'package:vnl/src/core/paths.dart' as core;
 import 'package:vnl/src/core/vndb.dart' as core;
 import 'package:vnl/src/features/library/data/library_repository.dart';
 import 'package:vnl/src/features/library/domain/cover_source.dart';
+import 'package:vnl/src/features/library/domain/selection.dart';
+import 'package:vnl/src/features/library/presentation/widgets/game_cover_tile.dart';
+import 'package:vnl/src/features/library/presentation/widgets/game_detail_pane.dart';
 import 'package:vnl/src/features/library/presentation/widgets/library_toolbar.dart';
 import 'package:vnl/src/utils/prefs/app_prefs.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
@@ -46,8 +49,12 @@ class ToolbarFakeRepository implements LibraryRepository {
       core.ThumbReport();
 }
 
-Future<void> pumpToolbar(WidgetTester tester, List<core.Game> games) async {
-  tester.view.physicalSize = const Size(1280, 800);
+Future<void> pumpToolbar(
+  WidgetTester tester,
+  List<core.Game> games, {
+  Size size = const Size(1280, 800),
+}) async {
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(() {
     tester.view.resetPhysicalSize();
@@ -85,155 +92,135 @@ List<core.Game> taggedGames() => [
       core.Game(id: 'g2', title: 'Beta', tags: ['Action']),
     ];
 
-void main() {
-  testWidgets('sort and tag dropdowns are labelled', (tester) async {
-    await pumpToolbar(tester, taggedGames());
-    final sortMenu = tester.widget<DropdownMenu<keys.SortField>>(
-      find.byType(DropdownMenu<keys.SortField>),
+List<core.Game> manyGames() => List.generate(
+      20,
+      (i) => core.Game(id: 'game-$i', title: 'Game $i'),
     );
-    final tagMenu = tester.widget<DropdownMenu<String?>>(
-      find.byType(DropdownMenu<String?>),
-    );
-    expect((sortMenu.label as Text).data, 'Sort by');
-    expect((tagMenu.label as Text).data, 'Tag');
-  });
 
-  Finder findSearchField() => find.byWidgetPredicate(
-        (widget) =>
-            widget is TextField && widget.decoration?.hintText == 'Search');
+void openPane(WidgetTester tester, String id) {
+  ProviderScope.containerOf(tester.element(find.byType(LibraryToolbar)))
+      .read(selectedGameIdProvider.notifier)
+      .select(id);
+}
 
-  testWidgets('search field draws one complete rounded border',
-      (tester) async {
-    await pumpToolbar(tester, taggedGames());
-    expect(findSearchField(), findsOneWidget);
-    final decorator = tester.widget<InputDecorator>(
-      find.descendant(
-        of: findSearchField(),
-        matching: find.byType(InputDecorator),
-      ).first,
-    );
-    final border = decorator.decoration.border;
-    expect(border, isA<OutlineInputBorder>());
-    expect(
-      (border as OutlineInputBorder).borderRadius,
-      const BorderRadius.all(Radius.circular(12)),
-    );
-    expect(
-      find.ancestor(
-        of: findSearchField(),
-        matching: find.byType(ClipRRect),
-      ),
-      findsNothing,
-    );
-  });
+Future<void> settle(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump();
+}
 
-  testWidgets('sort and tag dropdowns use dropdown arrows', (tester) async {
-    await pumpToolbar(tester, taggedGames());
-    final sortMenu = tester.widget<DropdownMenu<keys.SortField>>(
-      find.byType(DropdownMenu<keys.SortField>),
-    );
-    final tagMenu = tester.widget<DropdownMenu<String?>>(
-      find.byType(DropdownMenu<String?>),
-    );
-    expect(
-      (sortMenu.trailingIcon as Icon).icon,
-      Icons.arrow_drop_down_rounded,
-    );
-    expect(
-      (tagMenu.trailingIcon as Icon).icon,
-      Icons.arrow_drop_down_rounded,
-    );
-  });
-
-  testWidgets('sort and tag dropdowns do not take text focus', (tester) async {
-    await pumpToolbar(tester, taggedGames());
-    final sortMenu = tester.widget<DropdownMenu<keys.SortField>>(
-      find.byType(DropdownMenu<keys.SortField>),
-    );
-    final tagMenu = tester.widget<DropdownMenu<String?>>(
-      find.byType(DropdownMenu<String?>),
-    );
-    expect(sortMenu.requestFocusOnTap, isFalse);
-    expect(sortMenu.enableFilter, isFalse);
-    expect(sortMenu.enableSearch, isFalse);
-    expect(tagMenu.requestFocusOnTap, isFalse);
-    expect(tagMenu.enableFilter, isFalse);
-    expect(tagMenu.enableSearch, isFalse);
-    await tester.tap(find.byType(DropdownMenu<keys.SortField>));
-    await tester.pumpAndSettle();
-    expect(find.text('Title'), findsWidgets);
-    final editables = tester.widgetList<EditableText>(
-      find.descendant(
-        of: find.byType(DropdownMenu<keys.SortField>),
-        matching: find.byType(EditableText),
-      ),
-    );
-    for (final editable in editables) {
-      expect(editable.focusNode.hasPrimaryFocus, isFalse);
-    }
-    expect(
-      FocusManager.instance.primaryFocus?.context?.widget,
-      isNot(isA<EditableText>()),
-    );
-  });
-
-  testWidgets('sort and tag dropdowns keep the dropdown arrow when open',
-      (tester) async {
-    await pumpToolbar(tester, taggedGames());
-    for (final menu in [
-      tester.widget<DropdownMenu<keys.SortField>>(
-        find.byType(DropdownMenu<keys.SortField>),
-      ),
-      tester.widget<DropdownMenu<String?>>(
-        find.byType(DropdownMenu<String?>),
-      ),
-    ]) {
-      final selectedIcon = menu.selectedTrailingIcon as Icon?;
-      expect(
-        selectedIcon?.icon,
-        anyOf(isNull, Icons.arrow_drop_down_rounded),
+/// Right edge of the last cover in the first row.
+double lastCoverRight(WidgetTester tester) {
+  final tiles = find.byType(GameCoverTile);
+  final firstDy = tester.getTopLeft(tiles.first).dy;
+  var right = 0.0;
+  for (var i = 0; i < tiles.evaluate().length; i++) {
+    if ((tester.getTopLeft(tiles.at(i)).dy - firstDy).abs() < 1) {
+      final cover = find.descendant(
+        of: tiles.at(i),
+        matching: find.byType(AspectRatio),
       );
+      right = max(right, tester.getRect(cover).right);
     }
+  }
+  return right;
+}
+
+void main() {
+  testWidgets('sort and tag menus show their current values', (tester) async {
+    await pumpToolbar(tester, taggedGames());
+    expect(find.text('Added'), findsOneWidget);
+    expect(find.text('All tags'), findsOneWidget);
   });
 
   testWidgets('choosing Title sets the sort field', (tester) async {
     await pumpToolbar(tester, taggedGames());
-    await tester.tap(find.byType(DropdownMenu<keys.SortField>));
+    await tester.tap(find.text('Added'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Title').last);
-    await tester.pump();
+    await tester.pumpAndSettle();
     final container = ProviderScope.containerOf(
         tester.element(find.byType(LibraryToolbar)));
     expect(container.read(sortFieldProvider), keys.SortField.title);
+    expect(find.text('Title'), findsOneWidget);
   });
 
   testWidgets('choosing a tag filters, All tags clears', (tester) async {
     await pumpToolbar(tester, taggedGames());
     final container = ProviderScope.containerOf(
         tester.element(find.byType(LibraryToolbar)));
-    await tester.tap(find.byType(DropdownMenu<String?>));
+    await tester.tap(find.text('All tags'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Romance').last);
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(container.read(tagFilterProvider), 'Romance');
-    await tester.tap(find.byType(DropdownMenu<String?>));
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('toolbar-tag')),
+        matching: find.text('Romance'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Romance'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('All tags').last);
     await tester.pump();
     expect(container.read(tagFilterProvider), isNull);
   });
 
-  testWidgets('search, sort and tag share one height', (tester) async {
+  testWidgets('search is a plain hinted field with no label', (tester) async {
     await pumpToolbar(tester, taggedGames());
-    final fields = find.byType(TextField);
-    expect(fields, findsNWidgets(3));
-    final heights = [
-      for (var i = 0; i < 3; i++) tester.getSize(fields.at(i)).height,
-    ];
+    expect(find.text('Search visual novels…'), findsOneWidget);
+    expect(find.text('Search'), findsNothing);
+    expect(find.byKey(const ValueKey('toolbar-search')), findsOneWidget);
+  });
+
+  testWidgets('toolbar has no game count and no cover slider',
+      (tester) async {
+    await pumpToolbar(tester, manyGames());
+    expect(find.byType(Slider), findsNothing);
+    expect(find.textContaining('games'), findsNothing);
+    expect(find.textContaining(' of '), findsNothing);
+  });
+
+  testWidgets('pane open at 1000 wide: no overflow, search is 200 wide',
+      (tester) async {
+    await pumpToolbar(tester, manyGames(), size: const Size(1000, 640));
+    openPane(tester, 'game-0');
+    await settle(tester);
+    expect(tester.takeException(), isNull);
     expect(
-      heights.reduce(max) - heights.reduce(min),
-      lessThanOrEqualTo(1.0),
+      tester.getSize(find.byKey(const ValueKey('toolbar-search'))).width,
+      200,
     );
+  });
+
+  testWidgets('tag box ends on the last cover column at 1400 wide',
+      (tester) async {
+    await pumpToolbar(tester, manyGames(), size: const Size(1400, 980));
+    openPane(tester, 'game-0');
+    await settle(tester);
+    final tagRight =
+        tester.getRect(find.byKey(const ValueKey('toolbar-tag'))).right;
+    expect((tagRight - lastCoverRight(tester)).abs(), lessThanOrEqualTo(1.0));
+  });
+
+  testWidgets('settings box ends on the pane edge at 1400 wide',
+      (tester) async {
+    await pumpToolbar(tester, manyGames(), size: const Size(1400, 980));
+    openPane(tester, 'game-0');
+    await settle(tester);
+    final settingsRight =
+        tester.getRect(find.byKey(const ValueKey('toolbar-settings'))).right;
+    final paneRight = tester.getRect(find.byType(GameDetailPane)).right;
+    expect((settingsRight - paneRight).abs(), lessThanOrEqualTo(1.0));
+  });
+
+  testWidgets('settings box ends 12 px from the window edge with pane closed',
+      (tester) async {
+    await pumpToolbar(tester, manyGames(), size: const Size(1400, 980));
+    final settingsRight =
+        tester.getRect(find.byKey(const ValueKey('toolbar-settings'))).right;
+    expect(1400 - settingsRight, moreOrLessEquals(12, epsilon: 1.0));
   });
 
   testWidgets('no toolbar overflow at 480, 1280 and 1920 wide',

@@ -28,48 +28,36 @@ class LibraryGrid extends HookConsumerWidget {
   /// and the detail pane's top margin.
   static const topInset = 12.0;
 
-  /// Scrollbar thumb thickness. With the 20 px grid padding this leaves at
-  /// least 8 px between the last cover column and the thumb.
-  static const scrollbarThickness = 8.0;
-
-  /// Breathing room between the scrollbar and whatever is right of the grid:
-  /// the detail pane when open, the window edge when closed.
-  static const trailingGap = 8.0;
+  /// Cover columns end this far inside the viewport's left and right edges;
+  /// the scrollbar sits in the right inset. The toolbar aligns to the right one.
+  static const horizontalPadding = 20.0;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final coverWidth = ref.watch(coverWidthProvider);
     final scrollController = useScrollController();
     return Padding(
-      padding: const EdgeInsets.only(right: trailingGap),
-      child: ScrollbarTheme(
-        data: const ScrollbarThemeData(
-          thickness: WidgetStatePropertyAll(scrollbarThickness),
-          mainAxisMargin: topInset,
-        ),
-        child: Scrollbar(
+      padding: const EdgeInsets.only(top: topInset),
+      child: Scrollbar(
+        controller: scrollController,
+        thumbVisibility: true,
+        child: GridView.builder(
           controller: scrollController,
-          thumbVisibility: true,
-          child: Padding(
-            padding: const EdgeInsets.only(top: topInset),
-            child: GridView.builder(
-              controller: scrollController,
-              padding: const EdgeInsets.only(
-                left: 20,
-                right: 20,
-                bottom: 20,
-              ),
-              gridDelegate: GameCoverGridDelegate(
-                maxCrossAxisExtent: coverWidth.toDouble(),
-                crossAxisSpacing: 20,
-                mainAxisSpacing: 24,
-                titleExtent: gameTitleBlockHeight(context),
-              ),
-              itemCount: games.length,
-              itemBuilder: (context, index) =>
-                  GameCoverTile(game: games[index]),
-            ),
+          padding: const EdgeInsets.fromLTRB(
+            horizontalPadding,
+            0,
+            horizontalPadding,
+            20,
           ),
+          gridDelegate: GameCoverGridDelegate(
+            maxCrossAxisExtent: coverWidth.toDouble(),
+            crossAxisSpacing: 20,
+            mainAxisSpacing: 24,
+            titleExtent: gameTitleBlockHeight(context),
+          ),
+          itemCount: games.length,
+          itemBuilder: (context, index) =>
+              GameCoverTile(game: games[index]),
         ),
       ),
     );

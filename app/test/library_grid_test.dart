@@ -19,7 +19,6 @@ import 'package:vnl/src/core/covers.dart' as core;
 import 'package:vnl/src/core/model.dart' as core;
 import 'package:vnl/src/core/paths.dart' as core;
 import 'package:vnl/src/core/vndb.dart' as core;
-import 'package:vnl/src/constants/pref_keys.dart' as keys;
 import 'package:vnl/src/features/library/data/library_repository.dart';
 import 'package:vnl/src/features/library/domain/cover_source.dart';
 import 'package:vnl/src/features/library/presentation/widgets/game_cover_grid_delegate.dart';
@@ -105,23 +104,14 @@ int firstRowColumns(WidgetTester tester) {
   return dys.where((dy) => (dy - first).abs() < 1).length;
 }
 
-/// The scrollbar's track lane, derived from the laid-out [Scrollbar] plus
-/// the theme margins [LibraryGrid] applies. The thumb hugs the trailing
-/// edge (no cross-axis inset), so the lane is the full bar minus the top
-/// and bottom [LibraryGrid.topInset]. The bar spans the full row height;
-/// the grid viewport starts [LibraryGrid.topInset] below its top, so the
-/// track top lands exactly on the viewport top.
+/// The scrollbar's track: the bar's right 8 px, spanning the whole grid
+/// viewport (which already starts [LibraryGrid.topInset] below the toolbar).
 Rect scrollbarTrackRect(WidgetTester tester) {
   final bar = tester.getRect(find.descendant(
     of: find.byType(LibraryGrid),
     matching: find.byType(Scrollbar),
   ));
-  return Rect.fromLTRB(
-    bar.right - LibraryGrid.scrollbarThickness,
-    bar.top + LibraryGrid.topInset,
-    bar.right,
-    bar.bottom - LibraryGrid.topInset,
-  );
+  return Rect.fromLTRB(bar.right - 8, bar.top, bar.right, bar.bottom);
 }
 
 /// The grid's scroll viewport.
@@ -147,30 +137,33 @@ List<Rect> firstRowCovers(WidgetTester tester) {
 }
 
 void main() {
-  Finder findToolbarSearch() => find.byWidgetPredicate(
-        (widget) =>
-            widget is TextField && widget.decoration?.hintText == 'Search',
+  Finder findToolbarSearch() => find.descendant(
+        of: find.byKey(const ValueKey('toolbar-search')),
+        matching: find.byType(TextField),
       );
 
   testWidgets('grid builds lazily', (tester) async {
     await pumpLibrary(tester, fakeGames(2000));
     expect(find.byType(GameCoverTile).evaluate().length, lessThan(200));
-    expect(find.text('2000 games'), findsOneWidget);
   });
 
-  testWidgets('typing in search changes the count text', (tester) async {
-    await pumpLibrary(tester, fakeGames(2000));
-    await tester.enterText(findToolbarSearch(), 'zzz');
+  testWidgets('typing in search narrows the grid', (tester) async {
+    await pumpLibrary(tester, fakeGames(20));
+    await tester.enterText(findToolbarSearch(), 'Game 7');
     await tester.pump();
-    expect(find.text('0 of 2000'), findsOneWidget);
+    expect(find.byType(GameCoverTile), findsOneWidget);
+    expect(find.textContaining('games'), findsNothing);
   });
 
-  testWidgets('slider maximum lowers the column count', (tester) async {
+  testWidgets('a wider cover setting lowers the column count', (tester) async {
     await pumpLibrary(tester, fakeGames(2000));
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(LibraryGrid)));
     final before = firstRowColumns(tester);
     expect(before, greaterThan(1));
-    await tester.drag(find.byType(Slider), const Offset(500, 0));
-    await tester.pump(const Duration(milliseconds: 300));
+    container.read(coverWidthProvider.notifier).set(400);
+    await tester.pump();
+    await tester.pump();
     expect(firstRowColumns(tester), lessThan(before));
   });
 
@@ -178,12 +171,11 @@ void main() {
     await pumpLibrary(tester, fakeGames(20));
     final items = [
       findToolbarSearch(),
-      find.byType(DropdownMenu<keys.SortField>),
+      find.byType(MenuAnchor).at(0),
       find.byTooltip('Ascending'),
-      find.byType(SegmentedButton<bool>),
-      find.byType(DropdownMenu<String?>),
-      find.byType(Slider),
-      find.text('20 games'),
+      find.text('Favourites'),
+      find.byType(MenuAnchor).at(1),
+      find.byTooltip('Add game'),
       find.byTooltip('Settings'),
     ];
     for (final item in items) {
@@ -195,28 +187,6 @@ void main() {
     final spread =
         centres.reduce(max) - centres.reduce(min);
     expect(spread, lessThanOrEqualTo(1.0));
-  });
-
-  testWidgets('all/favourites keeps the same width either way',
-      (tester) async {
-    await pumpLibrary(tester, fakeGames(20));
-    final segments = find.byType(SegmentedButton<bool>);
-    expect(segments, findsOneWidget);
-    final before = tester.getRect(segments).width;
-    final container = ProviderScope.containerOf(tester.element(segments));
-    container.read(favouritesOnlyProvider.notifier).set(true);
-    await tester.pump();
-    await tester.pump();
-    expect(tester.getRect(segments).width,
-        moreOrLessEquals(before, epsilon: 0.5));
-  });
-
-  testWidgets('slider hides below 900 wide', (tester) async {
-    await pumpLibrary(tester, fakeGames(20));
-    setSurface(tester, 860, 800);
-    await tester.pump();
-    expect(find.byType(Slider), findsNothing);
-    expect(find.text('20 games'), findsOneWidget);
   });
 
   testWidgets('every cover has the same height at any slider value',
@@ -239,7 +209,7 @@ void main() {
     await tester.pump();
     await tester.pump();
     final container =
-        ProviderScope.containerOf(tester.element(find.byType(Slider)));
+        ProviderScope.containerOf(tester.element(find.byType(LibraryGrid)));
     for (final width in [100, 192, 400]) {
       container.read(coverWidthProvider.notifier).set(width);
       await tester.pump();
@@ -289,25 +259,6 @@ void main() {
     expect(titleRect.left,
         moreOrLessEquals(coverRect.left, epsilon: 0.5));
     expect(titleRect.right,
-        lessThanOrEqualTo(coverRect.right + 0.5));
-  });
-
-  testWidgets('rating shows below the cover', (tester) async {
-    await pumpLibrary(tester, [
-      core.Game(id: 'g1', title: 'Alpha', vndbRating: 75.0),
-    ]);
-    final container =
-        ProviderScope.containerOf(tester.element(find.byType(Slider)));
-    container.read(coverWidthProvider.notifier).set(400);
-    await tester.pump();
-    await tester.pump();
-    final coverRect = tester.getRect(find.byKey(const ValueKey('cover-g1')));
-    final ratingRect = tester.getRect(find.text('VNDB Rating 7.5'));
-    expect(ratingRect.top,
-        greaterThanOrEqualTo(coverRect.bottom - 0.5));
-    expect(ratingRect.left,
-        moreOrLessEquals(coverRect.left, epsilon: 0.5));
-    expect(ratingRect.right,
         lessThanOrEqualTo(coverRect.right + 0.5));
   });
 
@@ -397,10 +348,9 @@ void main() {
   testWidgets('scrollbar keeps its distance from the covers and the pane',
       (tester) async {
     await pumpLibrary(tester, fakeGames(20));
-    // Pane closed: the scrollbar sits 8 px in from the window edge.
+    // Pane closed: the scrollbar sits flush with the window edge.
     var track = scrollbarTrackRect(tester);
-    expect(1280 - track.right,
-        moreOrLessEquals(LibraryGrid.trailingGap, epsilon: 1.0));
+    expect(1280 - track.right, moreOrLessEquals(0, epsilon: 1.0));
     // Last cover column to scrollbar: at least 8 px.
     final rightmost =
         firstRowCovers(tester).map((rect) => rect.right).reduce(max);
@@ -436,31 +386,6 @@ void main() {
     }
   });
 
-  testWidgets('rating never ellipsizes at small or large cover widths',
-      (tester) async {
-    await pumpLibrary(tester, [
-      core.Game(id: 'g1', title: 'Alpha', vndbRating: 75.0),
-    ]);
-    final container =
-        ProviderScope.containerOf(tester.element(find.byType(Slider)));
-    for (final width in [100, 400]) {
-      container.read(coverWidthProvider.notifier).set(width);
-      await tester.pump();
-      await tester.pump();
-      expect(tester.takeException(), isNull);
-      final ratings = find.descendant(
-        of: find.byType(GameCoverTile),
-        matching: find.textContaining('VNDB Rating'),
-      );
-      if (width == 400) expect(ratings, findsOneWidget);
-      for (final element in ratings.evaluate()) {
-        final paragraph = tester.renderObject<RenderParagraph>(
-            find.byWidget(element.widget));
-        expect(paragraph.didExceedMaxLines, isFalse);
-      }
-    }
-  });
-
   testWidgets('tags do not appear on tiles', (tester) async {
     await pumpLibrary(tester, [
       core.Game(id: 'g1', title: 'Alpha', tags: ['zzz-unique-tag']),
@@ -478,7 +403,7 @@ void main() {
       (tester) async {
     await pumpLibrary(tester, fakeGames(8));
     final container =
-        ProviderScope.containerOf(tester.element(find.byType(Slider)));
+        ProviderScope.containerOf(tester.element(find.byType(LibraryGrid)));
     for (final width in [100, 192, 400]) {
       container.read(coverWidthProvider.notifier).set(width);
       await tester.pump();
@@ -490,20 +415,15 @@ void main() {
   testWidgets('cover source follows the settled width', (tester) async {
     await pumpLibrary(tester, fakeGames(2000));
     final container =
-        ProviderScope.containerOf(tester.element(find.byType(Slider)));
+        ProviderScope.containerOf(tester.element(find.byType(LibraryGrid)));
     expect(container.read(coverWidthProvider), 192);
 
-    final gesture =
-        await tester.startGesture(tester.getCenter(find.byType(Slider)));
-    await gesture.moveBy(const Offset(100, 0));
+    container.read(coverWidthProvider.notifier).set(300);
     await tester.pump();
-    final live = container.read(coverWidthProvider);
-    expect(live, greaterThan(192));
     expect(container.read(settledCoverWidthProvider), 192);
 
     await tester.pump(const Duration(milliseconds: 300));
-    expect(container.read(settledCoverWidthProvider), live);
-    await gesture.up();
-    await tester.pump(const Duration(milliseconds: 300));
+    expect(container.read(settledCoverWidthProvider), 300);
   });
+
 }

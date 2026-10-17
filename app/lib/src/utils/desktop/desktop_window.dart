@@ -16,10 +16,15 @@ import 'window_geometry.dart';
 import 'window_geometry_listener.dart';
 import 'window_geometry_store.dart';
 
-// Deliberately small so the window can shrink to the app's compact layout;
-// just large enough that it can't collapse to an unusable sliver.
-const kMinWindowSize = Size(300, 400);
+// Narrower than this and the toolbar's controls run into each other.
+const kMinWindowSize = Size(1000, 640);
 const kDefaultWindowSize = Size(1280, 900);
+
+typedef MinimumSizeSetter = Future<void> Function(Size size);
+
+/// Applies [kMinWindowSize] through [setter], which defaults to window_manager.
+Future<void> setMinimumWindowSize({MinimumSizeSetter? setter}) =>
+    (setter ?? windowManager.setMinimumSize)(kMinWindowSize);
 
 /// Initialise the desktop window: hide the OS title bar, restore the
 /// saved size/maximized state, and show only once Flutter is ready (no white
@@ -46,7 +51,7 @@ Future<void> initDesktopWindow(SharedPreferences prefs) async {
   );
 
   await windowManager.waitUntilReadyToShow(options, () async {
-    await windowManager.setMinimumSize(kMinWindowSize);
+    await setMinimumWindowSize();
     if (saved.maximized) {
       await windowManager.maximize();
     } else {

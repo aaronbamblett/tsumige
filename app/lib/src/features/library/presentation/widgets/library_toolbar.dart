@@ -4,6 +4,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -14,6 +16,7 @@ import '../../domain/cover_source.dart';
 import '../../domain/library_query.dart';
 import '../../../../utils/prefs/app_prefs.dart';
 import '../add_game/add_game_dialog.dart';
+import 'library_grid.dart';
 
 const Map<keys.SortField, String> sortFieldLabels = {
   keys.SortField.added: 'Added',
@@ -23,21 +26,32 @@ const Map<keys.SortField, String> sortFieldLabels = {
   keys.SortField.vndbRating: 'VNDB Rating',
 };
 
-const double _kFieldHeight = 40;
-const double _kDropdownWidth = 170;
+const double _kControlHeight = 40;
+const double _kGap = 10;
+const double _kSortWidth = 180;
+const double _kSegmentsWidth = 170;
+const double _kTagWidth = 180;
+const double _kSearchMinWidth = 200;
+const double _kAddWidth = 104;
+const double _kRightInset = 12;
 
-/// Search, sort, filters, entry count and the cover-size slider in one row.
-/// Scrolls horizontally only when too narrow to fit; at desktop widths every
-/// control is visible, with the count and settings pinned to the right.
+/// Width of the right group: Add, a gap, then Settings.
+const double _kRightGroupWidth = _kAddWidth + _kGap + _kControlHeight;
+
+/// Width the left group needs with the search box at its minimum.
+const double _kLeftGroupMinWidth =
+    _kSearchMinWidth + _kSortWidth + _kSegmentsWidth + _kTagWidth + 3 * _kGap;
+
+/// Search, sort, favourites and tag controls on the left; Add and Settings
+/// pinned right. [gridRight] is where the grid's last cover column ends, so
+/// the left group lines up with the covers. The left group stops short of
+/// the right group when the two would meet. The search box absorbs any
+/// slack and stops at its minimum; past that the left group can run past
+/// [gridRight].
 class LibraryToolbar extends ConsumerWidget {
-  const LibraryToolbar({
-    super.key,
-    required this.shown,
-    required this.total,
-  });
+  const LibraryToolbar({super.key, required this.gridRight});
 
-  final int shown;
-  final int total;
+  final double gridRight;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -47,161 +61,248 @@ class LibraryToolbar extends ConsumerWidget {
     final ascending = ref.watch(sortAscendingProvider);
     final favouritesOnly = ref.watch(favouritesOnlyProvider);
     final tagFilter = ref.watch(tagFilterProvider);
-    final coverWidth = ref.watch(coverWidthProvider);
-    final countText =
-        shown == total ? _count(total) : '$shown of $total';
-    final width = MediaQuery.sizeOf(context).width;
-    final searchWidth = (width * 0.25).clamp(160.0, 360.0);
     final scheme = Theme.of(context).colorScheme;
-    final restingBorder = const OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(12)),
-      borderSide: BorderSide.none,
-    );
-    final decoration = InputDecorationTheme(
-      filled: true,
-      fillColor: scheme.surfaceContainerHighest,
-      isDense: true,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      constraints: const BoxConstraints.tightFor(height: _kFieldHeight),
-      border: restingBorder,
-      enabledBorder: restingBorder,
-      disabledBorder: restingBorder,
-      focusedBorder: OutlineInputBorder(
-        borderRadius: const BorderRadius.all(Radius.circular(12)),
-        borderSide: BorderSide(color: scheme.primary, width: 2),
-      ),
-    );
     return SizedBox(
       height: 64,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: width - 24),
-            child: Row(
-              spacing: 12,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Row(
-                  spacing: 12,
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.center,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final leftEnd = math.min(
+            gridRight,
+            constraints.maxWidth - _kRightInset - _kRightGroupWidth - _kGap,
+          );
+          final leftWidth = math.max(
+            leftEnd - LibraryGrid.horizontalPadding,
+            _kLeftGroupMinWidth,
+          );
+          return Stack(
+            children: [
+              Positioned(
+                left: LibraryGrid.horizontalPadding,
+                top: 0,
+                bottom: 0,
+                width: leftWidth,
+                child: Row(
                   children: [
-                    SizedBox(
-                      width: searchWidth,
-                      child: _ToolbarSearchField(decoration: decoration),
-                    ),
-                    DropdownMenu<keys.SortField>(
-                      width: _kDropdownWidth,
-                      label: const Text('Sort by'),
-                      requestFocusOnTap: false,
-                      enableFilter: false,
-                      enableSearch: false,
-                      trailingIcon:
-                          const Icon(Icons.arrow_drop_down_rounded),
-                      selectedTrailingIcon:
-                          const Icon(Icons.arrow_drop_down_rounded),
-                      inputDecorationTheme: decoration,
-                      initialSelection: field,
-                      onSelected: (value) {
-                        if (value != null) {
-                          ref.read(sortFieldProvider.notifier).set(value);
-                        }
-                      },
-                      dropdownMenuEntries: [
-                        for (final entry in sortFieldLabels.entries)
-                          DropdownMenuEntry(
-                            value: entry.key,
-                            label: entry.value,
+                    const Expanded(child: _ToolbarSearchField()),
+                    const SizedBox(width: _kGap),
+                    _ToolbarBox(
+                      width: _kSortWidth,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: _SortMenu(
+                              field: field,
+                              onSelected: (value) => ref
+                                  .read(sortFieldProvider.notifier)
+                                  .set(value),
+                            ),
                           ),
-                      ],
-                    ),
-                    IconButton(
-                      tooltip: ascending ? 'Ascending' : 'Descending',
-                      icon: ascending
-                          ? const Icon(Icons.arrow_upward_rounded)
-                          : const Icon(Icons.arrow_downward_rounded),
-                      onPressed: () => ref
-                          .read(sortAscendingProvider.notifier)
-                          .set(!ascending),
-                    ),
-                    SegmentedButton<bool>(
-                      showSelectedIcon: false,
-                      segments: const [
-                        ButtonSegment(value: false, label: Text('All')),
-                        ButtonSegment(
-                            value: true, label: Text('Favourites')),
-                      ],
-                      selected: {favouritesOnly},
-                      onSelectionChanged: (selected) => ref
-                          .read(favouritesOnlyProvider.notifier)
-                          .set(selected.first),
-                    ),
-                    DropdownMenu<String?>(
-                      width: _kDropdownWidth,
-                      label: const Text('Tag'),
-                      requestFocusOnTap: false,
-                      enableFilter: false,
-                      enableSearch: false,
-                      trailingIcon:
-                          const Icon(Icons.arrow_drop_down_rounded),
-                      selectedTrailingIcon:
-                          const Icon(Icons.arrow_drop_down_rounded),
-                      inputDecorationTheme: decoration,
-                      initialSelection: tagFilter,
-                      onSelected: (value) => ref
-                          .read(tagFilterProvider.notifier)
-                          .set(value),
-                      dropdownMenuEntries: [
-                        const DropdownMenuEntry(
-                          value: null,
-                          label: 'All tags',
-                        ),
-                        for (final tag in tags)
-                          DropdownMenuEntry(
-                            value: tag,
-                            label: tag,
+                          Center(
+                            child: Container(
+                              width: 1,
+                              height: 22,
+                              color: scheme.outlineVariant,
+                            ),
                           ),
-                      ],
+                          Tooltip(
+                            message: ascending ? 'Ascending' : 'Descending',
+                            child: InkWell(
+                              onTap: () => ref
+                                  .read(sortAscendingProvider.notifier)
+                                  .set(!ascending),
+                              child: SizedBox(
+                                width: _kControlHeight,
+                                child: Icon(
+                                  ascending
+                                      ? Icons.arrow_upward_rounded
+                                      : Icons.arrow_downward_rounded,
+                                  size: 18,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
-                Row(
-                  spacing: 12,
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    if (width >= 900)
-                      SizedBox(
-                        width: 160,
-                        child: Slider(
-                          value: coverWidth.toDouble(),
-                          min: keys.coverWidthMin.toDouble(),
-                          max: keys.coverWidthMax.toDouble(),
-                          label: '$coverWidth',
-                          onChanged: (value) => ref
-                              .read(coverWidthProvider.notifier)
-                              .set(value.round()),
+                    const SizedBox(width: _kGap),
+                    _ToolbarBox(
+                      width: _kSegmentsWidth,
+                      child: Padding(
+                        padding: const EdgeInsets.all(3),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _Segment(
+                                label: 'All',
+                                selected: !favouritesOnly,
+                                onTap: () => ref
+                                    .read(favouritesOnlyProvider.notifier)
+                                    .set(false),
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            Expanded(
+                              child: _Segment(
+                                label: 'Favourites',
+                                selected: favouritesOnly,
+                                onTap: () => ref
+                                    .read(favouritesOnlyProvider.notifier)
+                                    .set(true),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    Text(countText),
-                    IconButton(
-                      tooltip: 'Add game',
-                      icon: const Icon(Icons.add_rounded),
-                      onPressed: () => showAddGameDialog(context),
                     ),
-                    IconButton(
-                      tooltip: 'Settings',
-                      icon: const Icon(Icons.settings_rounded),
-                      onPressed: () => context.push('/settings'),
+                    const SizedBox(width: _kGap),
+                    _ToolbarBox(
+                      key: const ValueKey('toolbar-tag'),
+                      width: _kTagWidth,
+                      child: _TagMenu(
+                        tags: tags,
+                        value: tagFilter,
+                        onSelected: (value) =>
+                            ref.read(tagFilterProvider.notifier).set(value),
+                      ),
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              Positioned(
+                right: _kRightInset,
+                top: 0,
+                bottom: 0,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _ToolbarBox(
+                      width: _kAddWidth,
+                      child: Tooltip(
+                        message: 'Add game',
+                        child: InkWell(
+                          onTap: () => showAddGameDialog(context),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(Icons.add_rounded, size: 18),
+                                SizedBox(width: 8),
+                                Text('Add'),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: _kGap),
+                    _ToolbarBox(
+                      key: const ValueKey('toolbar-settings'),
+                      width: _kControlHeight,
+                      child: Tooltip(
+                        message: 'Settings',
+                        child: InkWell(
+                          onTap: () => context.push('/settings'),
+                          child: const Icon(Icons.settings_rounded, size: 20),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// The shared control chrome: a 40 px box, 10 px radius, `surfaceContainer`
+/// fill and an `outlineVariant` border that brightens on hover.
+class _ToolbarBox extends StatefulWidget {
+  const _ToolbarBox({super.key, this.width, required this.child});
+
+  final double? width;
+  final Widget child;
+
+  @override
+  State<_ToolbarBox> createState() => _ToolbarBoxState();
+}
+
+class _ToolbarBoxState extends State<_ToolbarBox> {
+  var _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Container(
+        width: widget.width,
+        height: _kControlHeight,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainer,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: _hovered
+                ? scheme.onSurface.withValues(alpha: 0.18)
+                : scheme.outlineVariant,
+          ),
+        ),
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+class _SortMenu extends StatelessWidget {
+  const _SortMenu({required this.field, required this.onSelected});
+
+  final keys.SortField field;
+  final ValueChanged<keys.SortField> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return MenuAnchor(
+      style: const MenuStyle(
+        minimumSize: WidgetStatePropertyAll(Size(_kSortWidth, 0)),
+      ),
+      menuChildren: [
+        for (final entry in sortFieldLabels.entries)
+          MenuItemButton(
+            leadingIcon: entry.key == field
+                ? const Icon(Icons.check_rounded, size: 18)
+                : null,
+            onPressed: () => onSelected(entry.key),
+            child: Text(entry.value),
+          ),
+      ],
+      builder: (context, controller, _) => InkWell(
+        onTap: () => controller.isOpen ? controller.close() : controller.open(),
+        child: Padding(
+          padding: const EdgeInsets.only(left: 14, right: 10),
+          child: Row(
+            children: [
+              Icon(
+                Icons.sort_rounded,
+                size: 18,
+                color: scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: _kGap),
+              Expanded(
+                child: Text(
+                  sortFieldLabels[field]!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const Icon(Icons.arrow_drop_down_rounded, size: 22),
+            ],
           ),
         ),
       ),
@@ -209,14 +310,111 @@ class LibraryToolbar extends ConsumerWidget {
   }
 }
 
-String _count(int total) => total == 1 ? '1 game' : '$total games';
+class _TagMenu extends StatelessWidget {
+  const _TagMenu({
+    required this.tags,
+    required this.value,
+    required this.onSelected,
+  });
 
-/// Plain search field sharing the toolbar's [InputDecorationTheme]: one
-/// complete rounded border, hint text instead of a floating label.
+  final List<String> tags;
+  final String? value;
+  final ValueChanged<String?> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return MenuAnchor(
+      style: const MenuStyle(
+        minimumSize: WidgetStatePropertyAll(Size(_kTagWidth, 0)),
+        maximumSize: WidgetStatePropertyAll(Size(double.infinity, 360)),
+      ),
+      menuChildren: [
+        MenuItemButton(
+          leadingIcon: value == null
+              ? const Icon(Icons.check_rounded, size: 18)
+              : null,
+          onPressed: () => onSelected(null),
+          child: const Text('All tags'),
+        ),
+        for (final tag in tags)
+          MenuItemButton(
+            leadingIcon: tag == value
+                ? const Icon(Icons.check_rounded, size: 18)
+                : null,
+            onPressed: () => onSelected(tag),
+            child: Text(tag),
+          ),
+      ],
+      builder: (context, controller, _) => InkWell(
+        onTap: () => controller.isOpen ? controller.close() : controller.open(),
+        child: Padding(
+          padding: const EdgeInsets.only(left: 14, right: 10),
+          child: Row(
+            children: [
+              Icon(
+                Icons.local_offer_rounded,
+                size: 18,
+                color: scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: _kGap),
+              Expanded(
+                child: Text(
+                  value ?? 'All tags',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const Icon(Icons.arrow_drop_down_rounded, size: 22),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Segment extends StatelessWidget {
+  const _Segment({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      borderRadius: BorderRadius.circular(7),
+      onTap: onTap,
+      child: Container(
+        height: 32,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? scheme.primaryContainer : null,
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          style: TextStyle(
+            fontSize: 13.5,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            color: selected ? scheme.primary : scheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Plain search field: a search icon and hint text, no floating label.
 class _ToolbarSearchField extends ConsumerStatefulWidget {
-  const _ToolbarSearchField({required this.decoration});
-
-  final InputDecorationTheme decoration;
+  const _ToolbarSearchField();
 
   @override
   ConsumerState<_ToolbarSearchField> createState() =>
@@ -241,26 +439,43 @@ class _ToolbarSearchFieldState extends ConsumerState<_ToolbarSearchField> {
 
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      data: Theme.of(context)
-          .copyWith(inputDecorationTheme: widget.decoration),
-      child: TextField(
-        controller: _controller,
-        onChanged: (value) =>
-            ref.read(librarySearchProvider.notifier).set(value),
-        decoration: InputDecoration(
-          hintText: 'Search',
-          prefixIcon: const Icon(Icons.search_rounded),
-          suffixIcon: _controller.text.isEmpty
-              ? null
-              : IconButton(
-                  tooltip: 'Clear search',
-                  icon: const Icon(Icons.clear_rounded),
-                  onPressed: () {
-                    _controller.clear();
-                    ref.read(librarySearchProvider.notifier).set('');
-                  },
+    final scheme = Theme.of(context).colorScheme;
+    return _ToolbarBox(
+      key: const ValueKey('toolbar-search'),
+      child: Padding(
+        padding: const EdgeInsets.only(left: 14, right: 6),
+        child: Row(
+          children: [
+            Icon(
+              Icons.search_rounded,
+              size: 20,
+              color: scheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: _kGap),
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                onChanged: (value) =>
+                    ref.read(librarySearchProvider.notifier).set(value),
+                style: const TextStyle(fontSize: 14),
+                decoration: InputDecoration.collapsed(
+                  hintText: 'Search visual novels…',
+                  hintStyle: TextStyle(color: scheme.outline, fontSize: 14),
                 ),
+              ),
+            ),
+            if (_controller.text.isNotEmpty)
+              IconButton(
+                tooltip: 'Clear search',
+                visualDensity: VisualDensity.compact,
+                iconSize: 18,
+                icon: const Icon(Icons.clear_rounded),
+                onPressed: () {
+                  _controller.clear();
+                  ref.read(librarySearchProvider.notifier).set('');
+                },
+              ),
+          ],
         ),
       ),
     );

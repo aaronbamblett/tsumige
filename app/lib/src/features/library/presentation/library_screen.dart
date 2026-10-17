@@ -44,6 +44,10 @@ class _UmuBanner extends StatelessWidget {
   }
 }
 
+const double _kPaneWidth = 440;
+const double _kPaneMargin = 12;
+const double _kPaneSlotWidth = _kPaneWidth + 2 * _kPaneMargin;
+
 /// The library view: toolbar above a lazy cover grid. After the first frame
 /// with data it prints `startup_ms` and fills in missing thumbnails in the
 /// background, rebuilding tiles only when thumbnails were generated.
@@ -86,8 +90,6 @@ class LibraryScreen extends HookConsumerWidget {
       });
       return null;
     }, [libraryAsync.hasValue]);
-    final total =
-        libraryAsync.value?.library.games.length ?? games.length;
     final selected = ref.watch(selectedGameProvider);
     final defaultMode = ref.watch(launchModeProvider);
     final umuMissing = ref.watch(umuRunPathProvider) == null;
@@ -97,61 +99,63 @@ class LibraryScreen extends HookConsumerWidget {
             (game) => (game.launch.mode ?? defaultMode) == core.LaunchMode.proton);
     return Scaffold(
       body: SafeArea(
-        child: Column(
-          children: [
-            LibraryToolbar(shown: games.length, total: total),
-            SkippedBanner(
-              skipped:
-                  libraryAsync.value?.skipped ?? const [],
-            ),
-            if (umuMissing && usesProton) const _UmuBanner(),
-            Expanded(
-              child: Focus(
-                autofocus: true,
-                onKeyEvent: (node, event) {
-                  if (event is KeyDownEvent &&
-                      event.logicalKey == LogicalKeyboardKey.escape) {
-                    ref.read(selectedGameIdProvider.notifier).clear();
-                    return KeyEventResult.handled;
-                  }
-                  return KeyEventResult.ignored;
-                },
-                child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(child: LibraryGrid(games: games)),
-                      if (selected != null)
-                        Container(
-                          width: 400,
-                          margin: const EdgeInsets.only(
-                            top: LibraryGrid.topInset,
-                            left: 12,
-                            right: 12,
-                            bottom: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final gridWidth = constraints.maxWidth -
+                (selected == null ? 0 : _kPaneSlotWidth);
+            return Column(
+              children: [
+                LibraryToolbar(
+                  gridRight: gridWidth - LibraryGrid.horizontalPadding,
+                ),
+                SkippedBanner(
+                  skipped: libraryAsync.value?.skipped ?? const [],
+                ),
+                if (umuMissing && usesProton) const _UmuBanner(),
+                Expanded(
+                  child: Focus(
+                    autofocus: true,
+                    onKeyEvent: (node, event) {
+                      if (event is KeyDownEvent &&
+                          event.logicalKey == LogicalKeyboardKey.escape) {
+                        ref.read(selectedGameIdProvider.notifier).clear();
+                        return KeyEventResult.handled;
+                      }
+                      return KeyEventResult.ignored;
+                    },
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(child: LibraryGrid(games: games)),
+                        if (selected != null)
+                          Container(
+                            width: _kPaneWidth,
+                            margin: const EdgeInsets.all(_kPaneMargin),
+                            decoration: BoxDecoration(
                               color: Theme.of(context)
                                   .colorScheme
-                                  .outlineVariant,
-                              width: 1,
+                                  .surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .outlineVariant,
+                                width: 1,
+                              ),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: GameDetailPane(
+                              key: ValueKey(selected.id),
+                              game: selected,
                             ),
                           ),
-                          clipBehavior: Clip.antiAlias,
-                          child: GameDetailPane(
-                            key: ValueKey(selected.id),
-                            game: selected,
-                          ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-            ),
-          ],
+              ],
+            );
+          },
         ),
       ),
     );

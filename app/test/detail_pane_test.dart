@@ -23,6 +23,7 @@ import 'package:vnl/src/core/vndb.dart' as core;
 import 'package:vnl/src/features/library/data/library_repository.dart';
 import 'package:vnl/src/features/library/domain/cover_source.dart';
 import 'package:vnl/src/features/library/domain/game_editor.dart';
+import 'package:vnl/src/features/library/presentation/widgets/game_cover_tile.dart';
 import 'package:vnl/src/features/library/presentation/widgets/game_detail_pane.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
 
@@ -181,9 +182,9 @@ Future<void> tapSpoilerText(WidgetTester tester, String secret) async {
 }
 
 void main() {
-  Finder findToolbarSearch() => find.byWidgetPredicate(
-        (widget) =>
-            widget is TextField && widget.decoration?.hintText == 'Search',
+  Finder findToolbarSearch() => find.descendant(
+        of: find.byKey(const ValueKey('toolbar-search')),
+        matching: find.byType(TextField),
       );
 
   testWidgets('spoiler text is hidden until tapped, then shown',
@@ -453,12 +454,10 @@ void main() {
     expect(find.text('Alpha'), findsOneWidget);
   });
 
-  testWidgets('search field is at least 240 wide at 1280', (tester) async {
+  testWidgets('search field is at least 200 wide at 1280', (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
-    final searchBox = findToolbarSearch();
-    final width = tester.getSize(searchBox).width;
-    expect(width, greaterThanOrEqualTo(240));
-    expect(width, lessThanOrEqualTo(360));
+    final searchBox = find.byKey(const ValueKey('toolbar-search'));
+    expect(tester.getSize(searchBox).width, greaterThanOrEqualTo(200));
   });
 
   testWidgets('toolbar has no overflow at 480 and 1920', (tester) async {
@@ -481,7 +480,7 @@ void main() {
     await openPane(tester, 'Alpha');
     await tester.enterText(findToolbarSearch(), 'zzz');
     await tester.pump();
-    expect(find.text('0 of 2'), findsOneWidget);
+    expect(find.byType(GameCoverTile), findsNothing);
     expect(find.text('Alpha'), findsOneWidget);
   });
 
