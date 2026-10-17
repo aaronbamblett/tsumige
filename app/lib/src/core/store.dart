@@ -7,6 +7,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
@@ -117,6 +118,26 @@ Future<LoadedLibrary> loadLibrary(DataDir dir) async {
       stamp: await _stamp(file));
 }
 
+final Set<String> _backedUpRoots = <String>{};
+
+@visibleForTesting
+void resetBackupSessionForTest() => _backedUpRoots.clear();
+
+Future<void> _pruneBackups(DataDir dir) async {
+  final names = <String>[];
+  await for (final entry in dir.backups.list()) {
+    if (entry is! File) continue;
+    final name = p.basename(entry.path);
+    if (name.startsWith('library-') && name.endsWith('.json')) {
+      names.add(name);
+    }
+  }
+  names.sort();
+  while (names.length > 10) {
+    await File(p.join(dir.backups.path, names.removeAt(0))).delete();
+  }
+}
+
 Future<void> saveLibrary(DataDir dir, LoadedLibrary loaded) async {
   if (loaded.skipped.isNotEmpty) {
     throw SkippedEntriesPresent(loaded.skipped.length);
@@ -130,16 +151,20 @@ Future<void> saveLibrary(DataDir dir, LoadedLibrary loaded) async {
     if (await _stamp(file) != stamp) throw ChangedOnDisk(file.path);
   }
   if (await file.exists()) {
-    await dir.backups.create(recursive: true);
-    final base = _backupName(DateTime.now().toUtc());
-    var name = base;
-    var n = 2;
-    while (await File(p.join(dir.backups.path, name)).exists()) {
-      name = base.replaceFirst('.json', '-$n.json');
-      n++;
+    if (!_backedUpRoots.contains(dir.root)) {
+      await dir.backups.create(recursive: true);
+      final base = _backupName(DateTime.now().toUtc());
+      var name = base;
+      var n = 2;
+      while (await File(p.join(dir.backups.path, name)).exists()) {
+        name = base.replaceFirst('.json', '-$n.json');
+        n++;
+      }
+      await File(p.join(dir.backups.path, name))
+          .writeAsBytes(await file.readAsBytes());
+      await _pruneBackups(dir);
+      _backedUpRoots.add(dir.root);
     }
-    await File(p.join(dir.backups.path, name))
-        .writeAsBytes(await file.readAsBytes());
   } else {
     await file.parent.create(recursive: true);
   }

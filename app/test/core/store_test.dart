@@ -63,6 +63,8 @@ Game fullGame(String id) => Game(
     );
 
 void main() {
+  setUp(resetBackupSessionForTest);
+
   test('missing file loads empty', () async {
     final dir = await freshDir();
     final loaded = await loadLibrary(dir);
@@ -171,22 +173,75 @@ void main() {
     await expectLater(saveLibrary(dir, b), throwsA(isA<ChangedOnDisk>()));
   });
 
-  test('each save backs up the previous file', () async {
+  test('two saves in one session make exactly one backup', () async {
     final dir = await freshDir();
     final loaded = LoadedLibrary(library: Library(games: [fullGame(const Uuid().v4())]));
     await saveLibrary(dir, loaded);
     final first = await dir.libraryJson.readAsString();
     loaded.library.games.add(fullGame(const Uuid().v4()));
     await saveLibrary(dir, loaded);
-    final second = await dir.libraryJson.readAsString();
     loaded.library.games.add(fullGame(const Uuid().v4()));
     await saveLibrary(dir, loaded);
     final backups = await dir.backups.list().toList();
-    expect(backups, hasLength(2));
+    expect(backups, hasLength(1));
+    expect(await File(backups.single.path).readAsString(), equals(first));
+  });
+
+  test('a new session keeps the newest 10 and drops the oldest', () async {
+    final dir = await freshDir();
+    final loaded = LoadedLibrary(library: Library(games: [fullGame(const Uuid().v4())]));
+    await saveLibrary(dir, loaded);
+    final current = await dir.libraryJson.readAsString();
+    await dir.backups.create(recursive: true);
+    for (var i = 1; i <= 10; i++) {
+      final name = 'library-${i.toString().padLeft(2, '0')}.json';
+      await File('${dir.backups.path}/$name').writeAsString('old $i');
+    }
+    resetBackupSessionForTest();
+    loaded.library.games.add(fullGame(const Uuid().v4()));
+    await saveLibrary(dir, loaded);
+    final names = <String>[];
+    await for (final entry in dir.backups.list()) {
+      names.add(entry.path.split('/').last);
+    }
+    names.sort();
+    expect(names, hasLength(10));
+    expect(names, isNot(contains('library-01.json')));
+    expect(names, contains('library-02.json'));
     final contents = <String>{
-      for (final f in backups) await File(f.path).readAsString(),
+      for (final name in names)
+        await File('${dir.backups.path}/$name').readAsString(),
     };
-    expect(contents, equals({first, second}));
+    expect(contents, contains(current));
+    expect(contents, isNot(contains('old 1')));
+  });
+
+  test('a non-matching file in backups is never deleted', () async {
+    final dir = await freshDir();
+    final loaded = LoadedLibrary(library: Library(games: [fullGame(const Uuid().v4())]));
+    await saveLibrary(dir, loaded);
+    await dir.backups.create(recursive: true);
+    await File('${dir.backups.path}/notes.txt').writeAsString('keep me');
+    for (var i = 1; i <= 10; i++) {
+      final name = 'library-${i.toString().padLeft(2, '0')}.json';
+      await File('${dir.backups.path}/$name').writeAsString('old $i');
+    }
+    resetBackupSessionForTest();
+    loaded.library.games.add(fullGame(const Uuid().v4()));
+    await saveLibrary(dir, loaded);
+    expect(await File('${dir.backups.path}/notes.txt').readAsString(),
+        equals('keep me'));
+  });
+
+  test('a backup failure throws and leaves library.json unchanged', () async {
+    final dir = await freshDir();
+    final loaded = LoadedLibrary(library: Library(games: [fullGame(const Uuid().v4())]));
+    await saveLibrary(dir, loaded);
+    final before = await dir.libraryJson.readAsBytes();
+    await File(dir.backups.path).writeAsString('in the way');
+    loaded.library.games.add(fullGame(const Uuid().v4()));
+    await expectLater(saveLibrary(dir, loaded), throwsA(anything));
+    expect(await dir.libraryJson.readAsBytes(), equals(before));
   });
 
   test('nanosecond timestamps parse', () async {
