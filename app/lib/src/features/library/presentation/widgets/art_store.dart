@@ -4,12 +4,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:path/path.dart' as p;
 
 import '../../../../core/covers.dart';
 import '../../../../core/model.dart';
@@ -18,24 +16,25 @@ import '../../data/library_repository.dart';
 import '../../domain/cover_source.dart';
 import '../../domain/game_editor.dart';
 
+/// Stores [bytes] as the game's cover and records [source] (a VNDB url, or
+/// `file` for a local file). Image caches follow the file version, so no
+/// manual eviction is needed.
 Future<void> storeCoverBytes(
   BuildContext context,
   WidgetRef ref,
   Game game,
   List<int> bytes,
+  String source,
 ) async {
   final dir = ref.read(dataDirProvider);
   final name = await storeOriginal(dir, game.id, Uint8List.fromList(bytes));
   if (!context.mounted) return;
-  await ref
-      .read(gameEditorProvider)
-      .update(game.id, (g) => g.cover = name, context: context);
+  await ref.read(gameEditorProvider).update(game.id, (g) {
+    g.cover = name;
+    g.coverSource = source;
+  }, context: context);
   await generateThumbnails(dir, [(game.id, name)]);
   ref.invalidate(coverExistsProvider);
-  for (final width in thumbWidths) {
-    await FileImage(File(thumbPath(dir, game.id, width))).evict();
-  }
-  await FileImage(File(p.join(dir.coversOriginal.path, name))).evict();
 }
 
 Future<void> storeBackgroundBytes(
@@ -43,15 +42,16 @@ Future<void> storeBackgroundBytes(
   WidgetRef ref,
   Game game,
   List<int> bytes,
+  String source,
 ) async {
   final dir = ref.read(dataDirProvider);
   final name = await storeBackground(dir, game.id, Uint8List.fromList(bytes));
   if (!context.mounted) return;
-  await ref
-      .read(gameEditorProvider)
-      .update(game.id, (g) => g.background = name, context: context);
+  await ref.read(gameEditorProvider).update(game.id, (g) {
+    g.background = name;
+    g.backgroundSource = source;
+  }, context: context);
   ref.invalidate(coverExistsProvider);
-  await FileImage(File(p.join(dir.coversBackground.path, name))).evict();
 }
 
 /// Drops the pane background: its file moves to the trash folder and the
@@ -62,15 +62,11 @@ Future<void> clearBackground(
   Game game,
 ) async {
   final dir = ref.read(dataDirProvider);
-  final background = game.background;
   await trashBackground(dir, game);
-  if (background != null && background.isNotEmpty) {
-    await FileImage(File(p.join(dir.coversBackground.path, background)))
-        .evict();
-  }
   if (!context.mounted) return;
-  await ref
-      .read(gameEditorProvider)
-      .update(game.id, (g) => g.background = null, context: context);
+  await ref.read(gameEditorProvider).update(game.id, (g) {
+    g.background = null;
+    g.backgroundSource = null;
+  }, context: context);
   ref.invalidate(coverExistsProvider);
 }

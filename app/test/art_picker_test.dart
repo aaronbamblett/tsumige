@@ -55,14 +55,24 @@ const _shotTwo = {
   'dims': [1024, 768],
 };
 
-/// Canned VNDB answers for `/vn` and `/release`; every other host gets a PNG.
-/// [vndbFails] makes the `/vn` call answer 500.
-http.Client _fakeHttp({required bool Function() vndbFails}) {
+/// Canned VNDB answers for `/vn` and `/release`; every other host serves a
+/// PNG. [downloads] records each image url fetched. [brokenShot] makes the
+/// first screenshot answer with bytes that are not an image.
+http.Client _fakeHttp({
+  required bool Function() vndbFails,
+  bool Function()? brokenShot,
+  List<String>? downloads,
+}) {
   final png = Uint8List.fromList(
     img.encodePng(img.Image(width: 16, height: 16)),
   );
   return MockClient((request) async {
     if (request.url.host != 'api.vndb.org') {
+      final url = request.url.toString();
+      downloads?.add(url);
+      if (brokenShot != null && brokenShot() && url == _shotOne['url']) {
+        return http.Response('not an image', 200);
+      }
       return http.Response.bytes(
         png,
         200,
@@ -218,6 +228,9 @@ class _Harness {
 
 Finder _tile(String url) => find.byKey(ValueKey('art-$url'));
 
+Finder _pill(String url) =>
+    find.descendant(of: _tile(url), matching: find.text('Current'));
+
 List<String> _tileUrls(WidgetTester tester) => [
   for (final w in tester.widgetList(
     find.byWidgetPredicate(
@@ -235,6 +248,8 @@ Future<_Harness> _pumpDialog(
   String? vndbId = 'v900016',
   String? background,
   String? cover,
+  String? coverSource,
+  String? backgroundSource,
   bool Function()? vndbFails,
   Future<String?> Function()? picker,
 }) async {
@@ -248,6 +263,8 @@ Future<_Harness> _pumpDialog(
         vndbId: vndbId,
         cover: cover,
         background: background,
+        coverSource: coverSource,
+        backgroundSource: backgroundSource,
       );
   final loaded = core.LoadedLibrary(library: core.Library(games: [g]));
   final harness = _Harness(tester, temp, loaded);
@@ -295,7 +312,7 @@ void main() {
   );
 
   testWidgets(
-    'Save stores the picked cover and background and sets the field',
+    'Save stores the picked cover and background, recording their sources',
     (tester) async {
       final harness = await _pumpDialog(tester);
       final dir = harness.dir;
@@ -323,6 +340,8 @@ void main() {
         File(p.join(dir.coversBackground.path, 'g1.png')).existsSync(),
         isTrue,
       );
+      expect(harness.game.coverSource, _portrait['url']);
+      expect(harness.game.backgroundSource, _shotOne['url']);
       expect(find.byType(ArtPickerDialog), findsNothing);
     },
   );
@@ -350,6 +369,7 @@ void main() {
         isTrue,
       );
       expect(harness.game.background, isNull);
+      expect(harness.game.coverSource, 'file');
     },
   );
 
@@ -367,6 +387,7 @@ void main() {
         title: 'Sample Game',
         vndbId: 'v900016',
         background: 'g1.png',
+        backgroundSource: _shotOne['url'] as String,
       );
       final loaded = core.LoadedLibrary(library: core.Library(games: [game]));
       final harness = _Harness(tester, temp, loaded);
@@ -393,6 +414,7 @@ void main() {
             .any((e) => e.path.endsWith('background-g1.png')),
         isTrue,
       );
+      expect(harness.game.backgroundSource, isNull);
     },
   );
 
@@ -430,19 +452,6 @@ void main() {
     expect(_tileUrls(tester), contains(_main['url']));
   });
 
-  testWidgets('a portal file path is rejected with a toast', (tester) async {
-    await _pumpDialog(
-      tester,
-      vndbId: null,
-      picker: () async => '/run/user/1000/docs/c.png',
-    );
-    await tester.tap(find.text('From file…'));
-    await tester.pump();
-    await tester.pump();
-    expect(find.textContaining('Flatpak portal'), findsOneWidget);
-    await tester.pump(const Duration(seconds: 6));
-  });
-
   testWidgets('the Background note shows until a background is picked', (
     tester,
   ) async {
@@ -461,6 +470,19 @@ void main() {
       findsNothing,
     );
     expect(find.text('Use the cover'), findsOneWidget);
+  });
+
+  testWidgets('a portal file path is rejected with a toast', (tester) async {
+    await _pumpDialog(
+      tester,
+      vndbId: null,
+      picker: () async => '/run/user/1000/docs/c.png',
+    );
+    await tester.tap(find.text('From file…'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('Flatpak portal'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 6));
   });
 
   testWidgets('buttons are Brand buttons by type', (tester) async {
@@ -501,5 +523,118 @@ void main() {
       const Size(900, 576),
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'a retry after a failed background does not download the cover again',
+    (tester) async {
+      final downloads = <String>[];
+      var brokenShot = true;
+      final temp = Directory.systemTemp.createTempSync('vnl_art_picker_');
+      addTearDown(() => temp.deleteSync(recursive: true));
+      final game = core.Game(id: 'g1', title: 'Sample Game', vndbId: 'v900016');
+      final loaded = core.LoadedLibrary(library: core.Library(games: [game]));
+      final harness = _Harness(tester, temp, loaded);
+      await harness.open(
+        game: game,
+        http: _fakeHttp(
+          vndbFails: () => false,
+          brokenShot: () => brokenShot,
+          downloads: downloads,
+        ),
+      );
+      await settleVndb(tester);
+      await tester.tap(_tile(_portrait['url'] as String));
+      await tester.pump();
+      await tester.tap(find.text('Background'));
+      await tester.pump();
+      await tester.tap(_tile(_shotOne['url'] as String));
+      await tester.pump();
+      await tester.runAsync(() async {
+        await tester.tap(find.text('Save'));
+        await tester.pump();
+        for (var i = 0; i < 200 && game.cover == null; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 25));
+        }
+        for (var i = 0; i < 40; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 25));
+        }
+      });
+      await tester.pump();
+      expect(game.cover, 'g1.png');
+      expect(game.background, isNull);
+      expect(find.byType(ArtPickerDialog), findsOneWidget);
+      expect(find.textContaining("Couldn't use that image"), findsOneWidget);
+      await tester.pump(const Duration(seconds: 6));
+
+      brokenShot = false;
+      await runRealFlow(tester, () async {
+        await tester.tap(find.text('Save'));
+        await tester.pump();
+      }, () => game.background == 'g1.png');
+      expect(downloads.where((u) => u == _portrait['url']), hasLength(1));
+      expect(downloads.where((u) => u == _shotOne['url']), hasLength(2));
+      expect(game.backgroundSource, _shotOne['url']);
+      await tester.pump(const Duration(seconds: 6));
+    },
+  );
+
+  group('Current pill', () {
+    testWidgets(
+      'a migrated cover with no source is current on the VNDB main tile',
+      (tester) async {
+        await _pumpDialog(tester, cover: 'g1.png');
+        expect(_pill(_main['url'] as String), findsOneWidget);
+        expect(_pill(_portrait['url'] as String), findsNothing);
+      },
+    );
+
+    testWidgets('the recorded cover source is the current tile', (
+      tester,
+    ) async {
+      await _pumpDialog(
+        tester,
+        cover: 'g1.png',
+        coverSource: _portrait['url'] as String,
+      );
+      expect(_pill(_portrait['url'] as String), findsOneWidget);
+      expect(_pill(_main['url'] as String), findsNothing);
+    });
+
+    testWidgets('a local file cover marks no VNDB tile', (tester) async {
+      await _pumpDialog(tester, cover: 'g1.png', coverSource: 'file');
+      expect(find.text('Current'), findsNothing);
+    });
+
+    testWidgets(
+      'with no background the Background tab marks the cover source',
+      (tester) async {
+        await _pumpDialog(tester, cover: 'g1.png');
+        await tester.tap(find.text('Background'));
+        await tester.pump();
+        expect(_pill(_main['url'] as String), findsOneWidget);
+        expect(_pill(_shotOne['url'] as String), findsNothing);
+      },
+    );
+
+    testWidgets('the Background tab marks the background source', (
+      tester,
+    ) async {
+      await _pumpDialog(
+        tester,
+        cover: 'g1.png',
+        background: 'g1.png',
+        backgroundSource: _shotOne['url'] as String,
+      );
+      await tester.tap(find.text('Background'));
+      await tester.pump();
+      expect(_pill(_shotOne['url'] as String), findsOneWidget);
+      expect(_pill(_main['url'] as String), findsNothing);
+    });
+
+    testWidgets('a game with no cover shows no pill', (tester) async {
+      await _pumpDialog(tester);
+      expect(find.text('Current'), findsNothing);
+    });
   });
 }

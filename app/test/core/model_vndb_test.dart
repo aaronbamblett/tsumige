@@ -74,6 +74,26 @@ void main() {
     expect(old.cover, 'g5.png');
   });
 
+  test('art sources round-trip and are null in old files', () {
+    final game = Game(
+      id: 'g6',
+      cover: 'g6.png',
+      coverSource: 'https://t.vndb.org/cv/16/98416.jpg',
+      background: 'g6.jpg',
+      backgroundSource: 'file',
+    );
+    final json = jsonDecode(jsonEncode(game.toJson())) as Map<String, Object?>;
+    expect(json['cover_source'], 'https://t.vndb.org/cv/16/98416.jpg');
+    expect(json['background_source'], 'file');
+    final back = Game.fromJson(json);
+    expect(back.coverSource, 'https://t.vndb.org/cv/16/98416.jpg');
+    expect(back.backgroundSource, 'file');
+    final old = Game.fromJson({'id': 'g7', 'cover': 'g7.png', 'background': 'g7.jpg'});
+    expect(old.coverSource, isNull);
+    expect(old.backgroundSource, isNull);
+    expect(old.background, 'g7.jpg');
+  });
+
   test('a game saved without the new fields loads', () {
     final old = Game.fromJson({
       'id': 'g2',

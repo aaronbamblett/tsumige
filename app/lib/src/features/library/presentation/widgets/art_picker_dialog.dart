@@ -20,6 +20,7 @@ import '../../../../utils/toast.dart';
 import '../../data/library_repository.dart';
 import '../../domain/add_game.dart';
 import '../../domain/game_editor.dart';
+import 'art_image.dart';
 import 'art_overlay.dart';
 import 'art_store.dart';
 import 'library_toolbar.dart';
@@ -150,6 +151,13 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
     _ClearPick() => throw StateError('a cleared background has no bytes'),
   };
 
+  /// The VNDB url a pick came from, or `file` for a local file.
+  String _sourceOf(_Pick pick) => switch (pick) {
+    _RemotePick(:final art) => art.url,
+    _FilePick() => 'file',
+    _ClearPick() => throw StateError('a cleared background has no source'),
+  };
+
   Future<void> _save() async {
     final cover = _coverPick;
     final background = _backgroundPick;
@@ -165,14 +173,22 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
           ? null
           : await _bytesFor(background);
       if (!mounted) return;
-      if (coverBytes != null) {
-        await storeCoverBytes(context, ref, game, coverBytes);
+      if (cover != null && coverBytes != null) {
+        await storeCoverBytes(context, ref, game, coverBytes, _sourceOf(cover));
+        if (!mounted) return;
+        setState(() => _coverPick = null);
       }
       if (!mounted) return;
       if (background is _ClearPick) {
         await clearBackground(context, ref, game);
-      } else if (backgroundBytes != null) {
-        await storeBackgroundBytes(context, ref, game, backgroundBytes);
+      } else if (background != null && backgroundBytes != null) {
+        await storeBackgroundBytes(
+          context,
+          ref,
+          game,
+          backgroundBytes,
+          _sourceOf(background),
+        );
       }
       if (mounted) _close();
     } catch (e) {
@@ -377,6 +393,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
       ],
       columns: 5,
       aspectRatio: 3 / 4,
+      isCurrent: _isCurrentCover,
     );
   }
 
@@ -390,22 +407,40 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
           art.screenshots,
           columns: 3,
           aspectRatio: 440 / 340,
+          isCurrent: _isCurrentBackground,
         ),
         _section(
           'VNDB artwork',
           [?main, ...art.releaseImages.where((i) => !i.portrait)],
           columns: 3,
           aspectRatio: 440 / 340,
+          isCurrent: _isCurrentBackground,
         ),
       ],
     );
   }
+
+  /// Whether [art] is the cover or background the game uses now. A game with
+  /// a cover and no recorded source predates source tracking: its cover came
+  /// from VNDB's main image.
+  bool _isCurrentCover(ArtCandidate art) {
+    final source = widget.game.coverSource;
+    if (source != null) return art.url == source;
+    final hasCover = widget.game.cover?.isNotEmpty ?? false;
+    return hasCover && art.url == _candidates?.main?.url;
+  }
+
+  /// The pane shows the cover when no background is set.
+  bool _isCurrentBackground(ArtCandidate art) => _hasBackground
+      ? art.url == widget.game.backgroundSource
+      : _isCurrentCover(art);
 
   Widget _section(
     String label,
     List<ArtCandidate> items, {
     required int columns,
     required double aspectRatio,
+    required bool Function(ArtCandidate) isCurrent,
   }) {
     final scheme = Theme.of(context).colorScheme;
     final active = _activePick;
@@ -448,6 +483,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
                 key: ValueKey('art-${art.url}'),
                 art: art,
                 selected: active is _RemotePick && active.art.url == art.url,
+                current: isCurrent(art),
                 onTap: () => _setActivePick(_RemotePick(art)),
               ),
           ],
@@ -634,8 +670,8 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
     _ClearPick() => const SizedBox.shrink(),
   };
 
-  Widget _storedImage(String path) => Image.file(
-    File(path),
+  Widget _storedImage(String path) => Image(
+    image: artFileImage(File(path)),
     fit: BoxFit.cover,
     alignment: Alignment.topCenter,
     gaplessPlayback: true,
@@ -709,11 +745,13 @@ class _ArtTile extends StatefulWidget {
     super.key,
     required this.art,
     required this.selected,
+    required this.current,
     required this.onTap,
   });
 
   final ArtCandidate art;
   final bool selected;
+  final bool current;
   final VoidCallback onTap;
 
   @override
@@ -766,6 +804,25 @@ class _ArtTileState extends State<_ArtTile> {
                   ),
                 ),
               ),
+              if (widget.current)
+                Positioned(
+                  left: 6,
+                  top: 6,
+                  child: Container(
+                    height: 22,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: ArtOverlay.button,
+                      borderRadius: BorderRadius.circular(11),
+                      border: Border.all(color: ArtOverlay.buttonRing),
+                    ),
+                    child: const Text(
+                      'Current',
+                      style: TextStyle(fontSize: 11, color: OnImage.text),
+                    ),
+                  ),
+                ),
               if (art.width > 0 && art.height > 0)
                 Positioned(
                   right: 6,

@@ -16,6 +16,7 @@ import '../../../../../utils/theme/brand.dart';
 import '../../../data/library_repository.dart';
 import '../../../domain/cover_source.dart';
 import '../../../domain/selection.dart';
+import '../art_image.dart';
 import '../art_overlay.dart';
 import 'info_tab.dart';
 
@@ -214,8 +215,8 @@ class _OwnedCover extends ConsumerWidget {
         MediaQuery.devicePixelRatioOf(context);
     final source = coverSourceFor(game, dir, settled, exists);
     if (source == null) return const _NoCover();
-    return Image.file(
-      File(source.path),
+    return Image(
+      image: artFileImage(File(source.path)),
       fit: BoxFit.cover,
       gaplessPlayback: true,
       errorBuilder: (_, _, _) => const _NoCover(),

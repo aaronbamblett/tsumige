@@ -925,6 +925,39 @@ void main() {
     expect(_paneFileImage(coverPath), findsNothing);
   });
 
+  testWidgets('a background file replaced in place is drawn again', (
+    tester,
+  ) async {
+    late Directory temp;
+    final first = img.encodeJpg(img.Image(width: 16, height: 16));
+    await pumpLibrary(
+      tester,
+      [core.Game(id: 'g1', title: 'Alpha', cover: 'g1.png', background: 'g1.jpg')],
+      exposeTemp: (dir) {
+        temp = dir;
+        Directory(p.join(dir.path, 'covers', 'background'))
+            .createSync(recursive: true);
+        File(p.join(dir.path, 'covers', 'background', 'g1.jpg'))
+            .writeAsBytesSync(first);
+      },
+      exists: (path) => File(path).existsSync(),
+    );
+    final bgPath = p.join(temp.path, 'covers', 'background', 'g1.jpg');
+    await openPane(tester, 'Alpha');
+    final before = tester
+        .widget<Image>(_paneFileImage(bgPath))
+        .image;
+
+    File(bgPath).writeAsBytesSync(
+      img.encodeJpg(img.Image(width: 32, height: 24)),
+    );
+    await tester.tap(find.byTooltip('Favourite'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(tester.widget<Image>(_paneFileImage(bgPath)).image, isNot(before));
+  });
+
   testWidgets('the hero draws the cover when no background is set',
       (tester) async {
     late Directory temp;

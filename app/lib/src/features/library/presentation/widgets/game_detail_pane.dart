@@ -23,6 +23,7 @@ import '../../domain/game_editor.dart';
 import '../../domain/launch_actions.dart';
 import '../../domain/running_games.dart';
 import '../../domain/selection.dart';
+import 'art_image.dart';
 import 'art_overlay.dart';
 import 'art_picker_dialog.dart';
 import 'detail_tabs/history_tab.dart';
@@ -209,12 +210,11 @@ class GameDetailPane extends HookConsumerWidget {
     if (background != null && background.isNotEmpty) {
       final file = File(p.join(dir.coversBackground.path, background));
       if (exists(file.path)) {
-        return Image.file(
-          file,
+        return Image(
+          image: artFileImage(file, cacheWidth: physicalWidth),
           fit: BoxFit.cover,
           alignment: Alignment.topCenter,
           gaplessPlayback: true,
-          cacheWidth: physicalWidth,
           frameBuilder: (context, child, frame, _) =>
               frame == null ? const SizedBox.shrink() : child,
           errorBuilder: (_, _, _) => const SizedBox.shrink(),
@@ -228,19 +228,18 @@ class GameDetailPane extends HookConsumerWidget {
       fit: StackFit.expand,
       children: [
         if (exists(thumb))
-          Image.file(
-            File(thumb),
+          Image(
+            image: artFileImage(File(thumb)),
             fit: BoxFit.cover,
             alignment: Alignment.topCenter,
             gaplessPlayback: true,
             errorBuilder: (_, _, _) => const SizedBox.shrink(),
           ),
-        Image.file(
-          original,
+        Image(
+          image: artFileImage(original, cacheWidth: physicalWidth),
           fit: BoxFit.cover,
           alignment: Alignment.topCenter,
           gaplessPlayback: true,
-          cacheWidth: physicalWidth,
           frameBuilder: (context, child, frame, _) =>
               frame == null ? const SizedBox.shrink() : child,
           errorBuilder: (_, _, _) => const SizedBox.shrink(),

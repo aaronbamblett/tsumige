@@ -14,6 +14,7 @@ import '../../../../core/model.dart';
 import '../../data/library_repository.dart';
 import '../../domain/cover_source.dart';
 import '../../domain/selection.dart';
+import 'art_image.dart';
 import 'art_overlay.dart';
 import 'game_cover_grid_delegate.dart';
 
@@ -104,17 +105,19 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
     // Thumbnails decode at their own size, keeping a stable image-cache key
     // while the slider moves. Only the original decodes at the settled width.
     final image = source.isThumbnail
-        ? Image.file(
-            file,
+        ? Image(
+            image: artFileImage(file),
             fit: BoxFit.cover,
             gaplessPlayback: true,
             errorBuilder: (_, _, _) => const Center(child: Text('No cover')),
           )
-        : Image.file(
-            file,
+        : Image(
+            image: artFileImage(
+              file,
+              cacheWidth: settledPhysical.round().clamp(1, 1 << 16),
+            ),
             fit: BoxFit.cover,
             gaplessPlayback: true,
-            cacheWidth: settledPhysical.round().clamp(1, 1 << 16),
             errorBuilder: (_, _, _) => const Center(child: Text('No cover')),
           );
     return image;
