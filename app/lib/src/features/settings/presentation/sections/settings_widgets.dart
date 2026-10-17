@@ -401,6 +401,7 @@ class _SettingsTextBoxState extends State<SettingsTextBox> {
         textAlignVertical: multiline
             ? TextAlignVertical.top
             : TextAlignVertical.center,
+        strutStyle: StrutStyle.disabled,
         decoration: InputDecoration(
           hintText: widget.hint,
           hintStyle: theme.textTheme.bodyMedium?.copyWith(
@@ -408,9 +409,7 @@ class _SettingsTextBoxState extends State<SettingsTextBox> {
           ),
           isDense: true,
           border: InputBorder.none,
-          contentPadding: multiline
-              ? EdgeInsets.zero
-              : const EdgeInsets.symmetric(vertical: 10),
+          contentPadding: const EdgeInsets.symmetric(vertical: 10),
         ),
         onSubmitted: widget.onSubmitted,
       ),

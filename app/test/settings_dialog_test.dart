@@ -585,4 +585,44 @@ void main() {
     await tester.pump();
     expect(tester.getCenter(editable).dy, closeTo(box.dy, 2));
   });
+
+  testWidgets('prefix text baseline matches a dropdown value', (tester) async {
+    await pumpSettings(tester, SettingsFakeRepository());
+    await openSection(tester, 'launching');
+    await tester.pumpAndSettle();
+    double baselineInBox(Finder text, Finder box) {
+      final r = tester.renderObject<RenderBox>(text);
+      final b = tester.renderObject<RenderBox>(box);
+      final baseline = r
+          .localToGlobal(
+            Offset(
+              0,
+              r.getDryBaseline(
+                BoxConstraints.tight(r.size),
+                TextBaseline.alphabetic,
+              )!,
+            ),
+          )
+          .dy;
+      return baseline - b.localToGlobal(Offset.zero).dy;
+    }
+
+    final field = baselineInBox(
+      find.descendant(
+        of: find.byKey(const Key('settings-prefix')),
+        matching: find.byType(EditableText),
+      ),
+      find.byKey(const Key('settings-prefix')),
+    );
+    final dropdown = baselineInBox(
+      find
+          .descendant(
+            of: find.byKey(const Key('settings-locale')),
+            matching: find.byType(Text),
+          )
+          .first,
+      find.byKey(const Key('settings-locale')),
+    );
+    expect(field, closeTo(dropdown, 1));
+  });
 }
