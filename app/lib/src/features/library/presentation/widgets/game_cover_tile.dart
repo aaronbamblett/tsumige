@@ -81,8 +81,8 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
       splashColor: Colors.transparent,
       focusColor: Colors.transparent,
       focusNode: _focusNode,
+      onTapDown: (_) => setState(() => _pointerFocused = true),
       onTap: () {
-        setState(() => _pointerFocused = true);
         _focusNode.requestFocus();
         final selection = ref.read(selectedGameIdProvider.notifier);
         if (selected) {

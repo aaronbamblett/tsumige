@@ -628,6 +628,27 @@ void main() {
       expect(coverDecoration(tester, 'game-0'), isNull);
     });
 
+    testWidgets('keyboard Enter keeps the focus ring after deselecting', (
+      tester,
+    ) async {
+      await pumpLibrary(tester, fakeGames(20));
+      await tabToTile(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      final id = focusedTileId()!;
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(GameDetailPane), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(GameDetailPane), findsNothing);
+      expect(focusedTileId(), id);
+      final border = coverDecoration(tester, id)!.border! as Border;
+      expect(border.top.width, 2);
+    });
+
     testWidgets('Enter and Space toggle selection on a focused tile', (
       tester,
     ) async {
