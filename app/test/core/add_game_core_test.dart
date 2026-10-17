@@ -110,6 +110,22 @@ void main() {
     expect(game.vndbDataFetchedAt, isNull);
   });
 
+  test('rankSearchResults puts the exact title first, then prefix matches', () {
+    VnSearchResult vn(String id, String title) =>
+        VnSearchResult(id: id, title: title);
+    final ranked = rankSearchResults([
+      vn('v1', 'a(t)rium'),
+      vn('v2', 'A Trick of the Mind'),
+      vn('v3', 'Demo Story -First Light-'),
+    ], 'demo');
+    expect([for (final r in ranked) r.id], ['v3', 'v1', 'v2']);
+    final exact = rankSearchResults([
+      vn('v1', 'Demo Story -First Light-'),
+      vn('v2', 'Demo'),
+    ], ' demo ');
+    expect([for (final r in exact) r.id], ['v2', 'v1']);
+  });
+
   test('parseTagsField trims, drops empties and dedupes', () {
     expect(parseTagsField('Romance, sci-fi ,Romance,,  '),
         ['Romance', 'sci-fi']);

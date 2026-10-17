@@ -44,6 +44,25 @@ Game gameFromVn(VnSearchResult r,
   );
 }
 
+/// Orders VNDB search results: an exact title match first, then titles that
+/// start with the query, keeping VNDB's order within each group.
+List<VnSearchResult> rankSearchResults(
+    List<VnSearchResult> results, String query) {
+  final q = query.trim().toLowerCase();
+  int rank(VnSearchResult result) {
+    final title = result.title.trim().toLowerCase();
+    if (title == q) return 0;
+    return title.startsWith(q) ? 1 : 2;
+  }
+
+  final order = List<int>.generate(results.length, (i) => i)
+    ..sort((a, b) {
+      final byRank = rank(results[a]).compareTo(rank(results[b]));
+      return byRank != 0 ? byRank : a.compareTo(b);
+    });
+  return [for (final i in order) results[i]];
+}
+
 /// Fills the VNDB data for a game just picked from search. A failed fetch
 /// leaves the basic fields from the search result in place.
 Future<void> fillVndbMetadata(Game game, VndbClient client,

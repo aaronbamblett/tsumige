@@ -24,6 +24,7 @@ import 'package:vnl/src/features/library/data/library_repository.dart';
 import 'package:vnl/src/features/library/domain/add_game.dart';
 import 'package:vnl/src/features/library/domain/selection.dart';
 import 'package:vnl/src/features/library/presentation/add_game/add_game_dialog.dart';
+import 'package:vnl/src/features/library/presentation/widgets/detail_tabs/info_tab.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
 import 'package:vnl/src/utils/theme/brand.dart';
 
@@ -121,8 +122,9 @@ Uint8List _png() => img.encodePng(img.Image(width: 8, height: 8));
 Future<(_FakeRepository, _Http, ProviderContainer)> _pump(
     WidgetTester tester,
     {List<core.Game> games = const [],
-    List<Map<String, Object?>> rows = const []}) async {
-  tester.view.physicalSize = const Size(1280, 800);
+    List<Map<String, Object?>> rows = const [],
+    Size surface = const Size(1280, 800)}) async {
+  tester.view.physicalSize = surface;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(() {
     tester.view.resetPhysicalSize();
@@ -175,7 +177,7 @@ Future<void> _search(
 // find.text also matches the search field's editable text, so row taps must
 // be scoped to the result list.
 Finder _resultRow(String title) => find.descendant(
-      of: find.byType(ListTile),
+      of: find.byType(ListView),
       matching: find.text(title),
     );
 
@@ -226,7 +228,7 @@ void main() {
     expect(find.text('Demo'), findsOneWidget);
     expect(find.textContaining('2020'), findsOneWidget);
     expect(find.textContaining('Sample Studio'), findsOneWidget);
-    expect(find.text('VNDB Rating 8.5'), findsOneWidget);
+    expect(find.text('★ 8.5'), findsOneWidget);
   });
 
   testWidgets('an In library result cannot be picked', (tester) async {
@@ -257,22 +259,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(
         tester
-            .widget<TextField>(find.byKey(const Key('add-game-title')))
+            .widget<TextField>(find.descendant(
+                of: find.byKey(const Key('add-game-title')),
+                matching: find.byType(TextField)))
             .controller!
             .text,
         'DEMO');
+    expect(find.byKey(const Key('add-game-description')), findsNothing);
     expect(
-        tester
-            .widget<TextField>(find.byKey(const Key('add-game-description')))
-            .controller!
-            .text,
-        'A story.');
+        find.text(
+            'Description, VNDB tags and art come from VNDB. Launch '
+            'settings can be changed later in the Launch tab.'),
+        findsOneWidget);
     expect(
-        tester
-            .widget<TextField>(find.byKey(const Key('add-game-tags')))
-            .controller!
-            .text,
-        'Romance');
+        find.descendant(
+            of: find.byType(TagChip), matching: find.text('Romance')),
+        findsOneWidget);
     expect(find.widgetWithText(BrandButton, 'Add'), findsOneWidget);
     expect(find.widgetWithText(BrandGlassButton, 'Back'), findsOneWidget);
   });
@@ -399,6 +401,38 @@ void main() {
     expect(fake.games.single.cover, isNull);
     expect(find.text('Added DEMO (cover download failed)'), findsOneWidget);
     await _drainToast(tester);
+  });
+
+  testWidgets('Add without VNDB opens step 2 with a placeholder cover',
+      (tester) async {
+    await _pump(tester);
+    await tester.tap(find.byKey(const Key('add-game-manual')));
+    await tester.pumpAndSettle();
+    expect(find.text('Set it up'), findsOneWidget);
+    expect(find.byKey(const Key('add-game-description')), findsOneWidget);
+    expect(find.text('New game'), findsOneWidget);
+    expect(find.byIcon(Icons.image_not_supported_outlined), findsOneWidget);
+    expect(find.widgetWithText(BrandGlassButton, 'Back'), findsOneWidget);
+    expect(find.widgetWithText(BrandGlassButton, 'Cancel'), findsOneWidget);
+  });
+
+  testWidgets('the dialog is 960 by 720 at 1400 by 980', (tester) async {
+    await _pump(tester, surface: const Size(1400, 980));
+    expect(tester.getSize(find.byKey(const Key('add-game-frame'))),
+        const Size(960, 720));
+  });
+
+  testWidgets('nothing overflows in the dialog at 1000 by 640',
+      (tester) async {
+    final (_, http, _) = await _pump(tester,
+        surface: const Size(1000, 640),
+        rows: [_row('v900017', 'DEMO', imageUrl: null, tags: ['Romance'])]);
+    expect(tester.takeException(), isNull);
+    await _search(tester, 'DEMO', http);
+    expect(tester.takeException(), isNull);
+    await tester.tap(_resultRow('DEMO'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('the manual path requires a title', (tester) async {

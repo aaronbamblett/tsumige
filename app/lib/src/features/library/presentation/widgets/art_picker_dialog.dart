@@ -5,10 +5,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:path/path.dart' as p;
 
@@ -24,21 +22,16 @@ import '../../domain/game_editor.dart';
 import 'art_image.dart';
 import 'art_overlay.dart';
 import 'art_store.dart';
+import 'dialog_shell.dart';
 import 'library_toolbar.dart';
 
 /// Opens the Cover and Background picker over the current screen.
 Future<void> showArtPickerDialog(BuildContext context, Game game) {
-  final window = MediaQuery.sizeOf(context);
   return showDialog<void>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.5),
-    builder: (context) => ArtPickerDialog(
-      game: game,
-      size: Size(
-        math.min(960.0, window.width * 0.9),
-        math.min(720.0, window.height * 0.9),
-      ),
-    ),
+    builder: (context) =>
+        ArtPickerDialog(game: game, size: dialogShellSize(context)),
   );
 }
 
@@ -201,91 +194,21 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Dialog(
-      insetPadding: EdgeInsets.zero,
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      child: Container(
-        key: const Key('art-picker'),
-        width: widget.size.width,
-        height: widget.size.height,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainer,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: scheme.outlineVariant),
-        ),
-        child: Focus(
-          autofocus: true,
-          onKeyEvent: (node, event) {
-            if (event is KeyDownEvent &&
-                event.logicalKey == LogicalKeyboardKey.escape) {
-              _close();
-              return KeyEventResult.handled;
-            }
-            return KeyEventResult.ignored;
-          },
-          child: Column(
-            children: [
-              _header(context),
-              Divider(height: 1, color: scheme.outlineVariant),
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(child: _left()),
-                    _preview(context),
-                  ],
-                ),
-              ),
-              Divider(height: 1, color: scheme.outlineVariant),
-              _footer(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _header(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 14, 12, 14),
-      child: Row(
+    return DialogShell(
+      frameKey: const Key('art-picker'),
+      size: widget.size,
+      eyebrow: 'Change art',
+      title: widget.game.title,
+      onClose: _close,
+      closeKey: const Key('art-picker-close'),
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Change art',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-                Text(
-                  widget.game.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            key: const Key('art-picker-close'),
-            tooltip: 'Close',
-            icon: const Icon(Icons.close_rounded),
-            onPressed: _close,
-          ),
+          Expanded(child: _left()),
+          _preview(context),
         ],
       ),
+      footer: _footer(),
     );
   }
 
