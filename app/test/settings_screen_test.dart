@@ -11,12 +11,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path/path.dart' as p;
 import 'package:vnl/src/core/covers.dart' as core;
+import 'package:vnl/src/core/launch/detect.dart' as detect;
 import 'package:vnl/src/core/model.dart' as core;
 import 'package:vnl/src/core/paths.dart' as core;
 import 'package:vnl/src/core/store.dart' as core;
 import 'package:vnl/src/core/vndb.dart' as core;
 import 'package:vnl/src/features/library/data/library_repository.dart';
+import 'package:vnl/src/features/library/domain/game_editor.dart';
+import 'package:vnl/src/features/library/domain/runner_detection.dart';
 import 'package:vnl/src/features/settings/presentation/appearance/widgets/app_theme_selector/app_theme_selector.dart';
 import 'package:vnl/src/features/settings/presentation/appearance/widgets/is_true_black/is_true_black_tile.dart';
 import 'package:vnl/src/features/settings/presentation/settings_screen.dart';
@@ -76,6 +80,10 @@ Future<ProviderContainer> pumpSettings(
   WidgetTester tester,
   SettingsFakeRepository repo, {
   core.DataDir? dir,
+  List<detect.ProtonRunner> protonRunners = const [],
+  Future<String?> Function({String? initialDirectory, PathPickMode mode})?
+      pathPicker,
+  List<Uri>? openedUris,
 }) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
@@ -85,6 +93,13 @@ Future<ProviderContainer> pumpSettings(
       dataDirProvider
           .overrideWithValue(dir ?? core.DataDir('/tmp/vnl_test')),
       libraryRepositoryProvider.overrideWithValue(repo),
+      protonRunnersProvider.overrideWith((ref) => Future.value(protonRunners)),
+      if (pathPicker != null)
+        pathPickerProvider.overrideWithValue(pathPicker),
+      folderOpenerProvider.overrideWithValue((uri) async {
+        openedUris?.add(uri);
+        return true;
+      }),
     ],
     child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -100,6 +115,15 @@ Future<ProviderContainer> pumpSettings(
 
 Finder refreshTile() =>
     find.widgetWithText(ListTile, 'Refresh VNDB ratings');
+
+void setTallSurface(WidgetTester tester) {
+  tester.view.physicalSize = const Size(1280, 4000);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+}
 
 void main() {
   testWidgets('refresh tile disabled while running', (tester) async {
@@ -209,5 +233,118 @@ void main() {
     expect(find.byType(ThemeSelector), findsOneWidget);
     expect(find.byType(IsTrueBlackTile), findsOneWidget);
     expect(find.byType(CustomColorTile), findsNothing);
+  });
+
+  testWidgets('default mode dropdown writes the pref', (tester) async {
+    setTallSurface(tester);
+    final container =
+        await pumpSettings(tester, SettingsFakeRepository());
+    expect(container.read(launchModeProvider), core.LaunchMode.proton);
+    await tester.tap(find.byKey(const Key('settings-default-mode')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Wine').last);
+    await tester.pumpAndSettle();
+    expect(container.read(launchModeProvider), core.LaunchMode.wine);
+  });
+
+  testWidgets('default prefix text writes the pref, portal is rejected',
+      (tester) async {
+    setTallSurface(tester);
+    final container =
+        await pumpSettings(tester, SettingsFakeRepository());
+    final field = find.byKey(const Key('settings-default-prefix'));
+    await tester.enterText(field, '/games/prefix');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump();
+    expect(container.read(launchPrefixProvider), '/games/prefix');
+
+    await tester.enterText(field, '/run/user/1000/prefix');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump();
+    expect(container.read(launchPrefixProvider), '/games/prefix');
+    await tester.pump(const Duration(seconds: 6));
+  });
+
+  testWidgets('default prefix picker writes the pref', (tester) async {
+    setTallSurface(tester);
+    final container = await pumpSettings(tester, SettingsFakeRepository(),
+        pathPicker: ({String? initialDirectory, PathPickMode mode = PathPickMode.file}) async => '/picked/prefix');
+    final button = find.byKey(const Key('settings-default-prefix-choose'));
+    await tester.tap(button);
+    await tester.pump();
+    await tester.pump();
+    expect(container.read(launchPrefixProvider), '/picked/prefix');
+  });
+
+  testWidgets('default Proton runner dropdown writes the pref',
+      (tester) async {
+    setTallSurface(tester);
+    final container = await pumpSettings(tester, SettingsFakeRepository(),
+        protonRunners: const [
+          detect.ProtonRunner(name: 'GE-9', path: '/steam/ge-9'),
+        ]);
+    expect(container.read(launchRunnerProvider), isNull);
+    await tester.tap(find.byKey(const Key('settings-default-runner')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('GE-9').last);
+    await tester.pumpAndSettle();
+    expect(container.read(launchRunnerProvider), '/steam/ge-9');
+  });
+
+  testWidgets('default Proton runner custom shows a field', (tester) async {
+    setTallSurface(tester);
+    await pumpSettings(tester, SettingsFakeRepository());
+    await tester.tap(find.byKey(const Key('settings-default-runner')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Custom…').last);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('settings-default-runner-custom')),
+        findsOneWidget);
+  });
+
+  testWidgets('default locale dropdown writes the pref', (tester) async {
+    setTallSurface(tester);
+    final container =
+        await pumpSettings(tester, SettingsFakeRepository());
+    await tester.tap(find.byKey(const Key('settings-default-locale')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ko_KR.UTF-8').last);
+    await tester.pumpAndSettle();
+    expect(container.read(launchLocaleProvider), 'ko_KR.UTF-8');
+  });
+
+  testWidgets('default UMU id writes the pref', (tester) async {
+    setTallSurface(tester);
+    final container =
+        await pumpSettings(tester, SettingsFakeRepository());
+    final field = find.byKey(const Key('settings-default-umu'));
+    await tester.enterText(field, 'umu-test');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump();
+    expect(container.read(launchUmuGameIdProvider), 'umu-test');
+  });
+
+  testWidgets('open-folder buttons call the injected launcher',
+      (tester) async {
+    setTallSurface(tester);
+    final temp = Directory.systemTemp.createTempSync('vnl_settings_test_');
+    addTearDown(() => temp.deleteSync(recursive: true));
+    final opened = <Uri>[];
+    await pumpSettings(tester, SettingsFakeRepository(),
+        dir: core.DataDir(temp.path), openedUris: opened);
+    final dataButton = find.byKey(const Key('settings-open-data'));
+    await tester.tap(dataButton);
+    await tester.pump();
+    await tester.pump();
+    expect(opened, [Uri.file(temp.path)]);
+
+    final logsButton = find.byKey(const Key('settings-open-logs'));
+    await tester.tap(logsButton);
+    await tester.pump();
+    await tester.pump();
+    expect(opened, [Uri.file(temp.path), Uri.file(p.join(temp.path, 'logs'))]);
+    expect(Directory(p.join(temp.path, 'logs')).existsSync(), isTrue);
+    expect(find.text('Logs: one file per launch, plus latest.log'),
+        findsOneWidget);
   });
 }
