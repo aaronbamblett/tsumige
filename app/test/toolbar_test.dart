@@ -145,6 +145,57 @@ void main() {
     );
   });
 
+  testWidgets('sort and tag dropdowns do not take text focus', (tester) async {
+    await pumpToolbar(tester, taggedGames());
+    final sortMenu = tester.widget<DropdownMenu<keys.SortField>>(
+      find.byType(DropdownMenu<keys.SortField>),
+    );
+    final tagMenu = tester.widget<DropdownMenu<String?>>(
+      find.byType(DropdownMenu<String?>),
+    );
+    expect(sortMenu.requestFocusOnTap, isFalse);
+    expect(sortMenu.enableFilter, isFalse);
+    expect(sortMenu.enableSearch, isFalse);
+    expect(tagMenu.requestFocusOnTap, isFalse);
+    expect(tagMenu.enableFilter, isFalse);
+    expect(tagMenu.enableSearch, isFalse);
+    await tester.tap(find.byType(DropdownMenu<keys.SortField>));
+    await tester.pumpAndSettle();
+    expect(find.text('Title'), findsWidgets);
+    final editables = tester.widgetList<EditableText>(
+      find.descendant(
+        of: find.byType(DropdownMenu<keys.SortField>),
+        matching: find.byType(EditableText),
+      ),
+    );
+    for (final editable in editables) {
+      expect(editable.focusNode.hasPrimaryFocus, isFalse);
+    }
+    expect(
+      FocusManager.instance.primaryFocus?.context?.widget,
+      isNot(isA<EditableText>()),
+    );
+  });
+
+  testWidgets('sort and tag dropdowns keep the dropdown arrow when open',
+      (tester) async {
+    await pumpToolbar(tester, taggedGames());
+    for (final menu in [
+      tester.widget<DropdownMenu<keys.SortField>>(
+        find.byType(DropdownMenu<keys.SortField>),
+      ),
+      tester.widget<DropdownMenu<String?>>(
+        find.byType(DropdownMenu<String?>),
+      ),
+    ]) {
+      final selectedIcon = menu.selectedTrailingIcon as Icon?;
+      expect(
+        selectedIcon?.icon,
+        anyOf(isNull, Icons.arrow_drop_down_rounded),
+      );
+    }
+  });
+
   testWidgets('choosing Title sets the sort field', (tester) async {
     await pumpToolbar(tester, taggedGames());
     await tester.tap(find.byType(DropdownMenu<keys.SortField>));

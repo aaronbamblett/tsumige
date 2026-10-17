@@ -96,10 +96,13 @@ class LibraryToolbar extends ConsumerWidget {
                     DropdownMenu<keys.SortField>(
                       width: _kDropdownWidth,
                       label: const Text('Sort by'),
+                      requestFocusOnTap: false,
+                      enableFilter: false,
+                      enableSearch: false,
                       trailingIcon:
                           const Icon(Icons.arrow_drop_down_rounded),
                       selectedTrailingIcon:
-                          const Icon(Icons.arrow_drop_up_rounded),
+                          const Icon(Icons.arrow_drop_down_rounded),
                       inputDecorationTheme: decoration,
                       initialSelection: field,
                       onSelected: (value) {
@@ -117,9 +120,9 @@ class LibraryToolbar extends ConsumerWidget {
                     ),
                     IconButton(
                       tooltip: ascending ? 'Ascending' : 'Descending',
-                      icon: Icon(ascending
-                          ? Icons.arrow_upward_rounded
-                          : Icons.arrow_downward_rounded),
+                      icon: ascending
+                          ? const Icon(Icons.arrow_upward_rounded)
+                          : const Icon(Icons.arrow_downward_rounded),
                       onPressed: () => ref
                           .read(sortAscendingProvider.notifier)
                           .set(!ascending),
@@ -139,10 +142,13 @@ class LibraryToolbar extends ConsumerWidget {
                     DropdownMenu<String?>(
                       width: _kDropdownWidth,
                       label: const Text('Tag'),
+                      requestFocusOnTap: false,
+                      enableFilter: false,
+                      enableSearch: false,
                       trailingIcon:
                           const Icon(Icons.arrow_drop_down_rounded),
                       selectedTrailingIcon:
-                          const Icon(Icons.arrow_drop_up_rounded),
+                          const Icon(Icons.arrow_drop_down_rounded),
                       inputDecorationTheme: decoration,
                       initialSelection: tagFilter,
                       onSelected: (value) => ref
