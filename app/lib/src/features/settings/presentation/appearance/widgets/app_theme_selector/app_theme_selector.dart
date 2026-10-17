@@ -31,6 +31,19 @@ class ThemeSelector extends HookConsumerWidget {
   static const _cardsHeight = 132.0;
   static const _arrowSize = 34.0;
 
+  /// Width of the right-edge fade in logical pixels.
+  static const edgeFadeWidth = 40.0;
+
+  /// Stops for the right-edge fade at the given row width, or null when no
+  /// fade applies (nothing more to scroll right). The mask itself always
+  /// stays in the tree: adding or removing it would remount the list and
+  /// reset its scroll position just as it reaches the end.
+  @visibleForTesting
+  static List<double>? edgeFadeStops(double width, bool canScrollRight) {
+    if (!canScrollRight) return null;
+    return [0, (1 - edgeFadeWidth / width).clamp(0, 1), 1];
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selected = ref.watch(appThemeKeyProvider) ?? kDefaultAppTheme;
@@ -48,6 +61,7 @@ class ThemeSelector extends HookConsumerWidget {
     final maxExtent = position?.maxScrollExtent ?? 0;
     final offset = position?.pixels ?? 0;
     final canScroll = maxExtent > 0;
+    final canScrollRight = canScroll && offset < maxExtent;
     final cs = Theme.of(context).colorScheme;
 
     void scrollBy(double direction) {
@@ -135,7 +149,7 @@ class ThemeSelector extends HookConsumerWidget {
                       .floor()
                       .clamp(1, 100);
                   final cardWidth = constraints.maxWidth / (whole + 0.5) - 12;
-                  return ListView(
+                  final cards = ListView(
                     controller: controller,
                     scrollDirection: Axis.horizontal,
                     children: [
@@ -155,6 +169,32 @@ class ThemeSelector extends HookConsumerWidget {
                               .update(theme),
                         ),
                     ],
+                  );
+                  // 40 px fade at the right edge, only while there is more
+                  // to scroll right. The mask stays mounted either way so
+                  // the list keeps its scroll position.
+                  return ShaderMask(
+                    blendMode: BlendMode.dstIn,
+                    shaderCallback: (bounds) {
+                      final stops = ThemeSelector.edgeFadeStops(
+                        bounds.width,
+                        canScrollRight,
+                      );
+                      if (stops == null) {
+                        return const LinearGradient(
+                          colors: [Colors.white, Colors.white],
+                        ).createShader(bounds);
+                      }
+                      return LinearGradient(
+                        colors: const [
+                          Colors.white,
+                          Colors.white,
+                          Colors.transparent,
+                        ],
+                        stops: stops,
+                      ).createShader(bounds);
+                    },
+                    child: cards,
                   );
                 },
               ),

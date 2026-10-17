@@ -222,6 +222,9 @@ void main() {
   });
 
   testWidgets('data folder shown', (tester) async {
+    // The theme header row pushes this tile below the fold on the default
+    // surface; a tall surface keeps the whole settings list built.
+    setTallSurface(tester);
     await pumpSettings(tester, SettingsFakeRepository(),
         dir: core.DataDir('/tmp/x'));
     expect(find.text('/tmp/x'), findsOneWidget);

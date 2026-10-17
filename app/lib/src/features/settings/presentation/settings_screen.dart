@@ -137,7 +137,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 child: Text('Appearance', style: headingStyle),
               ),
               const AppThemeModeTile(),
-              const ThemeSelector(),
+              const ThemeSelector(title: Text('Theme')),
               Consumer(
                 builder: (context, ref, _) {
                   final theme = ref.watch(appThemeKeyProvider);
