@@ -5,23 +5,26 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../../core/covers.dart';
-import '../../../../core/format.dart';
 import '../../../../core/model.dart';
+import '../../../../utils/prefs/app_prefs.dart' hide LaunchMode;
 import '../../data/library_repository.dart';
 import '../../domain/cover_source.dart';
+import '../../domain/launch_actions.dart';
 import '../../domain/selection.dart';
-import '../../domain/vndb_markup.dart';
-import 'game_cover_grid_delegate.dart';
+import 'detail_tabs/history_tab.dart';
+import 'detail_tabs/info_tab.dart';
+import 'detail_tabs/launch_tab.dart';
+import 'detail_tabs/routes_tab.dart';
 
-/// Detail pane for the selected game: title, cover, VNDB rating, release
-/// date, tags, description, playtime, sessions and routes.
+const bool _launchingEnabled = false;
+
 class GameDetailPane extends ConsumerWidget {
   const GameDetailPane({super.key, required this.game});
 
@@ -29,215 +32,202 @@ class GameDetailPane extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 0, 0),
-                child: Text(
-                  game.title,
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-              ),
-            ),
-            IconButton(
-              tooltip: 'Close',
-              icon: const Icon(Icons.close_rounded),
-              onPressed: () => ref
-                  .read(selectedGameIdProvider.notifier)
-                  .clear(),
-            ),
-          ],
-        ),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              spacing: 12,
-              children: [
-                _hero(context, ref),
-                if (game.description.isNotEmpty) ...[
-                  _heading(context, 'Description'),
-                  VndbMarkupText(text: game.description),
-                ],
-                ..._sessionRows(context),
-                if (game.routes.isNotEmpty) ...[
-                  _heading(context, 'Routes'),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    spacing: 4,
-                    children: [
-                      for (final route in game.routes)
-                        Row(
-                          children: [
-                            Expanded(child: Text(route.name)),
-                            if (route.completed)
-                              const Icon(Icons.check_rounded),
-                            if (route.name == game.activeRoute)
-                              const Padding(
-                                padding: EdgeInsets.only(left: 8),
-                                child: Text('Active'),
-                              ),
-                          ],
-                        ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _heading(BuildContext context, String text) {
-    final theme = Theme.of(context);
-    return Text(
-      text,
-      style: theme.textTheme.titleSmall
-          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-    );
-  }
-
-  List<PlaySession> _newestFirst(List<PlaySession> sessions) {
-    final sorted = sessions.toList()
-      ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
-    return sorted;
-  }
-
-  List<Widget> _sessionRows(BuildContext context) {
-    final sessions = _newestFirst(game.playSessions);
-    if (sessions.isEmpty) return const [];
-    return [
-      _heading(context, 'Sessions'),
-      for (final session in sessions)
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                DateFormat('yyyy-MM-dd HH:mm').format(
-                  session.startedAt.toLocal(),
-                ),
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ),
-            Text(
-              formatPlaytime(session.durationSeconds),
-              textAlign: TextAlign.right,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ],
-        ),
-    ];
-  }
-
-  Widget _hero(BuildContext context, WidgetRef ref) {
-    final cover = game.cover;
-    if (cover == null || cover.isEmpty) return _facts(context);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _heroCover(context, ref),
-        const SizedBox(width: 12),
-        Expanded(child: _facts(context)),
-      ],
-    );
-  }
-
-  Widget _facts(BuildContext context) {
-    final theme = Theme.of(context);
-    final labelStyle = theme.textTheme.labelMedium
-        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: 10,
-      children: [
-        if (game.vndbRating != null) ...[
-          Text('VNDB Rating', style: labelStyle),
-          Text(
-            (game.vndbRating! / 10).toStringAsFixed(1),
-            style: theme.textTheme.headlineSmall,
-          ),
-          if (game.vndbVotecount != null)
-            Text(
-              '${game.vndbVotecount} votes',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-        ],
-        if (game.released != null && game.released!.isNotEmpty) ...[
-          Text('Released', style: labelStyle),
-          Text(game.released!, style: theme.textTheme.bodyLarge),
-        ],
-        Text('Total playtime', style: labelStyle),
-        Text(
-          formatPlaytime(game.totalPlaytimeSeconds),
-          style: theme.textTheme.bodyLarge,
-        ),
-        if (game.tags.isNotEmpty)
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
+    final colorScheme = Theme.of(context).colorScheme;
+    return DefaultTabController(
+      length: 4,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final hasCover = game.cover != null && game.cover!.isNotEmpty;
+          final heroHeight = hasCover
+              ? min(constraints.maxHeight * 0.4, 340.0)
+              : 120.0;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (final tag in game.tags)
-                Chip(
-                  label: Text(tag),
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              SizedBox(
+                key: const ValueKey('detail-hero'),
+                height: heroHeight,
+                width: double.infinity,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (hasCover)
+                      Container(
+                        color: colorScheme.surfaceContainerHigh,
+                        foregroundDecoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              colorScheme.surfaceContainerLow,
+                            ],
+                            stops: const [0.55, 1.0],
+                          ),
+                        ),
+                        child: _heroArt(
+                            context, ref, constraints.maxWidth),
+                      )
+                    else
+                      Container(color: colorScheme.surfaceContainerHigh),
+                    Positioned(
+                      top: 16,
+                      left: 16,
+                      right: 68,
+                      child: Text(
+                        game.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              shadows: const [
+                                Shadow(
+                                  blurRadius: 8,
+                                  color: Colors.black87,
+                                ),
+                              ],
+                            ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: IconButton(
+                        tooltip: 'Close',
+                        icon: const Icon(Icons.close_rounded),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.black45,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(36, 36),
+                          padding: EdgeInsets.zero,
+                          tapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () => ref
+                            .read(selectedGameIdProvider.notifier)
+                            .clear(),
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+              TabBar(
+                isScrollable: false,
+                tabAlignment: TabAlignment.fill,
+                indicatorColor: colorScheme.primary,
+                labelColor: colorScheme.primary,
+                unselectedLabelColor: colorScheme.onSurfaceVariant,
+                tabs: const [
+                  Tab(text: 'Info'),
+                  Tab(text: 'Launch'),
+                  Tab(text: 'Routes'),
+                  Tab(text: 'History'),
+                ],
+              ),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    InfoTab(game: game),
+                    LaunchTab(game: game),
+                    RoutesTab(game: game),
+                    HistoryTab(game: game),
+                  ],
+                ),
+              ),
+              _Footer(game: game),
             ],
-          ),
-      ],
+          );
+        },
+      ),
     );
   }
 
-  Widget _heroCover(BuildContext context, WidgetRef ref) {
-    const width = 190.0;
+  Widget _heroArt(
+      BuildContext context, WidgetRef ref, double width) {
     final dir = ref.watch(dataDirProvider);
     final exists = ref.watch(coverExistsProvider);
     final thumb = thumbPath(dir, game.id, 512);
-    // The thumbnail paints first; the original fades in over it with no gap.
     final physicalWidth =
         (width * MediaQuery.devicePixelRatioOf(context)).round().clamp(
       1,
       1 << 16,
     );
     final original = File(p.join(dir.coversOriginal.path, game.cover!));
-    return SizedBox(
-      key: const ValueKey('detail-cover'),
-      width: width,
-      child: AspectRatio(
-        aspectRatio: kGameCoverAspectRatio,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (exists(thumb))
-                Image.file(
-                  File(thumb),
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                ),
-              Image.file(
-                original,
-                fit: BoxFit.cover,
-                gaplessPlayback: true,
-                cacheWidth: physicalWidth,
-                frameBuilder: (context, child, frame, _) =>
-                    frame == null ? const SizedBox.shrink() : child,
-                errorBuilder: (_, _, _) => const SizedBox.shrink(),
-              ),
-            ],
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (exists(thumb))
+          Image.file(
+            File(thumb),
+            fit: BoxFit.cover,
+            alignment: Alignment.topCenter,
+            gaplessPlayback: true,
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
           ),
+        Image.file(
+          original,
+          fit: BoxFit.cover,
+          alignment: Alignment.topCenter,
+          gaplessPlayback: true,
+          cacheWidth: physicalWidth,
+          frameBuilder: (context, child, frame, _) =>
+              frame == null ? const SizedBox.shrink() : child,
+          errorBuilder: (_, _, _) => const SizedBox.shrink(),
         ),
+      ],
+    );
+  }
+}
+
+class _Footer extends ConsumerWidget {
+  const _Footer({required this.game});
+
+  final Game game;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final actions = ref.watch(launchActionsProvider);
+    final mode = game.launch.mode ?? ref.watch(launchModeProvider);
+    final showRunExe =
+        mode == LaunchMode.proton || mode == LaunchMode.wine;
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: 8,
+        children: [
+          if (showRunExe)
+            Tooltip(
+              message: 'Launching arrives in the next build',
+              child: SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: OutlinedButton(
+                  onPressed: _launchingEnabled
+                      ? () => actions.runExeInPrefix(game)
+                      : null,
+                  child: const Text('Run .exe inside prefix'),
+                ),
+              ),
+            ),
+          Tooltip(
+            message: 'Launching arrives in the next build',
+            child: SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: FilledButton(
+                onPressed: _launchingEnabled
+                    ? () => actions.launch(game)
+                    : null,
+                child: const Text('Launch'),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

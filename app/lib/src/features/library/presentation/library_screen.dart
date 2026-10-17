@@ -81,21 +81,25 @@ class LibraryScreen extends HookConsumerWidget {
                       Expanded(child: LibraryGrid(games: games)),
                       if (selected != null)
                         Container(
-                          width: 440,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerLow,
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              const VerticalDivider(width: 1, thickness: 1),
-                              Expanded(
-                                child: GameDetailPane(
-                                  key: ValueKey(selected.id),
-                                  game: selected,
-                                ),
-                              ),
-                            ],
+                          width: 400,
+                          margin: const EdgeInsets.only(
+                              top: 12, right: 12, bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .outlineVariant,
+                              width: 1,
+                            ),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: GameDetailPane(
+                            key: ValueKey(selected.id),
+                            game: selected,
                           ),
                         ),
                     ],

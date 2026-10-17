@@ -86,6 +86,21 @@ Finder paneText(WidgetTester tester, String text) => find.descendant(
       matching: find.text(text),
     );
 
+Finder tabLabel(String text) => find.descendant(
+      of: find.byType(TabBar),
+      matching: find.text(text),
+    );
+
+Finder richPaneText(WidgetTester tester, String text) => find.descendant(
+      of: find.byType(GameDetailPane),
+      matching: find.textContaining(text, findRichText: true),
+    );
+
+Future<void> openTab(WidgetTester tester, String text) async {
+  await tester.tap(tabLabel(text));
+  await tester.pumpAndSettle();
+}
+
 void _visitSpans(
     InlineSpan span, TextStyle? inherited, void Function(TextSpan, TextStyle?) fn) {
   if (span is TextSpan) {
@@ -99,8 +114,6 @@ void _visitSpans(
   }
 }
 
-/// Effective declared style of the span holding [secret], or null when the
-/// spoiler is revealed (no hiding style declared anywhere above the text).
 TextStyle? spoilerSpanStyle(WidgetTester tester, String secret) {
   for (final rich in tester.widgetList<RichText>(find.byType(RichText))) {
     var seen = false;
@@ -158,17 +171,47 @@ void main() {
     expect(spoilerSpanStyle(tester, 'secretwords')?.backgroundColor, isNull);
   });
 
-  testWidgets('a game with no sessions shows 0 min and no session rows',
+  testWidgets('hero shows the title inside the hero area', (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openPane(tester, 'Alpha');
+    final heroRect =
+        tester.getRect(find.byKey(const ValueKey('detail-hero')));
+    final titleRect = tester.getRect(paneText(tester, 'Alpha'));
+    expect(heroRect.contains(titleRect.topLeft), isTrue);
+    expect(heroRect.contains(titleRect.bottomRight), isTrue);
+  });
+
+  testWidgets('hero without a cover is a 120px block', (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openPane(tester, 'Alpha');
+    final heroRect =
+        tester.getRect(find.byKey(const ValueKey('detail-hero')));
+    expect(heroRect.height, moreOrLessEquals(120, epsilon: 0.5));
+  });
+
+  testWidgets('the four tabs exist and Launch shows Mode', (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openPane(tester, 'Alpha');
+    for (final label in ['Info', 'Launch', 'Routes', 'History']) {
+      expect(tabLabel(label), findsOneWidget);
+    }
+    expect(find.text('Mode'), findsNothing);
+    await openTab(tester, 'Launch');
+    expect(find.text('Mode'), findsOneWidget);
+  });
+
+  testWidgets('history shows Not played yet with no sessions',
       (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
-    expect(find.textContaining('0 min'), findsOneWidget);
-    expect(
-        find.textContaining(RegExp(r'\d{4}-\d{2}-\d{2}')), findsNothing);
+    await openTab(tester, 'History');
+    expect(find.text('TOTAL PLAYTIME'), findsOneWidget);
+    expect(find.text('0 min'), findsOneWidget);
+    expect(find.text('SESSIONS'), findsOneWidget);
+    expect(find.text('Not played yet'), findsOneWidget);
   });
 
-  testWidgets('a game with two sessions lists the newer one first',
-      (tester) async {
+  testWidgets('history lists the newer session first', (tester) async {
     final older = DateTime.utc(2024, 1, 2, 10, 0);
     final newer = DateTime.utc(2024, 3, 4, 12, 30);
     await pumpLibrary(tester, [
@@ -178,6 +221,7 @@ void main() {
       ]),
     ]);
     await openPane(tester, 'Alpha');
+    await openTab(tester, 'History');
     final format = DateFormat('yyyy-MM-dd HH:mm');
     final newerText = find.textContaining(format.format(newer.toLocal()));
     final olderText = find.textContaining(format.format(older.toLocal()));
@@ -185,6 +229,192 @@ void main() {
     expect(olderText, findsOneWidget);
     expect(tester.getTopLeft(newerText).dy,
         lessThan(tester.getTopLeft(olderText).dy));
+  });
+
+  testWidgets('info tab shows rating, tags and description labels',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        description: 'A story',
+        released: '2024-05-06',
+        vndbRating: 85.0,
+        vndbVotecount: 12,
+        tags: ['Action', 'Romance'],
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(paneText(tester, 'VNDB RATING'), findsOneWidget);
+    expect(richPaneText(tester, '8.5'), findsOneWidget);
+    expect(richPaneText(tester, '12 votes'), findsOneWidget);
+    expect(paneText(tester, 'RELEASED'), findsOneWidget);
+    expect(find.text('2024-05-06'), findsOneWidget);
+    expect(paneText(tester, 'TAGS'), findsOneWidget);
+    expect(paneText(tester, 'Action'), findsOneWidget);
+    expect(paneText(tester, 'Romance'), findsOneWidget);
+    expect(paneText(tester, 'DESCRIPTION'), findsOneWidget);
+  });
+
+  testWidgets('fifteen tags wrap without overflow at panel width 400',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        tags: [
+          for (var i = 0; i < 15; i++) 'Extremely long tag number $i',
+        ],
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(paneText(tester, 'Extremely long tag number 14'),
+        findsOneWidget);
+  });
+
+  testWidgets('changing the game resets the tab to Info', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', description: 'Alpha story'),
+      core.Game(id: 'g2', title: 'Beta', description: 'Beta story'),
+    ]);
+    await openPane(tester, 'Alpha');
+    await openTab(tester, 'Launch');
+    expect(find.text('Mode'), findsOneWidget);
+    await tester.tap(find.text('Beta').first);
+    await tester.pump();
+    await tester.pump();
+    final tabContext = tester.element(find.byType(TabBar));
+    expect(DefaultTabController.of(tabContext).index, 0);
+    expect(find.text('Mode'), findsNothing);
+    expect(find.text('Beta story'), findsOneWidget);
+  });
+
+  testWidgets('launch button is pinned below a long description',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+          id: 'g1', title: 'Alpha', description: 'A very long tale. ' * 500),
+    ]);
+    await openPane(tester, 'Alpha');
+    final launch = find.widgetWithText(FilledButton, 'Launch');
+    expect(launch, findsOneWidget);
+    expect(tester.widget<FilledButton>(launch).onPressed, isNull);
+    final launchRect = tester.getRect(launch);
+    expect(launchRect.top, greaterThanOrEqualTo(0));
+    expect(launchRect.bottom, lessThanOrEqualTo(800));
+    expect(find.byTooltip('Launching arrives in the next build'),
+        findsNWidgets(2));
+  });
+
+  testWidgets('run exe button is absent for a Native game', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+          id: 'g1',
+          title: 'Alpha',
+          launch: core.LaunchOverrides(mode: core.LaunchMode.native)),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(
+        find.widgetWithText(OutlinedButton, 'Run .exe inside prefix'),
+        findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Launch'), findsOneWidget);
+  });
+
+  testWidgets('run exe button shows for a Proton game', (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openPane(tester, 'Alpha');
+    expect(find.widgetWithText(OutlinedButton, 'Run .exe inside prefix'),
+        findsOneWidget);
+  });
+
+  testWidgets('launch tab falls back to global defaults', (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openPane(tester, 'Alpha');
+    await openTab(tester, 'Launch');
+    expect(find.textContaining('Proton', findRichText: true), findsOneWidget);
+    expect(find.textContaining('default', findRichText: true),
+        findsWidgets);
+    expect(find.text('Prefix'), findsOneWidget);
+    expect(find.text('Runner'), findsOneWidget);
+    expect(find.textContaining('umu default', findRichText: true), findsOneWidget);
+  });
+
+  testWidgets('steam mode shows only the app id', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+          id: 'g1',
+          title: 'Alpha',
+          launch: core.LaunchOverrides(
+              mode: core.LaunchMode.steam, steamAppId: 123)),
+    ]);
+    await openPane(tester, 'Alpha');
+    await openTab(tester, 'Launch');
+    expect(find.text('Steam app id'), findsOneWidget);
+    expect(find.textContaining('123', findRichText: true), findsOneWidget);
+    expect(find.text('Mode'), findsNothing);
+    expect(find.text('Prefix'), findsNothing);
+  });
+
+  testWidgets('native mode shows only executable and arguments',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+          id: 'g1',
+          title: 'Alpha',
+          launch: core.LaunchOverrides(
+              mode: core.LaunchMode.native,
+              executable: '/games/alpha/run.sh',
+              arguments: '--full')),
+    ]);
+    await openPane(tester, 'Alpha');
+    await openTab(tester, 'Launch');
+    expect(find.text('Executable'), findsOneWidget);
+    expect(find.text('/games/alpha/run.sh'), findsOneWidget);
+    expect(find.text('Arguments'), findsOneWidget);
+    expect(find.textContaining('--full', findRichText: true), findsOneWidget);
+    expect(find.text('Prefix'), findsNothing);
+    expect(find.text('Runner'), findsNothing);
+  });
+
+  testWidgets('long executable truncates with a full-path tooltip',
+      (tester) async {
+    final path =
+        '/very/long/prefix/drive_c/Program Files/Visual Novels/Alpha Game/game/alpha-visual-novel-launcher.exe';
+    await pumpLibrary(tester, [
+      core.Game(
+          id: 'g1',
+          title: 'Alpha',
+          launch: core.LaunchOverrides(executable: path)),
+    ]);
+    await openPane(tester, 'Alpha');
+    await openTab(tester, 'Launch');
+    expect(find.byTooltip(path), findsOneWidget);
+    expect(find.text(path), findsNothing);
+  });
+
+  testWidgets('routes tab shows completion and the active label',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', activeRoute: 'Rin', routes: [
+        core.Route(name: 'Rin', completed: true),
+        core.Route(name: 'Saber', completed: false),
+      ]),
+    ]);
+    await openPane(tester, 'Alpha');
+    await openTab(tester, 'Routes');
+    expect(find.text('Rin'), findsOneWidget);
+    expect(find.text('Saber'), findsOneWidget);
+    expect(find.text('Active'), findsOneWidget);
+    expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+  });
+
+  testWidgets('routes tab shows No routes when empty', (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openPane(tester, 'Alpha');
+    await openTab(tester, 'Routes');
+    expect(find.text('No routes'), findsOneWidget);
   });
 
   testWidgets('tapping a tile opens the pane; Escape closes it',
@@ -268,105 +498,32 @@ void main() {
     expect(border.top.width, 3);
   });
 
-  testWidgets('routes show completion and the active label',
-      (tester) async {
-    await pumpLibrary(tester, [
-      core.Game(id: 'g1', title: 'Alpha', activeRoute: 'Rin', routes: [
-        core.Route(name: 'Rin', completed: true),
-        core.Route(name: 'Saber', completed: false),
-      ]),
-    ]);
-    await openPane(tester, 'Alpha');
-    expect(find.text('Rin'), findsOneWidget);
-    expect(find.text('Saber'), findsOneWidget);
-    expect(find.text('Active'), findsOneWidget);
-    expect(find.byIcon(Icons.check_rounded), findsOneWidget);
-  });
-
   testWidgets('rating without a votecount shows no votes fallback',
       (tester) async {
     await pumpLibrary(tester, [
       core.Game(id: 'g1', title: 'Alpha', vndbRating: 85.0),
     ]);
     await openPane(tester, 'Alpha');
-    expect(paneText(tester, 'VNDB Rating'), findsOneWidget);
-    expect(find.text('8.5'), findsOneWidget);
+    expect(paneText(tester, 'VNDB RATING'), findsOneWidget);
+    expect(richPaneText(tester, '8.5'), findsOneWidget);
     expect(find.textContaining('votes'), findsNothing);
   });
 
-  testWidgets('release shows the Released label', (tester) async {
+  testWidgets('release shows the RELEASED label', (tester) async {
     await pumpLibrary(tester, [
       core.Game(id: 'g1', title: 'Alpha', released: '2021-08-26'),
     ]);
     await openPane(tester, 'Alpha');
-    expect(find.text('Released'), findsOneWidget);
+    expect(find.text('RELEASED'), findsOneWidget);
     expect(find.text('2021-08-26'), findsOneWidget);
   });
 
-  testWidgets('description heading follows the description',
-      (tester) async {
+  testWidgets('empty game shows no info sections', (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
-    expect(find.text('Description'), findsNothing);
-    expect(find.text('Sessions'), findsNothing);
-    expect(find.text('Routes'), findsNothing);
-  });
-
-  testWidgets('description and routes headings show with content',
-      (tester) async {
-    await pumpLibrary(tester, [
-      core.Game(
-        id: 'g1',
-        title: 'Alpha',
-        description: 'A story',
-        routes: [core.Route(name: 'Rin')],
-      ),
-    ]);
-    await openPane(tester, 'Alpha');
-    expect(find.text('Description'), findsOneWidget);
-    expect(find.text('Sessions'), findsNothing);
-    expect(find.text('Routes'), findsOneWidget);
-  });
-
-  testWidgets('sessions heading shows only with sessions', (tester) async {
-    await pumpLibrary(tester, [
-      core.Game(
-        id: 'g1',
-        title: 'Alpha',
-        playSessions: [
-          core.PlaySession(
-              startedAt: DateTime.utc(2024, 3, 4, 12, 30),
-              durationSeconds: 120),
-        ],
-      ),
-    ]);
-    await openPane(tester, 'Alpha');
-    expect(find.text('Sessions'), findsOneWidget);
-  });
-
-  testWidgets('rating, release and tags render beside the cover',
-      (tester) async {
-    await pumpLibrary(tester, [
-      core.Game(
-        id: 'g1',
-        title: 'Alpha',
-        released: '2024-05-06',
-        vndbRating: 85.0,
-        vndbVotecount: 12,
-        tags: ['Action', 'Romance'],
-      ),
-    ]);
-    await openPane(tester, 'Alpha');
-    expect(paneText(tester, 'VNDB Rating'), findsOneWidget);
-    expect(find.text('8.5'), findsOneWidget);
-    expect(find.text('12 votes'), findsOneWidget);
-    expect(find.text('Released'), findsOneWidget);
-    expect(find.text('2024-05-06'), findsOneWidget);
-    expect(paneText(tester, 'Action'), findsOneWidget);
-    expect(paneText(tester, 'Romance'), findsOneWidget);
-    expect(find.text('Total playtime'), findsOneWidget);
-    expect(find.text('0 min'), findsOneWidget);
-    expect(find.textContaining(RegExp(r'^Total \d')), findsNothing);
+    expect(find.text('DESCRIPTION'), findsNothing);
+    expect(find.text('TAGS'), findsNothing);
+    expect(find.text('VNDB RATING'), findsNothing);
   });
 
   testWidgets('rating value divides by ten', (tester) async {
@@ -374,39 +531,6 @@ void main() {
       core.Game(id: 'g1', title: 'Alpha', vndbRating: 64),
     ]);
     await openPane(tester, 'Alpha');
-    expect(find.text('6.4'), findsOneWidget);
-  });
-
-  testWidgets('facts sit beside the cover', (tester) async {
-    setSurface(tester, 1280, 800);
-    final temp = Directory.systemTemp.createTempSync('vnl_hero_test_');
-    addTearDown(() => temp.deleteSync(recursive: true));
-    SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        sharedPreferencesProvider
-            .overrideWithValue(await SharedPreferences.getInstance()),
-        dataDirProvider.overrideWithValue(core.DataDir(temp.path)),
-        libraryRepositoryProvider.overrideWithValue(DetailFakeRepository([
-          core.Game(
-              id: 'g1', title: 'Alpha', cover: 'cover.png', vndbRating: 64),
-        ])),
-        // No files on disk, so the images fall back — but the 190-wide
-        // hero cover box still lays out.
-        coverExistsProvider.overrideWithValue((_) => true),
-      ],
-      child: const VnlApp(),
-    ));
-    await tester.pump();
-    await tester.pump();
-    await openPane(tester, 'Alpha');
-    final coverRect =
-        tester.getRect(find.byKey(const ValueKey('detail-cover')));
-    expect(coverRect.width, moreOrLessEquals(190, epsilon: 0.5));
-    final labelTopLeft =
-        tester.getTopLeft(paneText(tester, 'VNDB Rating'));
-    expect(labelTopLeft.dx, greaterThan(coverRect.right));
-    expect((labelTopLeft.dy - coverRect.top).abs(), lessThanOrEqualTo(20));
-    expect(find.text('6.4'), findsOneWidget);
+    expect(richPaneText(tester, '6.4'), findsOneWidget);
   });
 }
