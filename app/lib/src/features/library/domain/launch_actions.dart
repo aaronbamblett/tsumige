@@ -106,14 +106,25 @@ class LaunchActions {
 
   Future<void> _run(BuildContext context, core.Game game,
       {String? overrideExe}) async {
-    final running = _ref.read(runningGamesProvider.notifier);
-    running.add(game.id);
     try {
       final result = await _ref.read(gameRunnerProvider).launch(
             game,
             _defaults(),
             overrideExe: overrideExe,
             umuRunPath: _ref.read(umuRunPathProvider),
+            onPhase: (phase) {
+              // Read the notifier fresh on every callback: it stays the same
+              // live instance now that the provider is keep-alive.
+              final running = _ref.read(runningGamesProvider.notifier);
+              switch (phase) {
+                case LaunchPhase.starting:
+                  running.setPhase(game.id, LaunchPhase.starting);
+                case LaunchPhase.running:
+                  running.setPhase(game.id, LaunchPhase.running);
+                case LaunchPhase.ended:
+                  running.remove(game.id);
+              }
+            },
           );
       if (result.sessionSeconds != null) {
         _ref.invalidate(libraryProvider);
@@ -131,10 +142,12 @@ class LaunchActions {
         Toast(context).showError('Failed to launch ${game.title}: $e');
       }
     } finally {
-      running.remove(game.id);
+      _ref.read(runningGamesProvider.notifier).remove(game.id);
     }
   }
 }
 
-@riverpod
+/// Keep-alive: a launch runs for the whole play session, and `_run` reports
+/// its end through this ref. An auto-dispose ref could be dead by then.
+@Riverpod(keepAlive: true)
 LaunchActions launchActions(Ref ref) => LaunchActions(ref);

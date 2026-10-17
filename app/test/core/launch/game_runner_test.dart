@@ -303,6 +303,80 @@ void main() {
     expect(latestFile().existsSync(), isTrue);
   });
 
+  test('native reports starting, running, then ended', () async {
+    final store = storeWith(nativeGame());
+    final starter = FakeStarter((command, log) async {
+      Future<int> exit() async {
+        now = now.add(const Duration(seconds: 90));
+        return 0;
+      }
+
+      return FakeStartedProcess(pid: 7, exitCode: exit());
+    });
+    final phases = <LaunchPhase>[];
+    final result =
+        await runner(store: store, starter: starter).launch(
+      nativeGame(),
+      defaults,
+      onPhase: phases.add,
+    );
+    expect(phases,
+        [LaunchPhase.starting, LaunchPhase.running, LaunchPhase.ended]);
+    expect(result.sessionSeconds, 90);
+  });
+
+  test('steam reports starting until the process appears, then ended',
+      () async {
+    final store = storeWith(steamGame());
+    final starter = FakeStarter((command, log) async =>
+        FakeStartedProcess(pid: 7, exitCode: Future.value(0)));
+    bool present() =>
+        !now.isBefore(t0.add(const Duration(seconds: 10))) &&
+        now.isBefore(t0.add(const Duration(seconds: 130)));
+    final phases = <LaunchPhase>[];
+    final result =
+        await runner(store: store, starter: starter, present: present)
+            .launch(steamGame(), defaults, onPhase: phases.add);
+    expect(phases,
+        [LaunchPhase.starting, LaunchPhase.running, LaunchPhase.ended]);
+    expect(result.sessionSeconds, 120);
+  });
+
+  test('steam that never appears reports starting then ended', () async {
+    final store = storeWith(steamGame());
+    final starter = FakeStarter((command, log) async =>
+        FakeStartedProcess(pid: 7, exitCode: Future.value(0)));
+    final phases = <LaunchPhase>[];
+    final result =
+        await runner(store: store, starter: starter).launch(
+      steamGame(),
+      defaults,
+      onPhase: phases.add,
+    );
+    expect(phases, [LaunchPhase.starting, LaunchPhase.ended]);
+    expect(result.sessionSeconds, isNull);
+  });
+
+  test('a starter error still reports ended exactly once', () async {
+    final store = storeWith(nativeGame());
+    final starter =
+        FakeStarter((command, log) async => throw StateError('nope'));
+    final phases = <LaunchPhase>[];
+    await expectLater(
+      runner(store: store, starter: starter).launch(
+        nativeGame(),
+        defaults,
+        onPhase: phases.add,
+      ),
+      throwsStateError,
+    );
+    expect(phases, [LaunchPhase.starting, LaunchPhase.ended]);
+    expect(
+      phases.where((phase) => phase == LaunchPhase.ended),
+      hasLength(1),
+    );
+  });
+
   test('steam that never appears records no session', () async {
     final store = storeWith(steamGame());
     final starter = FakeStarter((command, log) async =>

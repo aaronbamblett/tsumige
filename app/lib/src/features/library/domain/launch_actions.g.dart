@@ -208,19 +208,27 @@ final class ExePickerProvider
 
 String _$exePickerHash() => r'0453e8968351eb34967291a3eb8a9f3059a9fdd0';
 
+/// Keep-alive: a launch runs for the whole play session, and `_run` reports
+/// its end through this ref. An auto-dispose ref could be dead by then.
+
 @ProviderFor(launchActions)
 final launchActionsProvider = LaunchActionsProvider._();
+
+/// Keep-alive: a launch runs for the whole play session, and `_run` reports
+/// its end through this ref. An auto-dispose ref could be dead by then.
 
 final class LaunchActionsProvider
     extends $FunctionalProvider<LaunchActions, LaunchActions, LaunchActions>
     with $Provider<LaunchActions> {
+  /// Keep-alive: a launch runs for the whole play session, and `_run` reports
+  /// its end through this ref. An auto-dispose ref could be dead by then.
   LaunchActionsProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
         name: r'launchActionsProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -247,4 +255,4 @@ final class LaunchActionsProvider
   }
 }
 
-String _$launchActionsHash() => r'312e08764e15d010c178ad4316149a58eb384d7a';
+String _$launchActionsHash() => r'd62246bf38c6e035ba0b42ee721702d2ee054445';

@@ -15,6 +15,7 @@ import 'package:path/path.dart' as p;
 import 'package:http/http.dart' as http;
 
 import '../../../../core/covers.dart';
+import '../../../../core/launch/game_runner.dart';
 import '../../../../core/model.dart';
 import '../../../../core/trash.dart';
 import '../../../../core/vndb.dart';
@@ -349,10 +350,11 @@ class _Footer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final actions = ref.watch(launchActionsProvider);
     final LaunchMode mode = game.launch.mode ?? ref.watch(launchModeProvider);
-    final running = ref.watch(runningGamesProvider).contains(game.id);
+    final phase = ref.watch(runningGamesProvider)[game.id];
+    final busy = phase != null;
     final showRunExe =
         mode == LaunchMode.proton || mode == LaunchMode.wine;
-    final launchTip = _launchTooltip(ref, running, mode);
+    final launchTip = _launchTooltip(ref, phase, mode);
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -361,12 +363,12 @@ class _Footer extends ConsumerWidget {
         children: [
           if (showRunExe)
             Tooltip(
-              message: running ? 'Running' : '',
+              message: _phaseLabel(phase),
               child: SizedBox(
                 width: double.infinity,
                 height: 44,
                 child: OutlinedButton(
-                  onPressed: running
+                  onPressed: busy
                       ? null
                       : () => actions.runExeInPrefix(context, game),
                   child: const Text('Run .exe inside prefix'),
@@ -382,7 +384,22 @@ class _Footer extends ConsumerWidget {
                 onPressed: launchTip == null
                     ? () => actions.launch(context, game)
                     : null,
-                child: Text(running ? 'Running' : 'Launch'),
+                child: switch (phase) {
+                  LaunchPhase.starting => const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: 8,
+                      children: [
+                        SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        Text('Launching…'),
+                      ],
+                    ),
+                  LaunchPhase.running => const Text('Running'),
+                  // `ended` entries are removed, so this is unreachable.
+                  LaunchPhase.ended || null => const Text('Launch'),
+                },
               ),
             ),
           ),
@@ -391,8 +408,16 @@ class _Footer extends ConsumerWidget {
     );
   }
 
-  String? _launchTooltip(WidgetRef ref, bool running, LaunchMode mode) {
-    if (running) return 'Running';
+  String _phaseLabel(LaunchPhase? phase) => switch (phase) {
+        LaunchPhase.starting => 'Launching…',
+        LaunchPhase.running => 'Running',
+        // `ended` entries are removed, so this is unreachable.
+        LaunchPhase.ended || null => '',
+      };
+
+  String? _launchTooltip(
+      WidgetRef ref, LaunchPhase? phase, LaunchMode mode) {
+    if (phase != null) return _phaseLabel(phase);
     if (mode == LaunchMode.steam) {
       if (game.launch.steamAppId == null) return 'Steam App ID is not set';
     } else {

@@ -8,25 +8,40 @@ part of 'running_games.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// The ids of games running right now. A second game can launch while one
-/// runs, so this is a set rather than a single id.
+/// The launch phase of each game vnl can currently see.
+///
+/// Entries exist only between `starting` and `ended`: the `ended` callback
+/// removes the game, so the button shows "Running" (or "Launching…") only
+/// while the game's process is actually visible. Keep-alive: a launch
+/// outlives the detail pane, and the entry must still be here when the game
+/// exits, even if the pane was closed and reopened mid-session.
 
 @ProviderFor(RunningGames)
 final runningGamesProvider = RunningGamesProvider._();
 
-/// The ids of games running right now. A second game can launch while one
-/// runs, so this is a set rather than a single id.
+/// The launch phase of each game vnl can currently see.
+///
+/// Entries exist only between `starting` and `ended`: the `ended` callback
+/// removes the game, so the button shows "Running" (or "Launching…") only
+/// while the game's process is actually visible. Keep-alive: a launch
+/// outlives the detail pane, and the entry must still be here when the game
+/// exits, even if the pane was closed and reopened mid-session.
 final class RunningGamesProvider
-    extends $NotifierProvider<RunningGames, Set<String>> {
-  /// The ids of games running right now. A second game can launch while one
-  /// runs, so this is a set rather than a single id.
+    extends $NotifierProvider<RunningGames, Map<String, LaunchPhase>> {
+  /// The launch phase of each game vnl can currently see.
+  ///
+  /// Entries exist only between `starting` and `ended`: the `ended` callback
+  /// removes the game, so the button shows "Running" (or "Launching…") only
+  /// while the game's process is actually visible. Keep-alive: a launch
+  /// outlives the detail pane, and the entry must still be here when the game
+  /// exits, even if the pane was closed and reopened mid-session.
   RunningGamesProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
         name: r'runningGamesProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -39,30 +54,36 @@ final class RunningGamesProvider
   RunningGames create() => RunningGames();
 
   /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(Set<String> value) {
+  Override overrideWithValue(Map<String, LaunchPhase> value) {
     return $ProviderOverride(
       origin: this,
-      providerOverride: $SyncValueProvider<Set<String>>(value),
+      providerOverride: $SyncValueProvider<Map<String, LaunchPhase>>(value),
     );
   }
 }
 
-String _$runningGamesHash() => r'26297313707fd4e05fbc05460146022d07382409';
+String _$runningGamesHash() => r'10bd9c6c815b1d3e953461e61da6ce75de6c0242';
 
-/// The ids of games running right now. A second game can launch while one
-/// runs, so this is a set rather than a single id.
+/// The launch phase of each game vnl can currently see.
+///
+/// Entries exist only between `starting` and `ended`: the `ended` callback
+/// removes the game, so the button shows "Running" (or "Launching…") only
+/// while the game's process is actually visible. Keep-alive: a launch
+/// outlives the detail pane, and the entry must still be here when the game
+/// exits, even if the pane was closed and reopened mid-session.
 
-abstract class _$RunningGames extends $Notifier<Set<String>> {
-  Set<String> build();
+abstract class _$RunningGames extends $Notifier<Map<String, LaunchPhase>> {
+  Map<String, LaunchPhase> build();
   @$mustCallSuper
   @override
   WhenComplete runBuild() {
-    final ref = this.ref as $Ref<Set<String>, Set<String>>;
+    final ref =
+        this.ref as $Ref<Map<String, LaunchPhase>, Map<String, LaunchPhase>>;
     final element =
         ref.element
             as $ClassProviderElement<
-              AnyNotifier<Set<String>, Set<String>>,
-              Set<String>,
+              AnyNotifier<Map<String, LaunchPhase>, Map<String, LaunchPhase>>,
+              Map<String, LaunchPhase>,
               Object?,
               Object?
             >;

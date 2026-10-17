@@ -81,6 +81,7 @@ class FakeRunner extends GameRunner {
 
   final calls = <({core.Game game, String? overrideExe})>[];
   Completer<void>? gate;
+  Future<void> Function(void Function(LaunchPhase) emit)? script;
   LaunchResult nextResult = LaunchResult(
     logFile: File('fake.log'),
     exitCode: 0,
@@ -93,10 +94,18 @@ class FakeRunner extends GameRunner {
     LaunchDefaults defaults, {
     String? overrideExe,
     String? umuRunPath,
+    void Function(LaunchPhase)? onPhase,
   }) async {
     calls.add((game: game, overrideExe: overrideExe));
-    final pending = gate;
-    if (pending != null) await pending.future;
+    void emit(LaunchPhase phase) => onPhase?.call(phase);
+    if (script != null) {
+      await script!(emit);
+    } else {
+      emit(LaunchPhase.starting);
+      emit(LaunchPhase.running);
+      final pending = gate;
+      if (pending != null) await pending.future;
+    }
     return nextResult;
   }
 }
@@ -176,6 +185,15 @@ core.Game protonGame(String id, String title) => core.Game(
         executable: '/games/g/game.exe',
       ),
     );
+
+core.Game steamGame(String id, String title) => core.Game(
+      id: id,
+      title: title,
+      launch: core.LaunchOverrides(
+          mode: core.LaunchMode.steam, steamAppId: 1230140),
+    );
+
+Finder launchingButton() => find.widgetWithText(FilledButton, 'Launching…');
 
 void main() {
   testWidgets('launch is disabled with no executable set', (tester) async {
@@ -315,6 +333,98 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(launchButton(), findsOneWidget);
+  });
+
+  testWidgets('native shows Running while the process lives', (tester) async {
+    final runner = FakeRunner()..gate = Completer<void>();
+    await pumpLaunch(
+        tester,
+        [nativeGame('g1', 'Alpha', exe: '/games/g/start.sh')],
+        runner: runner);
+    await openPane(tester, 'Alpha');
+    await tester.tap(launchButton());
+    await tester.pump();
+    await tester.pump();
+    expect(runningButton(), findsOneWidget);
+    runner.gate!.complete();
+    await tester.pump();
+    await tester.pump();
+    expect(launchButton(), findsOneWidget);
+  });
+
+  testWidgets(
+      'a launch that ends after the pane was closed and reopened ends as Launch',
+      (tester) async {
+    final runner = FakeRunner()..gate = Completer<void>();
+    await pumpLaunch(tester, [protonGame('g1', 'Alpha')],
+        umu: '/usr/bin/umu-run', runner: runner);
+    await openPane(tester, 'Alpha');
+    await tester.tap(launchButton());
+    await tester.pump();
+    await tester.pump();
+    expect(runningButton(), findsOneWidget);
+    // Closing the pane drops every listener on the launch providers. The
+    // game keeps running; reopening must still show it as running, and the
+    // exit must clear it back to Launch.
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.byType(FilledButton), findsNothing);
+    await openPane(tester, 'Alpha');
+    await tester.pump();
+    expect(runningButton(), findsOneWidget);
+    runner.gate!.complete();
+    await tester.pump();
+    await tester.pump();
+    expect(launchButton(), findsOneWidget);
+  });
+
+  testWidgets(
+      'steam shows Launching… until the process appears, then Running',
+      (tester) async {
+    final runner = FakeRunner();
+    final appear = Completer<void>();
+    final exit = Completer<void>();
+    runner.script = (emit) async {
+      emit(LaunchPhase.starting);
+      await appear.future;
+      emit(LaunchPhase.running);
+      await exit.future;
+    };
+    await pumpLaunch(tester, [steamGame('g1', 'Demo')],
+        umu: '/usr/bin/umu-run', runner: runner);
+    await openPane(tester, 'Demo');
+    await tester.tap(launchButton());
+    await tester.pump();
+    await tester.pump();
+    expect(launchingButton(), findsOneWidget);
+    expect(
+        tester.widget<FilledButton>(launchingButton()).onPressed, isNull);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(runningButton(), findsNothing);
+    appear.complete();
+    await tester.pump();
+    await tester.pump();
+    expect(runningButton(), findsOneWidget);
+    expect(launchingButton(), findsNothing);
+    exit.complete();
+    await tester.pump();
+    await tester.pump();
+    expect(launchButton(), findsOneWidget);
+  });
+
+  testWidgets('a runner error returns the button to Launch', (tester) async {
+    final runner = FakeRunner();
+    runner.script = (_) async => throw StateError('boom');
+    await pumpLaunch(tester, [protonGame('g1', 'Alpha')],
+        umu: '/usr/bin/umu-run', runner: runner);
+    await openPane(tester, 'Alpha');
+    await tester.tap(launchButton());
+    await tester.pump();
+    await tester.pump();
+    expect(launchButton(), findsOneWidget);
+    expect(find.textContaining('Failed to launch'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 6));
   });
 
   testWidgets('run-exe with a cancelled picker does nothing', (tester) async {

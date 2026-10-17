@@ -6,19 +6,35 @@
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../core/launch/game_runner.dart';
+
 part 'running_games.g.dart';
 
-/// The ids of games running right now. A second game can launch while one
-/// runs, so this is a set rather than a single id.
-@riverpod
+/// The launch phase of each game vnl can currently see.
+///
+/// Entries exist only between `starting` and `ended`: the `ended` callback
+/// removes the game, so the button shows "Running" (or "Launching…") only
+/// while the game's process is actually visible. Keep-alive: a launch
+/// outlives the detail pane, and the entry must still be here when the game
+/// exits, even if the pane was closed and reopened mid-session.
+@Riverpod(keepAlive: true)
 class RunningGames extends _$RunningGames {
   @override
-  Set<String> build() => const {};
+  Map<String, LaunchPhase> build() => const {};
 
-  void add(String id) => state = {...state, id};
+  void setPhase(String id, LaunchPhase phase) {
+    if (phase == LaunchPhase.ended) {
+      remove(id);
+      return;
+    }
+    if (state[id] == phase) return;
+    state = {...state, id: phase};
+  }
+
+  void add(String id) => setPhase(id, LaunchPhase.starting);
 
   void remove(String id) {
-    if (!state.contains(id)) return;
-    state = state.where((other) => other != id).toSet();
+    if (!state.containsKey(id)) return;
+    state = {...state}..remove(id);
   }
 }

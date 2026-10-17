@@ -94,6 +94,14 @@ class IoProcessStarter implements ProcessStarter {
   }
 }
 
+/// Where a launch is in its lifecycle, reported through `onPhase`.
+///
+/// `starting` covers everything before the game is visible: spawning the
+/// process, and for Steam, waiting for the game process to appear.
+/// `running` means vnl can see the game's process. `ended` fires exactly
+/// once when the launch is over, including on errors.
+enum LaunchPhase { starting, running, ended }
+
 class LaunchResult {
   const LaunchResult({
     required this.logFile,
@@ -152,7 +160,16 @@ class GameRunner {
     LaunchDefaults defaults, {
     String? overrideExe,
     String? umuRunPath,
+    void Function(LaunchPhase phase)? onPhase,
   }) async {
+    var ended = false;
+    void emit(LaunchPhase phase) {
+      if (phase == LaunchPhase.ended) {
+        if (ended) return;
+        ended = true;
+      }
+      onPhase?.call(phase);
+    }
     final command = buildLaunchCommand(
       game,
       defaults,
@@ -162,15 +179,26 @@ class GameRunner {
     );
     final startedAt = clock();
     final logFile = newLaunchLog(dir, game, startedAt);
-    final process = await starter.start(command, logFile);
-    await writeRunningMarker(dir, game.id, startedAt, startedAt);
-    final heartbeat =
-        _RunningHeartbeat(dir, game.id, startedAt, clock, heartbeatInterval);
+    _RunningHeartbeat? heartbeat;
     try {
+      emit(LaunchPhase.starting);
+      final process = await starter.start(command, logFile);
+      // Native, Wine and Proton run the game in the spawned process itself,
+      // so it is visible as soon as `Process.start` returns. Steam reports
+      // `running` later, when the game process first appears (see below).
+      if ((game.launch.mode ?? defaults.mode) != LaunchMode.steam) {
+        emit(LaunchPhase.running);
+      }
+      await writeRunningMarker(dir, game.id, startedAt, startedAt);
+      heartbeat =
+          _RunningHeartbeat(dir, game.id, startedAt, clock, heartbeatInterval);
       if ((game.launch.mode ?? defaults.mode) == LaunchMode.steam) {
         // Timing `steam -applaunch` itself would be wrong: it exits at once.
         process.exitCode.then((_) {}, onError: (_) {});
-        final session = await _steamSession(game.launch.steamAppId!);
+        final session = await _steamSession(
+          game.launch.steamAppId!,
+          onFirstSeen: () => emit(LaunchPhase.running),
+        );
         if (session != null) {
           await recordSession(store, game.id, session.start, session.seconds);
         }
@@ -207,19 +235,26 @@ class GameRunner {
         sessionSeconds: recorded,
       );
     } finally {
-      await heartbeat.stop();
+      emit(LaunchPhase.ended);
+      await heartbeat?.stop();
     }
   }
 
   /// Polls for a process with `SteamAppId=<id>`: the session starts when one
   /// first appears (up to 3 minutes) and ends when none remains.
-  Future<_SteamSession?> _steamSession(int appId) async {
+  /// [onFirstSeen] fires once the game process is visible, so the UI can
+  /// show it as running. It never fires when no process appears.
+  Future<_SteamSession?> _steamSession(
+    int appId, {
+    void Function()? onFirstSeen,
+  }) async {
     DateTime? firstSeen;
     final deadline = clock().add(steamAppearTimeout);
     while (firstSeen == null) {
       final pids = await processTable.pidsWithEnv('SteamAppId', '$appId');
       if (pids.isNotEmpty) {
         firstSeen = clock();
+        onFirstSeen?.call();
         break;
       }
       if (!clock().isBefore(deadline)) return null;
