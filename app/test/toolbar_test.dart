@@ -20,10 +20,10 @@ import 'package:vnl/src/core/paths.dart' as core;
 import 'package:vnl/src/core/vndb.dart' as core;
 import 'package:vnl/src/features/library/data/library_repository.dart';
 import 'package:vnl/src/features/library/domain/cover_source.dart';
+import 'package:vnl/src/features/library/presentation/widgets/library_toolbar.dart';
 import 'package:vnl/src/utils/prefs/app_prefs.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
 import 'package:vnl/src/widgets/desktop/desktop_window_scaffold.dart';
-import 'package:vnl/src/widgets/search_field.dart';
 
 class ToolbarFakeRepository implements LibraryRepository {
   ToolbarFakeRepository(this.games);
@@ -98,21 +98,68 @@ void main() {
     expect((tagMenu.label as Text).data, 'Tag');
   });
 
+  Finder findSearchField() => find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField && widget.decoration?.hintText == 'Search');
+
+  testWidgets('search field draws one complete rounded border',
+      (tester) async {
+    await pumpToolbar(tester, taggedGames());
+    expect(findSearchField(), findsOneWidget);
+    final decorator = tester.widget<InputDecorator>(
+      find.descendant(
+        of: findSearchField(),
+        matching: find.byType(InputDecorator),
+      ).first,
+    );
+    final border = decorator.decoration.border;
+    expect(border, isA<OutlineInputBorder>());
+    expect(
+      (border as OutlineInputBorder).borderRadius,
+      const BorderRadius.all(Radius.circular(12)),
+    );
+    expect(
+      find.ancestor(
+        of: findSearchField(),
+        matching: find.byType(ClipRRect),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('sort and tag dropdowns use dropdown arrows', (tester) async {
+    await pumpToolbar(tester, taggedGames());
+    final sortMenu = tester.widget<DropdownMenu<keys.SortField>>(
+      find.byType(DropdownMenu<keys.SortField>),
+    );
+    final tagMenu = tester.widget<DropdownMenu<String?>>(
+      find.byType(DropdownMenu<String?>),
+    );
+    expect(
+      (sortMenu.trailingIcon as Icon).icon,
+      Icons.arrow_drop_down_rounded,
+    );
+    expect(
+      (tagMenu.trailingIcon as Icon).icon,
+      Icons.arrow_drop_down_rounded,
+    );
+  });
+
   testWidgets('choosing Title sets the sort field', (tester) async {
     await pumpToolbar(tester, taggedGames());
     await tester.tap(find.byType(DropdownMenu<keys.SortField>));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Title').last);
     await tester.pump();
-    final container =
-        ProviderScope.containerOf(tester.element(find.byType(SearchField)));
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(LibraryToolbar)));
     expect(container.read(sortFieldProvider), keys.SortField.title);
   });
 
   testWidgets('choosing a tag filters, All tags clears', (tester) async {
     await pumpToolbar(tester, taggedGames());
-    final container =
-        ProviderScope.containerOf(tester.element(find.byType(SearchField)));
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(LibraryToolbar)));
     await tester.tap(find.byType(DropdownMenu<String?>));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Romance').last);

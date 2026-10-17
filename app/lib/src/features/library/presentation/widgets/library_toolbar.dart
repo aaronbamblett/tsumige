@@ -13,7 +13,6 @@ import '../../data/library_repository.dart';
 import '../../domain/cover_source.dart';
 import '../../domain/library_query.dart';
 import '../../../../utils/prefs/app_prefs.dart';
-import '../../../../widgets/search_field.dart';
 
 const Map<keys.SortField, String> sortFieldLabels = {
   keys.SortField.added: 'Added',
@@ -52,15 +51,24 @@ class LibraryToolbar extends ConsumerWidget {
         shown == total ? _count(total) : '$shown of $total';
     final width = MediaQuery.sizeOf(context).width;
     final searchWidth = (width * 0.25).clamp(160.0, 360.0);
-    final decoration =
-        Theme.of(context).inputDecorationTheme.copyWith(
+    final scheme = Theme.of(context).colorScheme;
+    final restingBorder = const OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(12)),
+      borderSide: BorderSide.none,
+    );
+    final decoration = InputDecorationTheme(
       filled: true,
+      fillColor: scheme.surfaceContainerHighest,
       isDense: true,
       contentPadding:
           const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       constraints: const BoxConstraints.tightFor(height: _kFieldHeight),
-      border: const OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
+      border: restingBorder,
+      enabledBorder: restingBorder,
+      disabledBorder: restingBorder,
+      focusedBorder: OutlineInputBorder(
+        borderRadius: const BorderRadius.all(Radius.circular(12)),
+        borderSide: BorderSide(color: scheme.primary, width: 2),
       ),
     );
     return SizedBox(
@@ -83,24 +91,15 @@ class LibraryToolbar extends ConsumerWidget {
                   children: [
                     SizedBox(
                       width: searchWidth,
-                      child: Theme(
-                        data: Theme.of(context)
-                            .copyWith(inputDecorationTheme: decoration),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: SearchField(
-                            autofocus: false,
-                            onClose: () {},
-                            onChanged: (value) => ref
-                                .read(librarySearchProvider.notifier)
-                                .set(value ?? ''),
-                          ),
-                        ),
-                      ),
+                      child: _ToolbarSearchField(decoration: decoration),
                     ),
                     DropdownMenu<keys.SortField>(
                       width: _kDropdownWidth,
                       label: const Text('Sort by'),
+                      trailingIcon:
+                          const Icon(Icons.arrow_drop_down_rounded),
+                      selectedTrailingIcon:
+                          const Icon(Icons.arrow_drop_up_rounded),
                       inputDecorationTheme: decoration,
                       initialSelection: field,
                       onSelected: (value) {
@@ -140,6 +139,10 @@ class LibraryToolbar extends ConsumerWidget {
                     DropdownMenu<String?>(
                       width: _kDropdownWidth,
                       label: const Text('Tag'),
+                      trailingIcon:
+                          const Icon(Icons.arrow_drop_down_rounded),
+                      selectedTrailingIcon:
+                          const Icon(Icons.arrow_drop_up_rounded),
                       inputDecorationTheme: decoration,
                       initialSelection: tagFilter,
                       onSelected: (value) => ref
@@ -195,3 +198,59 @@ class LibraryToolbar extends ConsumerWidget {
 }
 
 String _count(int total) => total == 1 ? '1 game' : '$total games';
+
+/// Plain search field sharing the toolbar's [InputDecorationTheme]: one
+/// complete rounded border, hint text instead of a floating label.
+class _ToolbarSearchField extends ConsumerStatefulWidget {
+  const _ToolbarSearchField({required this.decoration});
+
+  final InputDecorationTheme decoration;
+
+  @override
+  ConsumerState<_ToolbarSearchField> createState() =>
+      _ToolbarSearchFieldState();
+}
+
+class _ToolbarSearchFieldState extends ConsumerState<_ToolbarSearchField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+    _controller.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: Theme.of(context)
+          .copyWith(inputDecorationTheme: widget.decoration),
+      child: TextField(
+        controller: _controller,
+        onChanged: (value) =>
+            ref.read(librarySearchProvider.notifier).set(value),
+        decoration: InputDecoration(
+          hintText: 'Search',
+          prefixIcon: const Icon(Icons.search_rounded),
+          suffixIcon: _controller.text.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Clear search',
+                  icon: const Icon(Icons.clear_rounded),
+                  onPressed: () {
+                    _controller.clear();
+                    ref.read(librarySearchProvider.notifier).set('');
+                  },
+                ),
+        ),
+      ),
+    );
+  }
+}

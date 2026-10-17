@@ -25,7 +25,6 @@ import 'package:vnl/src/features/library/presentation/widgets/game_cover_grid_de
 import 'package:vnl/src/features/library/presentation/widgets/game_cover_tile.dart';
 import 'package:vnl/src/utils/prefs/app_prefs.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
-import 'package:vnl/src/widgets/search_field.dart';
 
 class GridFakeRepository implements LibraryRepository {
   GridFakeRepository(this.games);
@@ -100,6 +99,11 @@ int firstRowColumns(WidgetTester tester) {
 }
 
 void main() {
+  Finder findToolbarSearch() => find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField && widget.decoration?.hintText == 'Search',
+      );
+
   testWidgets('grid builds lazily', (tester) async {
     await pumpLibrary(tester, fakeGames(2000));
     expect(find.byType(GameCoverTile).evaluate().length, lessThan(200));
@@ -108,13 +112,7 @@ void main() {
 
   testWidgets('typing in search changes the count text', (tester) async {
     await pumpLibrary(tester, fakeGames(2000));
-    await tester.enterText(
-      find.descendant(
-        of: find.byType(SearchField),
-        matching: find.byType(TextField),
-      ),
-      'zzz',
-    );
+    await tester.enterText(findToolbarSearch(), 'zzz');
     await tester.pump();
     expect(find.text('0 of 2000'), findsOneWidget);
   });
@@ -131,7 +129,7 @@ void main() {
   testWidgets('toolbar is one row at 1280 wide', (tester) async {
     await pumpLibrary(tester, fakeGames(20));
     final items = [
-      find.byType(SearchField),
+      findToolbarSearch(),
       find.byType(DropdownMenu<keys.SortField>),
       find.byTooltip('Ascending'),
       find.byType(SegmentedButton<bool>),

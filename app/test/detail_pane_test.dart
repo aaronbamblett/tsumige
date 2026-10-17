@@ -22,7 +22,6 @@ import 'package:vnl/src/features/library/data/library_repository.dart';
 import 'package:vnl/src/features/library/domain/cover_source.dart';
 import 'package:vnl/src/features/library/presentation/widgets/game_detail_pane.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
-import 'package:vnl/src/widgets/search_field.dart';
 
 class DetailFakeRepository implements LibraryRepository {
   DetailFakeRepository(this.games);
@@ -153,6 +152,11 @@ Future<void> tapSpoilerText(WidgetTester tester, String secret) async {
 }
 
 void main() {
+  Finder findToolbarSearch() => find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField && widget.decoration?.hintText == 'Search',
+      );
+
   testWidgets('spoiler text is hidden until tapped, then shown',
       (tester) async {
     await pumpLibrary(tester, [
@@ -431,10 +435,7 @@ void main() {
 
   testWidgets('search field is at least 240 wide at 1280', (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
-    final searchBox = find.descendant(
-      of: find.byType(SearchField),
-      matching: find.byType(TextField),
-    );
+    final searchBox = findToolbarSearch();
     final width = tester.getSize(searchBox).width;
     expect(width, greaterThanOrEqualTo(240));
     expect(width, lessThanOrEqualTo(360));
@@ -458,13 +459,7 @@ void main() {
       core.Game(id: 'g2', title: 'Beta'),
     ]);
     await openPane(tester, 'Alpha');
-    await tester.enterText(
-      find.descendant(
-        of: find.byType(SearchField),
-        matching: find.byType(TextField),
-      ),
-      'zzz',
-    );
+    await tester.enterText(findToolbarSearch(), 'zzz');
     await tester.pump();
     expect(find.text('0 of 2'), findsOneWidget);
     expect(find.text('Alpha'), findsOneWidget);
