@@ -466,6 +466,24 @@ void main() {
     expect(container.read(launchLocaleProvider), 'fr_FR.UTF-8');
   });
 
+  testWidgets('prefix field and controls share one centre and right edge', (
+    tester,
+  ) async {
+    await pumpSettings(tester, SettingsFakeRepository());
+    await openSection(tester, 'launching');
+    final field = tester.getRect(find.byKey(const Key('settings-prefix')));
+    final choose = tester.getRect(
+      find.byKey(const Key('settings-prefix-choose')),
+    );
+    expect(field.center.dy, closeTo(choose.center.dy, 1));
+    final proton = tester.getRect(
+      find.byKey(const Key('settings-proton-version')),
+    );
+    final locale = tester.getRect(find.byKey(const Key('settings-locale')));
+    expect(choose.right, closeTo(proton.right, 1));
+    expect(choose.right, closeTo(locale.right, 1));
+  });
+
   testWidgets('portal prefix is rejected', (tester) async {
     final container = await pumpSettings(tester, SettingsFakeRepository());
     await openSection(tester, 'launching');
