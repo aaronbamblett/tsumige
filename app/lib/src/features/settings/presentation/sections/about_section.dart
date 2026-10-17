@@ -5,15 +5,26 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'package:flutter/material.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/version.dart';
+import '../../../../utils/theme/brand.dart';
 import 'settings_widgets.dart';
 
-class AboutSection extends StatelessWidget {
+/// Opens the project repository in the browser. Overridden in tests so no
+/// browser opens.
+final githubUrlOpenerProvider = Provider<Future<bool> Function(Uri)>(
+  (ref) => launchUrl,
+);
+
+final _repoUri = Uri.parse('https://github.com/aaronbamblett/vn-launcher');
+
+class AboutSection extends ConsumerWidget {
   const AboutSection({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final muted = theme.textTheme.bodyMedium?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
@@ -33,6 +44,19 @@ class AboutSection extends StatelessWidget {
           control: Align(
             alignment: Alignment.centerRight,
             child: Text('MPL-2.0', style: theme.textTheme.bodyMedium),
+          ),
+        ),
+        SettingsRow(
+          label: 'Source code',
+          control: Align(
+            alignment: Alignment.centerRight,
+            child: BrandGlassButton(
+              height: 40,
+              expand: false,
+              onPressed: () => ref.read(githubUrlOpenerProvider)(_repoUri),
+              icon: const Icon(Icons.code_rounded, size: 20),
+              label: const Text('GitHub'),
+            ),
           ),
         ),
       ],
