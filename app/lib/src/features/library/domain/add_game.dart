@@ -8,7 +8,9 @@ import 'package:http/http.dart' as http;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/covers.dart';
 import '../../../core/model.dart';
+import '../../../core/paths.dart';
 import '../../../core/vndb.dart';
 
 part 'add_game.g.dart';
@@ -42,6 +44,67 @@ Game gameFromVn(VnSearchResult r,
       executable: exe.isEmpty ? null : exe,
     ),
   );
+}
+
+/// A game with no VNDB entry: the folder name or typed title, and an exe.
+Game plainGame({
+  required String title,
+  String description = '',
+  List<String> tags = const [],
+  required String exe,
+  LaunchMode? mode,
+  DateTime? now,
+}) {
+  return Game(
+    id: const Uuid().v4(),
+    title: title,
+    description: description,
+    tags: [...tags],
+    addedAt: (now ?? DateTime.now()).toUtc(),
+    launch: LaunchOverrides(
+      mode: mode,
+      executable: exe.isEmpty ? null : exe,
+    ),
+  );
+}
+
+/// Builds a game from a picked VNDB result: its VNDB metadata, then its
+/// cover. A failed cover download leaves the game without one and sets
+/// [coverFailed].
+Future<({Game game, bool coverFailed})> buildVnGame({
+  required VnSearchResult result,
+  required String title,
+  required String description,
+  required List<String> tags,
+  required String exe,
+  required LaunchMode? mode,
+  required int? steamAppId,
+  required VndbClient vndb,
+  required http.Client httpClient,
+  required DataDir dataDir,
+}) async {
+  final game = gameFromVn(result, exe: exe, mode: mode);
+  game.title = title;
+  game.description = description;
+  game.tags = [...tags];
+  await fillVndbMetadata(game, vndb);
+  game.launch.steamAppId = steamAppId;
+  var coverFailed = false;
+  final imageUrl = result.imageUrl;
+  if (imageUrl != null && imageUrl.isNotEmpty) {
+    try {
+      final response = await httpClient.get(Uri.parse(imageUrl));
+      if (response.statusCode != 200) {
+        throw StateError('HTTP ${response.statusCode}');
+      }
+      final name = await storeOriginal(dataDir, game.id, response.bodyBytes);
+      game.cover = name;
+      await generateThumbnails(dataDir, [(game.id, name)]);
+    } catch (_) {
+      coverFailed = true;
+    }
+  }
+  return (game: game, coverFailed: coverFailed);
 }
 
 /// Orders VNDB search results: an exact title match first, then titles that
