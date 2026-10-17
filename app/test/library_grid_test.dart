@@ -134,6 +134,20 @@ void main() {
     expect(spread, lessThanOrEqualTo(1.0));
   });
 
+  testWidgets('all/favourites keeps the same width either way',
+      (tester) async {
+    await pumpLibrary(tester, fakeGames(20));
+    final segments = find.byType(SegmentedButton<bool>);
+    expect(segments, findsOneWidget);
+    final before = tester.getRect(segments).width;
+    final container = ProviderScope.containerOf(tester.element(segments));
+    container.read(favouritesOnlyProvider.notifier).set(true);
+    await tester.pump();
+    await tester.pump();
+    expect(tester.getRect(segments).width,
+        moreOrLessEquals(before, epsilon: 0.5));
+  });
+
   testWidgets('slider hides below 900 wide', (tester) async {
     await pumpLibrary(tester, fakeGames(20));
     setSurface(tester, 860, 800);
@@ -163,7 +177,7 @@ void main() {
     await tester.pump();
     final container =
         ProviderScope.containerOf(tester.element(find.byType(Slider)));
-    for (final width in [100, 192, 999]) {
+    for (final width in [100, 192, 400]) {
       container.read(coverWidthProvider.notifier).set(width);
       await tester.pump();
       await tester.pump();
@@ -254,12 +268,12 @@ void main() {
     expect(find.textContaining('zzz-unique-tag'), findsNothing);
   });
 
-  testWidgets('no overflow at slider values 100, 192 and 999',
+  testWidgets('no overflow at slider values 100, 192 and 400',
       (tester) async {
     await pumpLibrary(tester, fakeGames(8));
     final container =
         ProviderScope.containerOf(tester.element(find.byType(Slider)));
-    for (final width in [100, 192, 999]) {
+    for (final width in [100, 192, 400]) {
       container.read(coverWidthProvider.notifier).set(width);
       await tester.pump();
       await tester.pump();

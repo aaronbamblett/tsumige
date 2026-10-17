@@ -30,7 +30,23 @@ void main() {
     expect(container.read(coverWidthProvider), 100);
 
     container.read(coverWidthProvider.notifier).set(1500);
-    expect(container.read(coverWidthProvider), 999);
+    expect(container.read(coverWidthProvider), 400);
+  });
+
+  test('clampCoverWidth bounds', () {
+    expect(keys.clampCoverWidth(999), 400);
+    expect(keys.clampCoverWidth(50), 100);
+    expect(keys.clampCoverWidth(192), 192);
+  });
+
+  test('stored cover width above max loads clamped', () async {
+    SharedPreferences.setMockInitialValues(
+        {keys.PrefKey.coverWidth.key: 999});
+    final prefs = await SharedPreferences.getInstance();
+    final container = containerFor(prefs);
+    addTearDown(container.dispose);
+
+    expect(container.read(coverWidthProvider), 400);
   });
 
   test('sort persists', () async {

@@ -12,7 +12,7 @@ import 'prefs_mixin.dart';
 
 part 'app_prefs.g.dart';
 
-/// Cover grid tile width in logical pixels, clamped to 100..999.
+/// Cover grid tile width in logical pixels, clamped to 100..400.
 @riverpod
 class CoverWidth extends _$CoverWidth with PrefsMixin<int> {
   @override

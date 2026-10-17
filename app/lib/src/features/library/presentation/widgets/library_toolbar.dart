@@ -115,6 +115,7 @@ class LibraryToolbar extends ConsumerWidget {
                       )
                     else
                       SegmentedButton<bool>(
+                        showSelectedIcon: false,
                         segments: const [
                           ButtonSegment(value: false, label: Text('All')),
                           ButtonSegment(

@@ -8,14 +8,14 @@ part of 'app_prefs.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Cover grid tile width in logical pixels, clamped to 100..999.
+/// Cover grid tile width in logical pixels, clamped to 100..400.
 
 @ProviderFor(CoverWidth)
 final coverWidthProvider = CoverWidthProvider._();
 
-/// Cover grid tile width in logical pixels, clamped to 100..999.
+/// Cover grid tile width in logical pixels, clamped to 100..400.
 final class CoverWidthProvider extends $NotifierProvider<CoverWidth, int> {
-  /// Cover grid tile width in logical pixels, clamped to 100..999.
+  /// Cover grid tile width in logical pixels, clamped to 100..400.
   CoverWidthProvider._()
     : super(
         from: null,
@@ -45,7 +45,7 @@ final class CoverWidthProvider extends $NotifierProvider<CoverWidth, int> {
 
 String _$coverWidthHash() => r'8bda59ad9e39969548a9ccb92a65b7f0e620e381';
 
-/// Cover grid tile width in logical pixels, clamped to 100..999.
+/// Cover grid tile width in logical pixels, clamped to 100..400.
 
 abstract class _$CoverWidth extends $Notifier<int> {
   int build();

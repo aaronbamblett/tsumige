@@ -9,7 +9,7 @@ enum SortField { added, title, lastPlayed, playtime, vndbRating }
 
 /// Cover grid tile width bounds, in logical pixels.
 const int coverWidthMin = 100;
-const int coverWidthMax = 999;
+const int coverWidthMax = 400;
 const int coverWidthDefault = 192;
 
 /// Clamp a cover width into [coverWidthMin]..[coverWidthMax].
