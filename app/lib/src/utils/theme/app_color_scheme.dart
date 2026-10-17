@@ -18,14 +18,18 @@ import 'theme_tokens.dart';
 ColorScheme schemeFromTokens(ThemeTokens t, Brightness brightness) {
   Color mix(Color a, Color b, double amt) => Color.lerp(a, b, amt)!;
 
+  // theme-kit's light blocks name --on-accent / --accent-bg, so use them
+  // verbatim. The dark blocks name neither, and fall back to the derived
+  // values so the dark scheme is unchanged.
   final accentBg = t.accentBg;
 
   return ColorScheme(
     brightness: brightness,
     // Brand accents (verbatim)
     primary: t.accent,
-    // Contrast against the accent, not always white: a light accent needs dark
-    // text so primary-filled elements stay legible.
+    // Contrast against the accent, not always white: a light accent (e.g. the
+    // Monochrome theme's near-white grey) needs dark text so the unread-count
+    // badge and other primary-filled elements stay legible.
     onPrimary: accentBg != null
         ? t.onAccent!
         : ThemeData.estimateBrightnessForColor(t.accent) == Brightness.light
@@ -67,5 +71,19 @@ ColorScheme schemeFromTokens(ThemeTokens t, Brightness brightness) {
     shadow: Colors.black,
     // No elevation tinting — keep surfaces exactly as specified above.
     surfaceTint: Colors.transparent,
+  );
+}
+
+/// Layers AMOLED pure-black on a DARK [ColorScheme]: backgrounds → black,
+/// elevated containers → stepped near-black. Accents and on-colors unchanged.
+ColorScheme applyAmoled(ColorScheme dark) {
+  return dark.copyWith(
+    surface: const Color(0xFF000000),
+    surfaceDim: const Color(0xFF000000),
+    surfaceContainerLowest: const Color(0xFF000000),
+    surfaceContainerLow: const Color(0xFF0A0A0A),
+    surfaceContainer: const Color(0xFF101010),
+    surfaceContainerHigh: const Color(0xFF161616),
+    surfaceContainerHighest: const Color(0xFF1C1C1C),
   );
 }

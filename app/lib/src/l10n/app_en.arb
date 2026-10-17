@@ -5,5 +5,43 @@
   "settings": "Settings",
   "search": "Search",
   "errorTitle": "Could not open library",
-  "retry": "Retry"
+  "retry": "Retry",
+  "appTheme": "App Theme Mode",
+  "@appTheme": {
+    "description": "Popup title and Button text to change App Theme Mode"
+  },
+  "themeModeSystem": "System",
+  "@themeModeSystem": {
+    "description": "Radio button text for App theme - System"
+  },
+  "themeModeLight": "Light",
+  "@themeModeLight": {
+    "description": "Radio button text for App theme - Light"
+  },
+  "themeModeDark": "Dark",
+  "@themeModeDark": {
+    "description": "Radio button text for App theme - Dark"
+  },
+  "pureBlackAmoled": "Pure black (AMOLED)",
+  "@pureBlackAmoled": {
+    "description": "AMOLED dark variant toggle"
+  },
+  "customColor": "Custom color",
+  "@customColor": {
+    "description": "Tile to pick a custom seed color"
+  },
+  "back": "Back",
+  "next": "Next",
+  "cancel": "Cancel",
+  "@cancel": {
+    "description": "Text for Cancel button in a Popup"
+  },
+  "appThemeIndigoNight": "Indigo Night",
+  "@appThemeIndigoNight": {},
+  "appThemeCarbon": "Carbon",
+  "@appThemeCarbon": {},
+  "appThemePlum": "Plum",
+  "@appThemePlum": {},
+  "appThemeCustom": "Custom",
+  "@appThemeCustom": {}
 }

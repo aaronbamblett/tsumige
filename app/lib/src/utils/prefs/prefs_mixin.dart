@@ -70,6 +70,37 @@ mixin PrefsMixin<T> {
     return prefs.getString(key.key);
   }
 
+  E? initNullableEnum<E extends Enum>(PrefKey key, List<E> values) {
+    persistOnChange((next) async {
+      final value = next as E?;
+      if (value == null) return prefs.remove(key.key);
+      return prefs.setInt(key.key, values.indexOf(value));
+    });
+    final stored = prefs.getInt(key.key);
+    if (stored != null && stored >= 0 && stored < values.length) {
+      return values[stored];
+    }
+    return null;
+  }
+
+  int? initNullableInt(PrefKey key) {
+    persistOnChange((next) async {
+      final value = next as int?;
+      if (value == null) return prefs.remove(key.key);
+      return prefs.setInt(key.key, value);
+    });
+    return prefs.getInt(key.key);
+  }
+
+  bool? initNullableBool(PrefKey key) {
+    persistOnChange((next) async {
+      final value = next as bool?;
+      if (value == null) return prefs.remove(key.key);
+      return prefs.setBool(key.key, value);
+    });
+    return prefs.getBool(key.key);
+  }
+
   SortField initSortField() {
     persistOnChange((next) async =>
         prefs.setInt(PrefKey.sortField.key, (next as SortField).index));

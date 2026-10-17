@@ -17,7 +17,10 @@ import 'package:vnl/src/core/paths.dart' as core;
 import 'package:vnl/src/core/store.dart' as core;
 import 'package:vnl/src/core/vndb.dart' as core;
 import 'package:vnl/src/features/library/data/library_repository.dart';
+import 'package:vnl/src/features/settings/presentation/appearance/widgets/app_theme_selector/app_theme_selector.dart';
+import 'package:vnl/src/features/settings/presentation/appearance/widgets/is_true_black/is_true_black_tile.dart';
 import 'package:vnl/src/features/settings/presentation/settings_screen.dart';
+import 'package:vnl/src/features/settings/widgets/app_theme_mode_tile/app_theme_mode_tile.dart';
 import 'package:vnl/src/l10n/generated/app_localizations.dart';
 import 'package:vnl/src/utils/prefs/app_prefs.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
@@ -198,5 +201,13 @@ void main() {
     await pumpSettings(tester, SettingsFakeRepository(),
         dir: core.DataDir('/tmp/x'));
     expect(find.text('/tmp/x'), findsOneWidget);
+  });
+
+  testWidgets('appearance theme controls render', (tester) async {
+    await pumpSettings(tester, SettingsFakeRepository());
+    expect(find.byType(AppThemeModeTile), findsOneWidget);
+    expect(find.byType(ThemeSelector), findsOneWidget);
+    expect(find.byType(IsTrueBlackTile), findsOneWidget);
+    expect(find.byType(CustomColorTile), findsNothing);
   });
 }

@@ -129,6 +129,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Retry'**
   String get retry;
+
+  /// Popup title and Button text to change App Theme Mode
+  ///
+  /// In en, this message translates to:
+  /// **'App Theme Mode'**
+  String get appTheme;
+
+  /// Radio button text for App theme - System
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get themeModeSystem;
+
+  /// Radio button text for App theme - Light
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get themeModeLight;
+
+  /// Radio button text for App theme - Dark
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get themeModeDark;
+
+  /// AMOLED dark variant toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Pure black (AMOLED)'**
+  String get pureBlackAmoled;
+
+  /// Tile to pick a custom seed color
+  ///
+  /// In en, this message translates to:
+  /// **'Custom color'**
+  String get customColor;
+
+  /// No description provided for @back.
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get back;
+
+  /// No description provided for @next.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get next;
+
+  /// Text for Cancel button in a Popup
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cancel;
+
+  /// No description provided for @appThemeIndigoNight.
+  ///
+  /// In en, this message translates to:
+  /// **'Indigo Night'**
+  String get appThemeIndigoNight;
+
+  /// No description provided for @appThemeCarbon.
+  ///
+  /// In en, this message translates to:
+  /// **'Carbon'**
+  String get appThemeCarbon;
+
+  /// No description provided for @appThemePlum.
+  ///
+  /// In en, this message translates to:
+  /// **'Plum'**
+  String get appThemePlum;
+
+  /// No description provided for @appThemeCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get appThemeCustom;
 }
 
 class _AppLocalizationsDelegate

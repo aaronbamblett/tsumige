@@ -12,7 +12,12 @@ import 'package:vnl/src/core/store.dart' as core;
 
 import '../constants/app_theme.dart';
 import '../features/library/data/library_repository.dart';
+import '../features/settings/presentation/appearance/widgets/app_theme_selector/app_theme_providers.dart';
+import '../features/settings/presentation/appearance/widgets/is_true_black/is_true_black_tile.dart';
+import '../features/settings/widgets/app_theme_mode_tile/app_theme_mode_tile.dart';
 import '../l10n/generated/app_localizations.dart';
+import '../utils/app_scroll_behavior.dart';
+import '../utils/extensions/bool.dart';
 import '../utils/extensions/l10n.dart';
 import '../utils/theme/app_theme_builder.dart';
 
@@ -41,10 +46,24 @@ class AppErrorApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final dir = ref.watch(dataDirProvider);
+    final appTheme = ref.watch(appThemeKeyProvider) ?? AppTheme.indigoNight;
+    final customSeed = ref.watch(customThemeColorProvider) ?? 0xFF7C7BFF;
+    final isTrueBlack = ref.watch(isTrueBlackProvider).ifNull();
     return MaterialApp(
-      theme: buildAppTheme(theme: AppTheme.vnl, brightness: Brightness.light),
-      darkTheme:
-          buildAppTheme(theme: AppTheme.vnl, brightness: Brightness.dark),
+      theme: buildAppTheme(
+        theme: appTheme,
+        brightness: Brightness.light,
+        customSeed: Color(customSeed),
+        amoled: false,
+      ),
+      darkTheme: buildAppTheme(
+        theme: appTheme,
+        brightness: Brightness.dark,
+        customSeed: Color(customSeed),
+        amoled: isTrueBlack,
+      ),
+      themeMode: ref.watch(appThemeModeProvider) ?? ThemeMode.system,
+      scrollBehavior: const AppScrollBehavior(),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Builder(

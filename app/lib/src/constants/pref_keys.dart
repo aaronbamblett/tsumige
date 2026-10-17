@@ -29,7 +29,11 @@ enum PrefKey {
   launchUmuGameId('launch.umuGameId', 'umu-default'),
   windowWidth('window.width', null),
   windowHeight('window.height', null),
-  windowMaximized('window.maximized', false);
+  windowMaximized('window.maximized', false),
+  appTheme('appearance.appTheme', null),
+  themeMode('appearance.themeMode', null),
+  customThemeColor('appearance.customColor', null),
+  trueBlack('appearance.trueBlack', null);
 
   const PrefKey(this.key, this.defaultValue);
 

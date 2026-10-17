@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../constants/app_theme.dart';
 import '../../../constants/pref_keys.dart' as keys;
 import '../../../core/store.dart' as core;
 import '../../../utils/extensions/l10n.dart';
@@ -14,6 +15,10 @@ import '../../../utils/prefs/app_prefs.dart';
 import '../../../utils/toast.dart';
 import '../../library/data/library_repository.dart';
 import '../widgets/slider_setting_tile/slider_setting_tile.dart';
+import '../widgets/app_theme_mode_tile/app_theme_mode_tile.dart';
+import 'appearance/widgets/app_theme_selector/app_theme_providers.dart';
+import 'appearance/widgets/app_theme_selector/app_theme_selector.dart';
+import 'appearance/widgets/is_true_black/is_true_black_tile.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -84,6 +89,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // Watched so the library is loaded before the first refresh tap.
     ref.watch(libraryProvider);
     final coverWidth = ref.watch(coverWidthProvider);
+    final themeMode = ref.watch(appThemeModeProvider);
     final dataDir = ref.watch(dataDirProvider);
     final theme = Theme.of(context);
     final headingStyle = theme.textTheme.titleSmall
@@ -103,6 +109,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
                 child: Text('Appearance', style: headingStyle),
               ),
+              const AppThemeModeTile(),
+              const ThemeSelector(),
+              Consumer(
+                builder: (context, ref, _) {
+                  final theme = ref.watch(appThemeKeyProvider);
+                  return theme == AppTheme.custom
+                      ? const CustomColorTile()
+                      : const SizedBox.shrink();
+                },
+              ),
+              if (themeMode != ThemeMode.light) const IsTrueBlackTile(),
               SliderSettingTile(
                 title: 'Cover size',
                 icon: Icons.photo_size_select_large_rounded,

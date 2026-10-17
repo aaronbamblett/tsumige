@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Contributors to the Suwayomi project
 // Copyright (c) 2026 Aaron Bamblett
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
@@ -5,23 +6,82 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'package:flutter/material.dart';
+import 'package:material_color_utilities/material_color_utilities.dart';
 
-/// The active theme's extra brand roles, registered by [buildAppTheme].
+import '../../widgets/mini_circular_progress_indicator.dart';
+
+/// Brand visual language — the SINGLE source for the things Flutter's Material
+/// [ThemeData] cannot express (gradients + glow). Gradients come from the
+/// active theme's own theme-kit `--grad` via [BrandColors]; the glow derives
+/// from the active [ColorScheme], which is built from the same tokens. Every
+/// named theme + Custom works for free.
+///
+/// Do NOT inline gradients/colors at call sites — use these components.
+
+/// The gradient used when a theme ships no `--grad` (every dark set, plus
+/// Custom): theme-kit's original `linear-gradient(135deg, accent, accent2)`,
+/// 135° == top-left → bottom-right, accent first.
+LinearGradient schemeBrandGradient(ColorScheme cs) => LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [cs.primary, cs.secondary],
+);
+
+/// The brand glow. Mirrors theme-kit `--glow` (accent at ~35%) as a soft shadow.
+List<BoxShadow> brandGlow(ColorScheme cs) => [
+  BoxShadow(
+    color: cs.primary.withValues(alpha: 0.35),
+    blurRadius: 22,
+    spreadRadius: -2,
+    offset: const Offset(0, 5),
+  ),
+];
+
+/// The active theme's `--grad` and `--on-accent`, registered by
+/// [buildAppTheme]. Read this instead of inlining a gradient — the light themes
+/// each have their own, and a few run in the opposite direction.
 class BrandColors extends ThemeExtension<BrandColors> {
-  const BrandColors({required this.success});
+  const BrandColors({
+    required this.gradient,
+    required this.onGradient,
+    required this.success,
+    this.neutral = false,
+  });
 
-  /// Positive-status colour (rating refresh finished).
+  final Gradient gradient;
+
+  /// Text/icon colour on top of [gradient].
+  final Color onGradient;
+
+  /// Positive-status colour (server connected, migration finished). See
+  /// [brandSuccessColor] for why this needs its own token.
   final Color success;
 
+  /// Colourless UI (Monochrome light): genre chips and cover backdrops drop
+  /// their hues.
+  final bool neutral;
+
   @override
-  BrandColors copyWith({Color? success}) =>
-      BrandColors(success: success ?? this.success);
+  BrandColors copyWith({
+    Gradient? gradient,
+    Color? onGradient,
+    Color? success,
+    bool? neutral,
+  }) => BrandColors(
+    gradient: gradient ?? this.gradient,
+    onGradient: onGradient ?? this.onGradient,
+    success: success ?? this.success,
+    neutral: neutral ?? this.neutral,
+  );
 
   @override
   BrandColors lerp(ThemeExtension<BrandColors>? other, double t) {
     if (other is! BrandColors) return this;
     return BrandColors(
+      gradient: Gradient.lerp(gradient, other.gradient, t)!,
+      onGradient: Color.lerp(onGradient, other.onGradient, t)!,
       success: Color.lerp(success, other.success, t)!,
+      neutral: t < 0.5 ? neutral : other.neutral,
     );
   }
 
@@ -29,6 +89,8 @@ class BrandColors extends ThemeExtension<BrandColors> {
     final theme = Theme.of(context);
     return theme.extension<BrandColors>() ??
         BrandColors(
+          gradient: schemeBrandGradient(theme.colorScheme),
+          onGradient: const Color(0xFF0B0D1A),
           success: brandSuccessColor(theme.colorScheme.brightness),
         );
   }
@@ -46,8 +108,403 @@ Color brandSuccessColor(Brightness brightness) => brightness == Brightness.dark
 Color brandStarColor(Brightness brightness) =>
     brightness == Brightness.dark ? Colors.amber : const Color(0xFFB7791F);
 
-/// A lighter, more vibrant accent for text/outline actions (links).
+/// Colours for content drawn on the cover art rather than the theme surface.
+/// Theme-independent on purpose: the art underneath is, so these must not
+/// follow the light/dark scheme.
+abstract final class OnImage {
+  static const text = Colors.white;
+  static const shadow = Colors.black;
+  static const scrim = Color(0xAA000000);
+}
+
+/// The single reader-chrome surface (top/bottom bars, seekbars, skip buttons) so
+/// the chrome reads uniform. Near-opaque — 0.9 dark / 0.95 light; a
+/// lower alpha washes out over white webtoon pages.
+Color readerNavSurface(ColorScheme cs) =>
+    cs.surface.withValues(alpha: cs.brightness == Brightness.dark ? 0.9 : 0.95);
+
+/// A lighter, more vibrant accent for text/outline actions (links, "Uninstall").
 /// Light mode keeps the deep primary; lightening it would undo its contrast.
 Color brandBrightAccent(ColorScheme cs) => cs.brightness == Brightness.light
     ? cs.primary
     : Color.lerp(cs.primary, Colors.white, 0.22)!;
+
+/// Deterministic hue (0-360) for a label — same genre always gets the same
+/// color. Mirrors the playground's `hueFor`: h = (h*31 + codeUnit) % 360.
+double brandHueFor(String label) {
+  var h = 0;
+  for (final c in label.codeUnits) {
+    h = (h * 31 + c) % 360;
+  }
+  return h.toDouble();
+}
+
+/// An icon painted with the brand gradient (for the downloaded check-circle,
+/// etc.). Single source — do not inline ShaderMask + gradient at call sites.
+Widget brandGradientIcon(
+  BuildContext context,
+  IconData icon, {
+  double size = 24,
+}) {
+  return ShaderMask(
+    blendMode: BlendMode.srcIn,
+    shaderCallback: (bounds) =>
+        BrandColors.of(context).gradient.createShader(bounds),
+    child: Icon(icon, size: size, color: Colors.white),
+  );
+}
+
+Widget _brandRow({
+  required BuildContext context,
+  required Widget label,
+  Widget? icon,
+  required bool expand,
+  Color? content,
+}) {
+  final color = content ?? BrandColors.of(context).onGradient;
+  return Row(
+    mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      if (icon != null) ...[
+        IconTheme.merge(
+          data: IconThemeData(color: color, size: 20),
+          child: icon,
+        ),
+        const SizedBox(width: 8),
+      ],
+      // Flexible so a long label (e.g. "Downloading 14") ellipsises instead
+      // of overflowing the button's width.
+      Flexible(
+        child: DefaultTextStyle.merge(
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+          ),
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
+          child: label,
+        ),
+      ),
+    ],
+  );
+}
+
+/// Primary action — brand gradient + glow, dark content. (No Material fill.)
+class BrandButton extends StatelessWidget {
+  const BrandButton({
+    super.key,
+    required this.onPressed,
+    required this.label,
+    this.icon,
+    this.loading = false,
+    this.height = 46,
+    this.expand = true,
+  });
+
+  final VoidCallback? onPressed;
+  final Widget label;
+  final Widget? icon;
+  final bool loading;
+  final double height;
+  final bool expand;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final brand = BrandColors.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: brand.gradient,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: brandGlow(cs),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: loading ? null : onPressed,
+          child: SizedBox(
+            height: height,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Center(
+                child: loading
+                    ? MiniCircularProgressIndicator(color: brand.onGradient)
+                    : _brandRow(
+                        context: context,
+                        label: label,
+                        icon: icon,
+                        expand: expand,
+                      ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Secondary action — translucent glass fill + accent border + bright text.
+class BrandGlassButton extends StatelessWidget {
+  const BrandGlassButton({
+    super.key,
+    required this.onPressed,
+    required this.label,
+    this.icon,
+    this.height = 46,
+    this.expand = true,
+  });
+
+  final VoidCallback? onPressed;
+  final Widget label;
+  final Widget? icon;
+  final double height;
+  final bool expand;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final accent = brandBrightAccent(cs);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: cs.onSurface.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onPressed,
+          child: SizedBox(
+            height: height,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Center(
+                child: _brandRow(
+                  context: context,
+                  label: label,
+                  icon: icon,
+                  expand: expand,
+                  content: accent,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Small circular **glass** brand button — translucent fill + accent border +
+/// bright accent glyph. Single source for round brand actions (reader
+/// chapter-end jumps, etc.).
+class BrandCircleButton extends StatelessWidget {
+  const BrandCircleButton({
+    super.key,
+    required this.icon,
+    required this.onPressed,
+    this.size = 42,
+  });
+
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: cs.onSurface.withValues(alpha: 0.06),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onPressed,
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: Icon(icon, size: size * 0.55, color: brandBrightAccent(cs)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Filled round icon button for the reader vertical nav. Filled
+/// with [color] (the shared [readerNavSurface] so it matches the bar capsule
+/// exactly), glyph in the theme `primary`. [quarterTurns] rotates the icon so
+/// the chapter skip glyphs point up / down like the vertical slider.
+class BrandFilledCircleButton extends StatelessWidget {
+  const BrandFilledCircleButton({
+    super.key,
+    required this.icon,
+    required this.onPressed,
+    required this.color,
+    this.size = 44,
+    this.quarterTurns = 0,
+  });
+
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final Color color;
+  final double size;
+  final int quarterTurns;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final enabled = onPressed != null;
+    return DecoratedBox(
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onPressed,
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: RotatedBox(
+              quarterTurns: quarterTurns,
+              child: Icon(
+                icon,
+                size: size * 0.5,
+                color: enabled
+                    ? cs.primary
+                    : cs.onSurface.withValues(alpha: 0.3),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+typedef ChipColors = ({Color fill, Color border, Color text});
+
+final _lightChipColors = <int, ChipColors>{};
+
+/// Fill / border / text for a genre chip at [hue].
+///
+/// Light mode uses HCT rather than HSL because HSL lightness is not perceived
+/// lightness: one value that suits blue leaves yellow and cyan at ~1:1 against
+/// a light surface. HCT tone holds every hue at the same contrast (~6.5:1).
+ChipColors brandChipColors(double hue, Brightness brightness) {
+  if (brightness == Brightness.dark) {
+    return (
+      fill: HSLColor.fromAHSL(0.16, hue, 0.70, 0.55).toColor(),
+      border: HSLColor.fromAHSL(0.45, hue, 0.70, 0.60).toColor(),
+      text: HSLColor.fromAHSL(1, hue, 0.85, 0.78).toColor(),
+    );
+  }
+  // Hct.from runs a solver per call, so memoize — brandHueFor yields whole
+  // degrees, capping this at 360 entries.
+  return _lightChipColors.putIfAbsent(hue.round(), () {
+    // Hue read back from the dark chip's color so a genre keeps its color
+    // family across modes.
+    final hct = Hct.fromInt(
+      HSLColor.fromAHSL(1, hue, 0.85, 0.55).toColor().toARGB32(),
+    ).hue;
+    return (
+      // Opaque, so contrast holds whichever light theme's surface is behind.
+      fill: Color(Hct.from(hct, 40, 92).toInt()),
+      border: Color(Hct.from(hct, 40, 80).toInt()),
+      text: Color(Hct.from(hct, 50, 34).toInt()),
+    );
+  });
+}
+
+/// Genre / tag chip — fill tinted with a UNIQUE per-label color
+/// (hue derived from the label, so every genre is visually distinct).
+class BrandChip extends StatelessWidget {
+  const BrandChip({super.key, required this.label, this.onTap});
+
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final colors = BrandColors.of(context).neutral
+        ? (
+            fill: cs.surfaceContainer,
+            border: cs.outlineVariant,
+            text: cs.onSurface,
+          )
+        : brandChipColors(brandHueFor(label), cs.brightness);
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: BoxDecoration(
+        color: colors.fill,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colors.border),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: colors.text,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        ),
+      ),
+    );
+    if (onTap == null) return chip;
+    return GestureDetector(onTap: onTap, child: chip);
+  }
+}
+
+/// Floating action — brand gradient + glow pill, dark content.
+class BrandFab extends StatelessWidget {
+  const BrandFab({
+    super.key,
+    required this.onPressed,
+    required this.label,
+    this.icon,
+  });
+
+  final VoidCallback? onPressed;
+  final Widget label;
+  final Widget? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: BrandColors.of(context).gradient,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: brandGlow(cs),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            child: _brandRow(
+              context: context,
+              label: label,
+              icon: icon,
+              expand: false,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

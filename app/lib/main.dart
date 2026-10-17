@@ -11,9 +11,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/constants/app_theme.dart';
 import 'src/features/library/data/library_repository.dart';
+import 'src/features/settings/presentation/appearance/widgets/app_theme_selector/app_theme_providers.dart';
+import 'src/features/settings/presentation/appearance/widgets/is_true_black/is_true_black_tile.dart';
+import 'src/features/settings/widgets/app_theme_mode_tile/app_theme_mode_tile.dart';
 import 'src/l10n/generated/app_localizations.dart';
 import 'src/routes/router.dart';
+import 'src/utils/app_scroll_behavior.dart';
 import 'src/utils/desktop/desktop_window.dart';
+import 'src/utils/extensions/bool.dart';
 import 'src/utils/prefs/prefs_mixin.dart';
 import 'src/utils/startup_time.dart';
 import 'src/utils/theme/app_theme_builder.dart';
@@ -41,6 +46,22 @@ class VnlApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final library = ref.watch(libraryProvider);
+    final appTheme = ref.watch(appThemeKeyProvider) ?? AppTheme.indigoNight;
+    final customSeed = ref.watch(customThemeColorProvider) ?? 0xFF7C7BFF;
+    final isTrueBlack = ref.watch(isTrueBlackProvider).ifNull();
+    final theme = buildAppTheme(
+      theme: appTheme,
+      brightness: Brightness.light,
+      customSeed: Color(customSeed),
+      amoled: false,
+    );
+    final darkTheme = buildAppTheme(
+      theme: appTheme,
+      brightness: Brightness.dark,
+      customSeed: Color(customSeed),
+      amoled: isTrueBlack,
+    );
+    final themeMode = ref.watch(appThemeModeProvider) ?? ThemeMode.system;
     // Show the error screen while a retry is pending too: Riverpod re-runs a
     // failed load on a timer, during which the state is loading-with-error,
     // and a corrupt library would otherwise sit on an empty window.
@@ -49,9 +70,10 @@ class VnlApp extends ConsumerWidget {
     }
     return library.when(
       loading: () => MaterialApp(
-        theme: buildAppTheme(theme: AppTheme.vnl, brightness: Brightness.light),
-        darkTheme:
-            buildAppTheme(theme: AppTheme.vnl, brightness: Brightness.dark),
+        theme: theme,
+        darkTheme: darkTheme,
+        themeMode: themeMode,
+        scrollBehavior: const AppScrollBehavior(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: const Scaffold(body: SizedBox.shrink()),
@@ -59,10 +81,10 @@ class VnlApp extends ConsumerWidget {
       error: (error, _) => AppErrorApp(error: error),
       data: (_) => MaterialApp.router(
         builder: FToastBuilder(),
-        theme:
-            buildAppTheme(theme: AppTheme.vnl, brightness: Brightness.light),
-        darkTheme:
-            buildAppTheme(theme: AppTheme.vnl, brightness: Brightness.dark),
+        theme: theme,
+        darkTheme: darkTheme,
+        themeMode: themeMode,
+        scrollBehavior: const AppScrollBehavior(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         routerConfig: ref.watch(routerProvider),
