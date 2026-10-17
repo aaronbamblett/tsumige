@@ -60,6 +60,61 @@ const String _vnDataFields =
     'olang,developers{id,name,original},tags{name,rating,spoiler,category},'
     'relations{id,relation,relation_official,title,image.url}';
 
+const String _artVnFields =
+    'image.url,image.thumbnail,image.dims,'
+    'screenshots.url,screenshots.thumbnail,screenshots.dims';
+
+const String _artReleaseFields =
+    'images.type,images.url,images.thumbnail,images.dims';
+
+/// One VNDB image offered as cover or background. [width] and [height] are 0
+/// when VNDB gives no dimensions.
+class ArtCandidate {
+  final String url;
+  final String thumbnail;
+  final int width;
+  final int height;
+  final String type;
+
+  const ArtCandidate({
+    required this.url,
+    required this.thumbnail,
+    required this.width,
+    required this.height,
+    required this.type,
+  });
+
+  bool get portrait => height >= width;
+}
+
+class ArtCandidates {
+  final ArtCandidate? main;
+  final List<ArtCandidate> releaseImages;
+  final List<ArtCandidate> screenshots;
+
+  const ArtCandidates({
+    this.main,
+    this.releaseImages = const [],
+    this.screenshots = const [],
+  });
+}
+
+ArtCandidate? _parseArt(Object? raw, String type) {
+  if (raw is! Map) return null;
+  final url = raw['url'];
+  if (url is! String || !url.startsWith('http')) return null;
+  final thumb = raw['thumbnail'];
+  final dims = raw['dims'];
+  final hasDims = dims is List && dims.length == 2 && dims.every((d) => d is int);
+  return ArtCandidate(
+    url: url,
+    thumbnail: thumb is String && thumb.startsWith('http') ? thumb : url,
+    width: hasDims ? dims[0] as int : 0,
+    height: hasDims ? dims[1] as int : 0,
+    type: type,
+  );
+}
+
 class VnSearchResult {
   final String id;
   final String title;
@@ -328,6 +383,50 @@ class VndbClient {
       }
     }
     return out;
+  }
+
+  /// The VN's main image, its screenshots, and the images of its releases
+  /// (deduplicated by url, with the main image left out of the release list).
+  Future<ArtCandidates> fetchArtCandidates(String vndbId) async {
+    final vnRows = await _postPage('/vn', {
+      'filters': ['id', '=', vndbId],
+      'fields': _artVnFields,
+      'results': 1,
+    });
+    final vn = vnRows.results.isEmpty ? null : vnRows.results.first;
+    final main = vn == null ? null : _parseArt(vn['image'], 'main');
+    final shots = vn?['screenshots'];
+    final screenshots = [
+      for (final shot in shots is List ? shots : const [])
+        ?_parseArt(shot, 'screenshot'),
+    ];
+    final seen = {if (main != null) main.url};
+    final releaseImages = <ArtCandidate>[];
+    for (var page = 1;; page++) {
+      final result = await _postPage('/release', {
+        'filters': ['vn', '=', ['id', '=', vndbId]],
+        'fields': _artReleaseFields,
+        'results': 100,
+        'page': page,
+      });
+      for (final release in result.results) {
+        final images = release['images'];
+        if (images is! List) continue;
+        for (final image in images) {
+          if (image is! Map) continue;
+          final type = image['type'];
+          final art = _parseArt(image, type is String ? type : 'release');
+          if (art == null || !seen.add(art.url)) continue;
+          releaseImages.add(art);
+        }
+      }
+      if (!result.more) break;
+    }
+    return ArtCandidates(
+      main: main,
+      releaseImages: releaseImages,
+      screenshots: screenshots,
+    );
   }
 
   /// VN ids, among [ids], that have at least one release with `has_ero`.

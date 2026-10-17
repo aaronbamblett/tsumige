@@ -435,4 +435,124 @@ void main() {
     expect(report.updated, 2);
     expect(report.notFound, isEmpty);
   });
+  group('fetchArtCandidates', () {
+    const main = {
+      'url': 'https://t.vndb.org/cv/16/98416.jpg',
+      'thumbnail': 'https://t.vndb.org/cv.t/16/98416.jpg',
+      'dims': [411, 560],
+    };
+
+    test('orders the main image, screenshots and deduped release images', () async {
+      final seen = <Map<String, Object?>>[];
+      final client = _routed(
+        seen: seen,
+        vn: (body) => _ok([
+          {
+            'image': main,
+            'screenshots': [
+              {
+                'url': 'https://t.vndb.org/sf/86/101386.jpg',
+                'thumbnail': 'https://t.vndb.org/sf.t/86/101386.jpg',
+                'dims': [1024, 768],
+              },
+            ],
+          },
+        ]),
+        release: (body) => _ok([
+          {
+            'images': [
+              {'type': 'pkgfront', ...main},
+              {
+                'type': 'pkgfront',
+                'url': 'https://t.vndb.org/cv/66/98366.jpg',
+                'thumbnail': 'https://t.vndb.org/cv.t/66/98366.jpg',
+                'dims': [350, 500],
+              },
+              {
+                'type': 'dig',
+                'url': 'https://t.vndb.org/cv/64/98364.jpg',
+                'thumbnail': 'https://t.vndb.org/cv.t/64/98364.jpg',
+                'dims': [1368, 770],
+              },
+              {
+                'type': 'dig',
+                'url': 'https://t.vndb.org/cv/66/98366.jpg',
+                'dims': [350, 500],
+              },
+            ],
+          },
+        ]),
+      );
+
+      final art = await client.fetchArtCandidates('v927448');
+
+      expect(art.main!.url, main['url']);
+      expect(art.main!.width, 411);
+      expect(art.main!.height, 560);
+      expect(art.main!.type, 'main');
+      expect(art.screenshots.single.type, 'screenshot');
+      expect(art.screenshots.single.thumbnail,
+          'https://t.vndb.org/sf.t/86/101386.jpg');
+      expect(art.releaseImages.map((i) => i.url), [
+        'https://t.vndb.org/cv/66/98366.jpg',
+        'https://t.vndb.org/cv/64/98364.jpg',
+      ]);
+      expect(art.releaseImages.first.portrait, isTrue);
+      expect(art.releaseImages.last.portrait, isFalse);
+      expect(art.releaseImages.first.thumbnail,
+          'https://t.vndb.org/cv.t/66/98366.jpg');
+      expect(art.releaseImages.last.type, 'dig');
+      expect(seen.first['filters'], ['id', '=', 'v927448']);
+      expect(seen.last['filters'], ['vn', '=', ['id', '=', 'v927448']]);
+      expect(seen.last['results'], 100);
+    });
+
+    test('falls back to the url when a thumbnail is missing', () async {
+      final client = _routed(
+        vn: (body) => _ok([
+          {'image': {'url': 'https://t.vndb.org/cv/1/1.jpg'}},
+        ]),
+      );
+      final art = await client.fetchArtCandidates('v1');
+      expect(art.main!.thumbnail, 'https://t.vndb.org/cv/1/1.jpg');
+      expect(art.main!.width, 0);
+      expect(art.screenshots, isEmpty);
+      expect(art.releaseImages, isEmpty);
+    });
+
+    test('pages the release request while more is set', () async {
+      final pages = <Object?>[];
+      final client = _routed(
+        vn: (body) => _ok([{'image': main}]),
+        release: (body) {
+          pages.add(body['page']);
+          final url = 'https://t.vndb.org/cv/${body['page']}/1.jpg';
+          return http.Response(
+            _page([
+              {
+                'images': [
+                  {'type': 'dig', 'url': url, 'dims': [600, 900]},
+                ],
+              },
+            ], more: body['page'] == 1),
+            200,
+          );
+        },
+      );
+      final art = await client.fetchArtCandidates('v1');
+      expect(pages, [1, 2]);
+      expect(art.releaseImages.map((i) => i.url), [
+        'https://t.vndb.org/cv/1/1.jpg',
+        'https://t.vndb.org/cv/2/1.jpg',
+      ]);
+    });
+
+    test('no VN row gives empty candidates', () async {
+      final client = _routed(vn: (body) => _ok([]));
+      final art = await client.fetchArtCandidates('v404');
+      expect(art.main, isNull);
+      expect(art.releaseImages, isEmpty);
+      expect(art.screenshots, isEmpty);
+    });
+  });
 }
