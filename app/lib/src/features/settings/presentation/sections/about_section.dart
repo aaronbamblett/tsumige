@@ -32,9 +32,26 @@ class AboutSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Tsumige', style: theme.textTheme.headlineSmall),
-        const SizedBox(height: 4),
-        Text('Version $appVersion', style: muted),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            ImageIcon(
+              const AssetImage('assets/icon/tsumige_mark.png'),
+              size: 40,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Tsumige', style: theme.textTheme.headlineSmall),
+                const SizedBox(height: 4),
+                Text('Version $appVersion', style: muted),
+              ],
+            ),
+          ],
+        ),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 16),
           child: Divider(height: 1, color: theme.colorScheme.outlineVariant),

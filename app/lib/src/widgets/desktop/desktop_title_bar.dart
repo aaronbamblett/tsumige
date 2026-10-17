@@ -39,11 +39,22 @@ class DesktopTitleBar extends StatelessWidget {
                 // Brand name (not localized). Kept as a literal so the bar never
                 // depends on Localizations being in scope at the app-builder
                 // level, where AppLocalizations.of() isn't reliably available.
-                child: Text(
-                  'Tsumige',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: scheme.onSurface.withValues(alpha: 0.7),
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ImageIcon(
+                      const AssetImage('assets/icon/tsumige_mark.png'),
+                      size: 16,
+                      color: scheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Tsumige',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: scheme.onSurface.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
