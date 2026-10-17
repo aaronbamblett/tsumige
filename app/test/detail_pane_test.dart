@@ -222,10 +222,10 @@ void main() {
     expect(heroRect.height, moreOrLessEquals(120, epsilon: 0.5));
   });
 
-  testWidgets('the four tabs exist and Launch shows Mode', (tester) async {
+  testWidgets('the three tabs exist and Launch shows Mode', (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
-    for (final label in ['Info', 'Launch', 'Routes', 'History']) {
+    for (final label in ['Info', 'Launch', 'History']) {
       expect(tabLabel(label), findsOneWidget);
     }
     expect(find.text('Mode'), findsNothing);
@@ -439,45 +439,6 @@ void main() {
       matching: find.byType(TextField),
     );
     expect(tester.widget<TextField>(exeField).controller?.text, path);
-  });
-
-  testWidgets('routes tab shows completion state and the active dropdown',
-      (tester) async {
-    await pumpLibrary(tester, [
-      core.Game(id: 'g1', title: 'Alpha', activeRoute: 'Rin', routes: [
-        core.Route(name: 'Rin', completed: true),
-        core.Route(name: 'Saber', completed: false),
-      ]),
-    ]);
-    await openPane(tester, 'Alpha');
-    await openTab(tester, 'Routes');
-    expect(find.text('2 routes'), findsOneWidget);
-    expect(find.text('Saber'), findsOneWidget);
-    expect(
-        tester
-            .widget<Checkbox>(
-                find.byKey(const ValueKey('route-completed-Rin')))
-            .value,
-        isTrue);
-    expect(
-        tester
-            .widget<Checkbox>(
-                find.byKey(const ValueKey('route-completed-Saber')))
-            .value,
-        isFalse);
-    expect(
-        tester
-            .widget<DropdownButton<String?>>(
-                find.byKey(const Key('routes-active')))
-            .value,
-        'Rin');
-  });
-
-  testWidgets('routes tab shows a zero count when empty', (tester) async {
-    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
-    await openPane(tester, 'Alpha');
-    await openTab(tester, 'Routes');
-    expect(find.text('0 routes'), findsOneWidget);
   });
 
   testWidgets('tapping a tile opens the pane; Escape closes it',

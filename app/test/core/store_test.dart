@@ -49,8 +49,6 @@ Game fullGame(String id) => Game(
         environment: 'KEY=value',
         steamAppId: 12345,
       ),
-      routes: [Route(name: 'Watatsuki', completed: true, notes: 'r')],
-      activeRoute: 'Watatsuki',
       playSessions: [
         PlaySession(
             startedAt: DateTime.utc(2026, 10, 3, 14),
@@ -109,6 +107,33 @@ void main() {
     expect(game.tags, isEmpty);
     expect(game.launch.mode, isNull);
     expect(game.playSessions, isEmpty);
+  });
+
+  test('legacy route keys load and are not written back', () async {
+    final dir = await freshDir();
+    final id = const Uuid().v4();
+    await dir.libraryJson.writeAsString(jsonEncode({
+      'schema_version': 1,
+      'games': [
+        {
+          'id': id,
+          'title': 'Legacy',
+          'routes': [
+            {'name': 'x', 'completed': true}
+          ],
+          'active_route': 'x',
+        }
+      ],
+    }));
+    final loaded = await loadLibrary(dir);
+    expect(loaded.skipped, isEmpty);
+    expect(loaded.library.games.single.title, 'Legacy');
+    await saveLibrary(dir, loaded);
+    final saved = jsonDecode(await dir.libraryJson.readAsString())
+        as Map<String, Object?>;
+    final game = (saved['games'] as List).single as Map<String, Object?>;
+    expect(game.containsKey('routes'), isFalse);
+    expect(game.containsKey('active_route'), isFalse);
   });
 
   test('bad entry skipped, others load', () async {

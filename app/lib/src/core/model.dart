@@ -50,8 +50,6 @@ class Game {
   Language? language;
   String? cover;
   LaunchOverrides launch;
-  List<Route> routes;
-  String? activeRoute;
   List<PlaySession> playSessions;
 
   Game({
@@ -70,13 +68,10 @@ class Game {
     this.language,
     this.cover,
     LaunchOverrides? launch,
-    List<Route>? routes,
-    this.activeRoute,
     List<PlaySession>? playSessions,
   })  : tags = tags ?? [],
         addedAt = addedAt ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
         launch = launch ?? LaunchOverrides(),
-        routes = routes ?? [],
         playSessions = playSessions ?? [];
 
   factory Game.fromJson(Map m) => Game(
@@ -97,8 +92,6 @@ class Game {
         launch: m['launch'] is Map
             ? LaunchOverrides.fromJson(m['launch'] as Map)
             : LaunchOverrides(),
-        routes: readList(m, 'routes', (e) => Route.fromJson(e)),
-        activeRoute: readStringOrNull(m, 'active_route'),
         playSessions:
             readList(m, 'play_sessions', (e) => PlaySession.fromJson(e)),
       );
@@ -119,8 +112,6 @@ class Game {
         'language': language?.name,
         'cover': cover,
         'launch': launch.toJson(),
-        'routes': [for (final r in routes) r.toJson()],
-        'active_route': activeRoute,
         'play_sessions': [for (final s in playSessions) s.toJson()],
       };
 
@@ -182,26 +173,6 @@ class LaunchOverrides {
         'environment': environment,
         'steam_app_id': steamAppId,
       };
-}
-
-class Route {
-  String name;
-  bool completed;
-  String? notes;
-
-  Route({this.name = '', this.completed = false, this.notes});
-
-  factory Route.fromJson(Object? raw) {
-    if (raw is! Map) throw const FormatException('route must be an object');
-    return Route(
-      name: readString(raw, 'name'),
-      completed: readBool(raw, 'completed'),
-      notes: readStringOrNull(raw, 'notes'),
-    );
-  }
-
-  Map<String, Object?> toJson() =>
-      {'name': name, 'completed': completed, 'notes': notes};
 }
 
 class PlaySession {

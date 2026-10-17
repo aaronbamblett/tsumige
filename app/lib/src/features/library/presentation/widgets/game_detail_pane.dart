@@ -30,7 +30,6 @@ import '../../domain/selection.dart';
 import 'detail_tabs/history_tab.dart';
 import 'detail_tabs/info_tab.dart';
 import 'detail_tabs/launch_tab.dart';
-import 'detail_tabs/routes_tab.dart';
 
 
 
@@ -43,7 +42,7 @@ class GameDetailPane extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
     return DefaultTabController(
-      length: 4,
+      length: 3,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final hasCover = game.cover != null && game.cover!.isNotEmpty;
@@ -119,7 +118,6 @@ class GameDetailPane extends ConsumerWidget {
                 tabs: const [
                   Tab(text: 'Info'),
                   Tab(text: 'Launch'),
-                  Tab(text: 'Routes'),
                   Tab(text: 'History'),
                 ],
               ),
@@ -128,7 +126,6 @@ class GameDetailPane extends ConsumerWidget {
                   children: [
                     InfoTab(game: game),
                     LaunchTab(game: game),
-                    RoutesTab(game: game),
                     HistoryTab(game: game),
                   ],
                 ),
