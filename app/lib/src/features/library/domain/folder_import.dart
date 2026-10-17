@@ -253,9 +253,7 @@ double similarity(String folder, String title) {
   if (a.isNotEmpty && b.isNotEmpty) {
     if ((' $b ').contains(' $a ') || (' $a ').contains(' $b ')) {
       ratio = math.max(ratio, _containmentScore(a, b));
-    } else if (sa.isNotEmpty &&
-        sb.isNotEmpty &&
-        (sa.startsWith(sb) || sb.startsWith(sa))) {
+    } else if (sa.isNotEmpty && sa.length < sb.length && sb.startsWith(sa)) {
       ratio = math.max(ratio, _containmentScore(sa, sb));
     }
   }

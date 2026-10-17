@@ -250,6 +250,11 @@ void main() {
       expect(similarity('DEMO', 'DEMO Plus'), greaterThanOrEqualTo(0.85));
     });
 
+    test('a title that is a prefix of the folder name gets no bonus', () {
+      expect(similarity('Demoxa', 'DEMO'), closeTo(0.8, 1e-12));
+      expect(similarity('Demoxa', 'DEMO'), lessThan(0.85));
+    });
+
     test('an equal score keeps VNDB order', () {
       final m = matchFolder('Foo Bar', [
         _vn('v1', 'Foo Bar Deluxe'),
