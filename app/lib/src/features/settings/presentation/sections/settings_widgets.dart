@@ -401,11 +401,16 @@ class _SettingsTextBoxState extends State<SettingsTextBox> {
         textAlignVertical: multiline
             ? TextAlignVertical.top
             : TextAlignVertical.center,
-        decoration: InputDecoration.collapsed(
+        decoration: InputDecoration(
           hintText: widget.hint,
           hintStyle: theme.textTheme.bodyMedium?.copyWith(
             color: scheme.onSurfaceVariant,
           ),
+          isDense: true,
+          border: InputBorder.none,
+          contentPadding: multiline
+              ? EdgeInsets.zero
+              : const EdgeInsets.symmetric(vertical: 10),
         ),
         onSubmitted: widget.onSubmitted,
       ),
@@ -415,7 +420,7 @@ class _SettingsTextBoxState extends State<SettingsTextBox> {
         horizontal: 12,
         vertical: multiline ? 10 : 0,
       ),
-      child: field,
+      child: multiline ? field : SizedBox(width: double.infinity, child: field),
     );
     final overlay = widget.overlay;
     return MouseRegion(

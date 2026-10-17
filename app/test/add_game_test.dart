@@ -520,4 +520,27 @@ void main() {
     expect(tester.getSize(placeholder.first), const Size(220, 293));
     expect(find.text('New game'), findsOneWidget);
   });
+
+  testWidgets('add text is centred in each box, unfocused and focused',
+      (tester) async {
+    await _pump(tester);
+    await tester.tap(find.byKey(const Key('add-game-manual')));
+    await tester.pumpAndSettle();
+    for (final key in ['add-game-title', 'add-game-exe']) {
+      final box = find.descendant(
+          of: find.byKey(Key(key)), matching: find.byType(SettingsTextBox));
+      final editable = find.descendant(
+          of: find.byKey(Key(key)), matching: find.byType(EditableText));
+      expect(tester.getCenter(editable).dy,
+          closeTo(tester.getCenter(box).dy, 2), reason: '$key unfocused');
+      await tester.tap(editable);
+      await tester.pump();
+      expect(tester.getCenter(editable).dy,
+          closeTo(tester.getCenter(box).dy, 2), reason: '$key focused');
+      await tester.enterText(find.byKey(Key(key)), 'typed value');
+      await tester.pump();
+      expect(tester.getCenter(editable).dy,
+          closeTo(tester.getCenter(box).dy, 2), reason: '$key typing');
+    }
+  });
 }

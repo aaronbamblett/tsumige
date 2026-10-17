@@ -566,4 +566,23 @@ void main() {
       expect(tester.takeException(), isNull, reason: section);
     }
   });
+
+  testWidgets('prefix text is centred in its box, unfocused and focused', (
+    tester,
+  ) async {
+    await pumpSettings(tester, SettingsFakeRepository());
+    await openSection(tester, 'launching');
+    final field = find.byKey(const Key('settings-prefix'));
+    final box = tester.getCenter(
+      find.descendant(of: field, matching: find.byType(SettingsTextBox)),
+    );
+    final editable = find.descendant(
+      of: field,
+      matching: find.byType(EditableText),
+    );
+    expect(tester.getCenter(editable).dy, closeTo(box.dy, 2));
+    await tester.tap(editable);
+    await tester.pump();
+    expect(tester.getCenter(editable).dy, closeTo(box.dy, 2));
+  });
 }

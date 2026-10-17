@@ -485,4 +485,43 @@ void main() {
     expect(clip.left, closeTo(box.left + 1, 0.5));
     expect(clip.right, closeTo(box.right - 1, 0.5));
   });
+
+  testWidgets('single-line text is centred in each box, unfocused and focused',
+      (tester) async {
+    await pumpLaunch(tester, [
+      core.Game(
+          id: 'g1',
+          title: 'Alpha',
+          launch: core.LaunchOverrides(
+              mode: core.LaunchMode.proton,
+              executable: '/games/a.exe',
+              umuGameId: 'umu-1',
+              arguments: '--x')),
+    ]);
+    await openLaunch(tester, 'Alpha');
+    await openAdvanced(tester);
+    for (final key in ['launch-executable', 'launch-umu', 'launch-arguments']) {
+      final box = find.descendant(
+          of: find.byKey(Key(key)), matching: find.byType(SettingsTextBox));
+      final editable = find.descendant(
+          of: find.byKey(Key(key)), matching: find.byType(EditableText));
+      expect(tester.getCenter(editable).dy,
+          closeTo(tester.getCenter(box).dy, 2), reason: '$key unfocused');
+      await tester.ensureVisible(editable);
+      await tester.pump();
+      expect(tester.getCenter(editable).dy,
+          closeTo(tester.getCenter(box).dy, 2), reason: '$key scrolled');
+      await tester.tap(editable);
+      await tester.pump();
+      expect(tester.getCenter(editable).dy,
+          closeTo(tester.getCenter(box).dy, 2), reason: '$key focused');
+      await tester.enterText(find.byKey(Key(key)), 'typed value');
+      await tester.pump();
+      expect(tester.getCenter(editable).dy,
+          closeTo(tester.getCenter(box).dy, 2), reason: '$key typing');
+      await blur(tester);
+      await tester.pumpAndSettle();
+    }
+    await tester.pump(const Duration(seconds: 6));
+  });
 }
