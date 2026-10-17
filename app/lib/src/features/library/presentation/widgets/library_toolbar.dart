@@ -13,6 +13,7 @@ import '../../data/library_repository.dart';
 import '../../domain/cover_source.dart';
 import '../../domain/library_query.dart';
 import '../../../../utils/prefs/app_prefs.dart';
+import '../add_game/add_game_dialog.dart';
 
 const Map<keys.SortField, String> sortFieldLabels = {
   keys.SortField.added: 'Added',
@@ -187,6 +188,11 @@ class LibraryToolbar extends ConsumerWidget {
                         ),
                       ),
                     Text(countText),
+                    IconButton(
+                      tooltip: 'Add game',
+                      icon: const Icon(Icons.add_rounded),
+                      onPressed: () => showAddGameDialog(context),
+                    ),
                     IconButton(
                       tooltip: 'Settings',
                       icon: const Icon(Icons.settings_rounded),

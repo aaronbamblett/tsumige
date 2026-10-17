@@ -55,6 +55,27 @@ class GameEditor {
     _ref.invalidate(libraryProvider);
   }
 
+  /// Appends a new game (the add dialog's save path) and saves.
+  Future<void> add(Game game, {BuildContext? context}) async {
+    final loaded = _ref.read(libraryProvider).value;
+    if (loaded == null) return;
+    loaded.library.games.add(game);
+    try {
+      await _ref.read(libraryRepositoryProvider).save(loaded);
+    } on ChangedOnDisk {
+      _ref.invalidate(libraryProvider);
+      if (context?.mounted == false) return;
+      _tell(context, changedOnDiskMessage, error: false);
+      return;
+    } catch (e) {
+      _ref.invalidate(libraryProvider);
+      if (context?.mounted == false) return;
+      _tell(context, '$e', error: true);
+      return;
+    }
+    _ref.invalidate(libraryProvider);
+  }
+
   /// Removes the game (already moved to trash by the caller) and saves.
   Future<void> remove(String gameId, {BuildContext? context}) async {
     final loaded = _ref.read(libraryProvider).value;
