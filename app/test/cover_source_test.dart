@@ -9,10 +9,10 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:path/path.dart' as p;
-import 'package:vnl/src/core/covers.dart';
-import 'package:vnl/src/core/model.dart';
-import 'package:vnl/src/core/paths.dart';
-import 'package:vnl/src/features/library/domain/cover_source.dart';
+import 'package:tsumige/src/core/covers.dart';
+import 'package:tsumige/src/core/model.dart';
+import 'package:tsumige/src/core/paths.dart';
+import 'package:tsumige/src/features/library/domain/cover_source.dart';
 
 void main() {
   artVersionStatTests();
@@ -21,7 +21,7 @@ void main() {
   late DataDir dir;
 
   setUp(() {
-    temp = Directory.systemTemp.createTempSync('vnl_cover_source_test_');
+    temp = Directory.systemTemp.createTempSync('tsumige_cover_source_test_');
     dir = DataDir(temp.path);
   });
 
@@ -83,7 +83,7 @@ void main() {
 
 void artVersionStatTests() {
   test('building twice stats a file once, and invalidation stats it again', () {
-    final temp = Directory.systemTemp.createTempSync('vnl_art_version_');
+    final temp = Directory.systemTemp.createTempSync('tsumige_art_version_');
     addTearDown(() => temp.deleteSync(recursive: true));
     final file = File(p.join(temp.path, 'g1.png'))..writeAsBytesSync([1]);
     final stats = <String>[];

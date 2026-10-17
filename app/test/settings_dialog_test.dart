@@ -13,23 +13,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:vnl/src/core/covers.dart' as core;
-import 'package:vnl/src/core/launch/detect.dart' as detect;
-import 'package:vnl/src/core/model.dart' as core;
-import 'package:vnl/src/core/paths.dart' as core;
-import 'package:vnl/src/core/store.dart' as core;
-import 'package:vnl/src/core/vndb.dart' as core;
-import 'package:vnl/src/features/library/data/library_repository.dart';
-import 'package:vnl/src/features/library/domain/game_editor.dart';
-import 'package:vnl/src/features/library/domain/runner_detection.dart';
-import 'package:vnl/src/features/library/presentation/widgets/library_toolbar.dart';
-import 'package:vnl/src/features/settings/presentation/sections/settings_widgets.dart';
-import 'package:vnl/src/features/settings/presentation/settings_dialog.dart';
-import 'package:vnl/src/features/settings/widgets/app_theme_mode_tile/app_theme_mode_tile.dart';
-import 'package:vnl/src/l10n/generated/app_localizations.dart';
-import 'package:vnl/src/utils/prefs/app_prefs.dart';
-import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
-import 'package:vnl/src/utils/theme/brand.dart';
+import 'package:tsumige/src/core/covers.dart' as core;
+import 'package:tsumige/src/core/launch/detect.dart' as detect;
+import 'package:tsumige/src/core/model.dart' as core;
+import 'package:tsumige/src/core/paths.dart' as core;
+import 'package:tsumige/src/core/store.dart' as core;
+import 'package:tsumige/src/core/vndb.dart' as core;
+import 'package:tsumige/src/features/library/data/library_repository.dart';
+import 'package:tsumige/src/features/library/domain/game_editor.dart';
+import 'package:tsumige/src/features/library/domain/runner_detection.dart';
+import 'package:tsumige/src/features/library/presentation/widgets/library_toolbar.dart';
+import 'package:tsumige/src/features/settings/presentation/sections/settings_widgets.dart';
+import 'package:tsumige/src/features/settings/presentation/settings_dialog.dart';
+import 'package:tsumige/src/features/settings/widgets/app_theme_mode_tile/app_theme_mode_tile.dart';
+import 'package:tsumige/src/l10n/generated/app_localizations.dart';
+import 'package:tsumige/src/utils/prefs/app_prefs.dart';
+import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
+import 'package:tsumige/src/utils/theme/brand.dart';
 
 class SettingsFakeRepository implements LibraryRepository {
   SettingsFakeRepository({
@@ -107,7 +107,7 @@ Future<ProviderContainer> pumpSettings(
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
-        dataDirProvider.overrideWithValue(dir ?? core.DataDir('/tmp/vnl_test')),
+        dataDirProvider.overrideWithValue(dir ?? core.DataDir('/tmp/tsumige_test')),
         libraryRepositoryProvider.overrideWithValue(repo),
         protonRunnersProvider.overrideWith(
           (ref) => Future.value(protonRunners),
@@ -179,7 +179,7 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
-          dataDirProvider.overrideWithValue(core.DataDir('/tmp/vnl_test')),
+          dataDirProvider.overrideWithValue(core.DataDir('/tmp/tsumige_test')),
           libraryRepositoryProvider.overrideWithValue(SettingsFakeRepository()),
         ],
         child: MaterialApp(
@@ -523,12 +523,12 @@ void main() {
     await tester.enterText(field, '/run/user/1000/prefix');
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pump();
-    expect(container.read(launchPrefixProvider), '~/Games/vnl/prefix');
+    expect(container.read(launchPrefixProvider), '~/Games/tsumige/prefix');
     await tester.pump(const Duration(seconds: 6));
   });
 
   testWidgets('open folder buttons call the injected launcher', (tester) async {
-    final temp = Directory.systemTemp.createTempSync('vnl_settings_test_');
+    final temp = Directory.systemTemp.createTempSync('tsumige_settings_test_');
     addTearDown(() => temp.deleteSync(recursive: true));
     final opened = <Uri>[];
     await pumpLibrarySection(

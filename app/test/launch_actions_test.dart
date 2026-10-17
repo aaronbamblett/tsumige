@@ -12,20 +12,20 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:vnl/main.dart';
-import 'package:vnl/src/core/launch/game_runner.dart';
-import 'package:vnl/src/core/launch/launch_command.dart';
-import 'package:vnl/src/core/launch/process_table.dart';
-import 'package:vnl/src/core/covers.dart' as core;
-import 'package:vnl/src/core/launch/session_recorder.dart';
-import 'package:vnl/src/core/model.dart' as core;
-import 'package:vnl/src/core/paths.dart' as core;
-import 'package:vnl/src/core/vndb.dart' as core;
-import 'package:vnl/src/features/library/data/library_repository.dart';
-import 'package:vnl/src/features/library/domain/cover_source.dart';
-import 'package:vnl/src/features/library/domain/launch_actions.dart';
-import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
-import 'package:vnl/src/utils/theme/brand.dart';
+import 'package:tsumige/main.dart';
+import 'package:tsumige/src/core/launch/game_runner.dart';
+import 'package:tsumige/src/core/launch/launch_command.dart';
+import 'package:tsumige/src/core/launch/process_table.dart';
+import 'package:tsumige/src/core/covers.dart' as core;
+import 'package:tsumige/src/core/launch/session_recorder.dart';
+import 'package:tsumige/src/core/model.dart' as core;
+import 'package:tsumige/src/core/paths.dart' as core;
+import 'package:tsumige/src/core/vndb.dart' as core;
+import 'package:tsumige/src/features/library/data/library_repository.dart';
+import 'package:tsumige/src/features/library/domain/cover_source.dart';
+import 'package:tsumige/src/features/library/domain/launch_actions.dart';
+import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
+import 'package:tsumige/src/utils/theme/brand.dart';
 
 class FakeRepository implements LibraryRepository {
   FakeRepository(this.games);
@@ -135,7 +135,7 @@ Future<Directory> pumpLaunch(
       return null;
     },
   );
-  final temp = Directory.systemTemp.createTempSync('vnl_launch_test_');
+  final temp = Directory.systemTemp.createTempSync('tsumige_launch_test_');
   addTearDown(() => temp.deleteSync(recursive: true));
   SharedPreferences.setMockInitialValues({});
   await tester.pumpWidget(ProviderScope(
@@ -150,7 +150,7 @@ Future<Directory> pumpLaunch(
       umuRunPathProvider.overrideWithValue(umu),
       exePickerProvider.overrideWithValue(picker ?? noPick),
     ],
-    child: const VnlApp(),
+    child: const TsumigeApp(),
   ));
   await tester.pump();
   await tester.pump();
@@ -284,7 +284,7 @@ void main() {
         return null;
       },
     );
-    final temp = Directory.systemTemp.createTempSync('vnl_launch_test_');
+    final temp = Directory.systemTemp.createTempSync('tsumige_launch_test_');
     addTearDown(() => temp.deleteSync(recursive: true));
     SharedPreferences.setMockInitialValues({});
     repo = FakeRepository([protonGame('g1', 'Alpha')]);
@@ -299,7 +299,7 @@ void main() {
         umuRunPathProvider.overrideWithValue('/usr/bin/umu-run'),
         exePickerProvider.overrideWithValue(noPick),
       ],
-      child: const VnlApp(),
+      child: const TsumigeApp(),
     ));
     await tester.pump();
     await tester.pump();
@@ -501,7 +501,7 @@ void main() {
         return null;
       },
     );
-    final temp = Directory.systemTemp.createTempSync('vnl_launch_test_');
+    final temp = Directory.systemTemp.createTempSync('tsumige_launch_test_');
     addTearDown(() => temp.deleteSync(recursive: true));
     final running =
         Directory('${temp.path}/running')..createSync(recursive: true);
@@ -522,7 +522,7 @@ void main() {
         umuRunPathProvider.overrideWithValue('/usr/bin/umu-run'),
         exePickerProvider.overrideWithValue(noPick),
       ],
-      child: const VnlApp(),
+      child: const TsumigeApp(),
     ));
     await tester.pump();
     await tester.pump();

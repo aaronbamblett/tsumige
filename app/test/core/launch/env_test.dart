@@ -5,7 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vnl/src/core/launch/env.dart';
+import 'package:tsumige/src/core/launch/env.dart';
 
 void main() {
   test('empty text gives no variables', () {

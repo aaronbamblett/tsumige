@@ -7,8 +7,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:vnl/src/features/settings/presentation/sections/about_section.dart';
-import 'package:vnl/src/utils/theme/brand.dart';
+import 'package:tsumige/src/features/settings/presentation/sections/about_section.dart';
+import 'package:tsumige/src/utils/theme/brand.dart';
 
 void main() {
   testWidgets('GitHub button opens the repository through the opener', (
@@ -33,6 +33,6 @@ void main() {
     expect(button, findsOneWidget);
     await tester.tap(button);
     await tester.pump();
-    expect(opened, [Uri.parse('https://github.com/aaronbamblett/vn-launcher')]);
+    expect(opened, [Uri.parse('https://github.com/aaronbamblett/tsumige')]);
   });
 }

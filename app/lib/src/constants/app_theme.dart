@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 
 import '../utils/extensions/l10n.dart';
 
-/// vnl's default theme. Tsumiru defaults to Indigo Night; Royal gives vnl
+/// Tsumige's default theme. Tsumiru defaults to Indigo Night; Royal gives Tsumige
 /// its own look.
 const kDefaultAppTheme = AppTheme.royal;
 

@@ -5,7 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vnl/src/core/format.dart';
+import 'package:tsumige/src/core/format.dart';
 
 void main() {
   test('formatPlaytime', () {

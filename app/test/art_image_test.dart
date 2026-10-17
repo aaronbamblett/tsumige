@@ -8,12 +8,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:vnl/src/features/library/domain/cover_source.dart';
-import 'package:vnl/src/features/library/presentation/widgets/art_image.dart';
+import 'package:tsumige/src/features/library/domain/cover_source.dart';
+import 'package:tsumige/src/features/library/presentation/widgets/art_image.dart';
 
 void main() {
   test('a file rewritten at the same path gets a new image key', () {
-    final temp = Directory.systemTemp.createTempSync('vnl_art_image_');
+    final temp = Directory.systemTemp.createTempSync('tsumige_art_image_');
     addTearDown(() => temp.deleteSync(recursive: true));
     final file = File(p.join(temp.path, 'g1.jpg'))
       ..writeAsBytesSync([1, 2, 3]);

@@ -10,7 +10,7 @@ import '../../../core/launch/game_runner.dart';
 
 part 'running_games.g.dart';
 
-/// The launch phase of each game vnl can currently see.
+/// The launch phase of each game Tsumige can currently see.
 ///
 /// Entries exist only between `starting` and `ended`: the `ended` callback
 /// removes the game, so the button shows "Running" (or "Launching…") only

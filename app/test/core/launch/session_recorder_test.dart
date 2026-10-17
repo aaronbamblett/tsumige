@@ -9,10 +9,10 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:vnl/src/core/launch/session_recorder.dart';
-import 'package:vnl/src/core/model.dart';
-import 'package:vnl/src/core/paths.dart';
-import 'package:vnl/src/core/store.dart';
+import 'package:tsumige/src/core/launch/session_recorder.dart';
+import 'package:tsumige/src/core/model.dart';
+import 'package:tsumige/src/core/paths.dart';
+import 'package:tsumige/src/core/store.dart';
 
 /// Reloads return fresh copies (as from disk) so a retry cannot append the
 /// same session twice to one object.
@@ -46,7 +46,7 @@ class FakeStore implements SessionStore {
 void main() {
   late Directory temp;
   setUp(() {
-    temp = Directory.systemTemp.createTempSync('vnl_session_test_');
+    temp = Directory.systemTemp.createTempSync('tsumige_session_test_');
   });
   tearDown(() {
     temp.deleteSync(recursive: true);

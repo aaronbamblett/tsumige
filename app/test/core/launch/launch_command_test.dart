@@ -5,8 +5,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vnl/src/core/launch/launch_command.dart';
-import 'package:vnl/src/core/model.dart';
+import 'package:tsumige/src/core/launch/launch_command.dart';
+import 'package:tsumige/src/core/model.dart';
 
 const defaults = LaunchDefaults(
   mode: LaunchMode.proton,
@@ -295,7 +295,7 @@ void main() {
       environment: 'EXTRA=yes',
     ));
     final command = build(game, hostEnv: const {
-      'FLATPAK_ID': 'com.example.Vnl',
+      'FLATPAK_ID': 'com.example.Tsumige',
       'DISPLAY': ':0',
     });
     expect(
@@ -326,7 +326,7 @@ void main() {
       executable: '/games/suba/start.sh',
     ));
     final command =
-        build(game, hostEnv: const {'FLATPAK_ID': 'com.example.Vnl'});
+        build(game, hostEnv: const {'FLATPAK_ID': 'com.example.Tsumige'});
     expect(command.executable, 'flatpak-spawn');
     expect(
       command.args,
@@ -345,7 +345,7 @@ void main() {
       executable: '/games/suba/game.exe',
     ));
     final command = build(game, hostEnv: const {
-      'FLATPAK_ID': 'com.example.Vnl',
+      'FLATPAK_ID': 'com.example.Tsumige',
       'DISPLAY': ':0',
     });
     expect(command.executable, 'flatpak-spawn');

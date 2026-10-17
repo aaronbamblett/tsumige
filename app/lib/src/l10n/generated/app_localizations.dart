@@ -97,7 +97,7 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In en, this message translates to:
-  /// **'vn-launcher'**
+  /// **'Tsumige'**
   String get appTitle;
 
   /// No description provided for @library.

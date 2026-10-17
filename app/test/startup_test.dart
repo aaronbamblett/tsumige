@@ -9,14 +9,14 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:vnl/main.dart';
-import 'package:vnl/src/features/library/data/library_repository.dart';
-import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
-import 'package:vnl/src/core/covers.dart' as core;
-import 'package:vnl/src/core/model.dart' as core;
-import 'package:vnl/src/core/paths.dart' as core;
-import 'package:vnl/src/core/store.dart' as core;
-import 'package:vnl/src/core/vndb.dart' as core;
+import 'package:tsumige/main.dart';
+import 'package:tsumige/src/features/library/data/library_repository.dart';
+import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
+import 'package:tsumige/src/core/covers.dart' as core;
+import 'package:tsumige/src/core/model.dart' as core;
+import 'package:tsumige/src/core/paths.dart' as core;
+import 'package:tsumige/src/core/store.dart' as core;
+import 'package:tsumige/src/core/vndb.dart' as core;
 
 class ThrowingLibrary extends Library {
   ThrowingLibrary(this.error);
@@ -80,7 +80,7 @@ Future<SharedPreferences> mockPrefs() async {
 void main() {
   testWidgets('corrupt library shows error screen', (tester) async {
     final temp =
-        Directory.systemTemp.createTempSync('vnl_startup_error_test_');
+        Directory.systemTemp.createTempSync('tsumige_startup_error_test_');
     addTearDown(() => temp.deleteSync(recursive: true));
     final dir = core.DataDir(temp.path);
     final error =
@@ -93,7 +93,7 @@ void main() {
         dataDirProvider.overrideWithValue(dir),
         libraryProvider.overrideWith(() => ThrowingLibrary(error)),
       ],
-      child: const VnlApp(),
+      child: const TsumigeApp(),
     ));
     await tester.pumpAndSettle();
 
@@ -102,7 +102,7 @@ void main() {
   });
 
   testWidgets('failed library load is not retried', (tester) async {
-    final temp = Directory.systemTemp.createTempSync('vnl_startup_retry_test_');
+    final temp = Directory.systemTemp.createTempSync('tsumige_startup_retry_test_');
     addTearDown(() => temp.deleteSync(recursive: true));
     final dir = core.DataDir(temp.path);
     final repository = ThrowingRepository(
@@ -116,7 +116,7 @@ void main() {
         dataDirProvider.overrideWithValue(dir),
         libraryRepositoryProvider.overrideWithValue(repository),
       ],
-      child: const VnlApp(),
+      child: const TsumigeApp(),
     ));
     await tester.pump();
     await tester.pump(const Duration(seconds: 10));
@@ -126,7 +126,7 @@ void main() {
   });
 
   testWidgets('library loads once', (tester) async {
-    final temp = Directory.systemTemp.createTempSync('vnl_startup_load_test_');
+    final temp = Directory.systemTemp.createTempSync('tsumige_startup_load_test_');
     addTearDown(() => temp.deleteSync(recursive: true));
     final repository = CountingRepository();
 
@@ -137,7 +137,7 @@ void main() {
         dataDirProvider.overrideWithValue(core.DataDir(temp.path)),
         libraryRepositoryProvider.overrideWithValue(repository),
       ],
-      child: const VnlApp(),
+      child: const TsumigeApp(),
     ));
     await tester.pumpAndSettle();
 

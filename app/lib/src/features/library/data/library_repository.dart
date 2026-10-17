@@ -7,11 +7,11 @@
 import 'dart:io';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:vnl/src/core/covers.dart' as core;
-import 'package:vnl/src/core/model.dart' as core;
-import 'package:vnl/src/core/paths.dart' as core;
-import 'package:vnl/src/core/store.dart' as core;
-import 'package:vnl/src/core/vndb.dart' as core;
+import 'package:tsumige/src/core/covers.dart' as core;
+import 'package:tsumige/src/core/model.dart' as core;
+import 'package:tsumige/src/core/paths.dart' as core;
+import 'package:tsumige/src/core/store.dart' as core;
+import 'package:tsumige/src/core/vndb.dart' as core;
 
 part 'library_repository.g.dart';
 

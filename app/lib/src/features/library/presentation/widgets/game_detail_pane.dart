@@ -519,7 +519,7 @@ Future<void> _deleteGame(BuildContext context, WidgetRef ref, Game game) async {
     builder: (dialogContext) => AlertDialog(
       title: Text('Delete ${game.title}?'),
       content: const Text(
-        "It moves to the trash folder in vnl's data "
+        "It moves to the trash folder in Tsumige's data "
         'folder and can be restored by hand.',
       ),
       actions: [

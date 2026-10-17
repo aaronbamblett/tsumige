@@ -8,14 +8,14 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:vnl/src/core/launch/log_files.dart';
-import 'package:vnl/src/core/model.dart';
-import 'package:vnl/src/core/paths.dart';
+import 'package:tsumige/src/core/launch/log_files.dart';
+import 'package:tsumige/src/core/model.dart';
+import 'package:tsumige/src/core/paths.dart';
 
 void main() {
   late Directory temp;
   setUp(() {
-    temp = Directory.systemTemp.createTempSync('vnl_log_test_');
+    temp = Directory.systemTemp.createTempSync('tsumige_log_test_');
   });
   tearDown(() {
     temp.deleteSync(recursive: true);

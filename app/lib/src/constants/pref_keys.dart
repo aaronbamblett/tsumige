@@ -26,7 +26,7 @@ enum PrefKey {
   favouritesOnly('library.favouritesOnly', false),
   adultFilter('library.adultFilter', 0),
   tagFilter('library.tagFilter', null),
-  launchPrefix('launch.prefix', '~/Games/vnl/prefix'),
+  launchPrefix('launch.prefix', '~/Games/tsumige/prefix'),
   launchRunner('launch.runner', null),
   launchLocale('launch.locale', 'ja_JP.UTF-8'),
   launchUmuGameId('launch.umuGameId', 'umu-default'),

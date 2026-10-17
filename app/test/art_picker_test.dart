@@ -16,16 +16,16 @@ import 'package:http/testing.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:vnl/src/core/covers.dart' as core;
-import 'package:vnl/src/core/model.dart' as core;
-import 'package:vnl/src/core/paths.dart' as core;
-import 'package:vnl/src/core/vndb.dart' as core;
-import 'package:vnl/src/features/library/data/library_repository.dart';
-import 'package:vnl/src/features/library/domain/add_game.dart';
-import 'package:vnl/src/features/library/domain/game_editor.dart';
-import 'package:vnl/src/features/library/presentation/widgets/art_picker_dialog.dart';
-import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
-import 'package:vnl/src/utils/theme/brand.dart';
+import 'package:tsumige/src/core/covers.dart' as core;
+import 'package:tsumige/src/core/model.dart' as core;
+import 'package:tsumige/src/core/paths.dart' as core;
+import 'package:tsumige/src/core/vndb.dart' as core;
+import 'package:tsumige/src/features/library/data/library_repository.dart';
+import 'package:tsumige/src/features/library/domain/add_game.dart';
+import 'package:tsumige/src/features/library/domain/game_editor.dart';
+import 'package:tsumige/src/features/library/presentation/widgets/art_picker_dialog.dart';
+import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
+import 'package:tsumige/src/utils/theme/brand.dart';
 
 const _main = {
   'url': 'https://t.vndb.org/cv/16/98416.jpg',
@@ -253,7 +253,7 @@ Future<_Harness> _pumpDialog(
   bool Function()? vndbFails,
   Future<String?> Function()? picker,
 }) async {
-  final temp = Directory.systemTemp.createTempSync('vnl_art_picker_');
+  final temp = Directory.systemTemp.createTempSync('tsumige_art_picker_');
   addTearDown(() => temp.deleteSync(recursive: true));
   final g =
       game ??
@@ -349,7 +349,7 @@ void main() {
   testWidgets(
     'From file… makes the file the pending cover and Save stores it',
     (tester) async {
-      final temp = Directory.systemTemp.createTempSync('vnl_art_picker_');
+      final temp = Directory.systemTemp.createTempSync('tsumige_art_picker_');
       addTearDown(() => temp.deleteSync(recursive: true));
       final source = File(p.join(temp.path, 'picked.png'))
         ..writeAsBytesSync(_png());
@@ -376,7 +376,7 @@ void main() {
   testWidgets(
     'Use the cover clears the background and moves its file to trash',
     (tester) async {
-      final temp = Directory.systemTemp.createTempSync('vnl_art_picker_');
+      final temp = Directory.systemTemp.createTempSync('tsumige_art_picker_');
       addTearDown(() => temp.deleteSync(recursive: true));
       final dir = core.DataDir(temp.path);
       dir.coversBackground.createSync(recursive: true);
@@ -505,7 +505,7 @@ void main() {
   });
 
   testWidgets('nothing overflows at 1000 by 640', (tester) async {
-    final temp = Directory.systemTemp.createTempSync('vnl_art_picker_');
+    final temp = Directory.systemTemp.createTempSync('tsumige_art_picker_');
     addTearDown(() => temp.deleteSync(recursive: true));
     final game = core.Game(id: 'g1', title: 'Sample Game', vndbId: 'v900016');
     final loaded = core.LoadedLibrary(library: core.Library(games: [game]));
@@ -530,7 +530,7 @@ void main() {
     (tester) async {
       final downloads = <String>[];
       var brokenShot = true;
-      final temp = Directory.systemTemp.createTempSync('vnl_art_picker_');
+      final temp = Directory.systemTemp.createTempSync('tsumige_art_picker_');
       addTearDown(() => temp.deleteSync(recursive: true));
       final game = core.Game(id: 'g1', title: 'Sample Game', vndbId: 'v900016');
       final loaded = core.LoadedLibrary(library: core.Library(games: [game]));

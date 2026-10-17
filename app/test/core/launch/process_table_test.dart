@@ -8,7 +8,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:vnl/src/core/launch/process_table.dart';
+import 'package:tsumige/src/core/launch/process_table.dart';
 
 void writeEnviron(String procRoot, String pid, List<String> entries) {
   final dir = Directory(p.join(procRoot, pid))..createSync(recursive: true);
@@ -23,7 +23,7 @@ void writeEnviron(String procRoot, String pid, List<String> entries) {
 void main() {
   late Directory proc;
   setUp(() {
-    proc = Directory.systemTemp.createTempSync('vnl_proc_test_');
+    proc = Directory.systemTemp.createTempSync('tsumige_proc_test_');
   });
   tearDown(() {
     proc.deleteSync(recursive: true);

@@ -15,19 +15,19 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:vnl/main.dart';
-import 'package:vnl/src/core/covers.dart' as core;
-import 'package:vnl/src/core/model.dart' as core;
-import 'package:vnl/src/core/paths.dart' as core;
-import 'package:vnl/src/core/vndb.dart' as core;
-import 'package:vnl/src/features/library/data/library_repository.dart';
-import 'package:vnl/src/features/library/domain/cover_source.dart';
-import 'package:vnl/src/features/library/presentation/widgets/game_cover_grid_delegate.dart';
-import 'package:vnl/src/features/library/presentation/widgets/game_cover_tile.dart';
-import 'package:vnl/src/features/library/presentation/widgets/game_detail_pane.dart';
-import 'package:vnl/src/features/library/presentation/widgets/library_grid.dart';
-import 'package:vnl/src/utils/prefs/app_prefs.dart';
-import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
+import 'package:tsumige/main.dart';
+import 'package:tsumige/src/core/covers.dart' as core;
+import 'package:tsumige/src/core/model.dart' as core;
+import 'package:tsumige/src/core/paths.dart' as core;
+import 'package:tsumige/src/core/vndb.dart' as core;
+import 'package:tsumige/src/features/library/data/library_repository.dart';
+import 'package:tsumige/src/features/library/domain/cover_source.dart';
+import 'package:tsumige/src/features/library/presentation/widgets/game_cover_grid_delegate.dart';
+import 'package:tsumige/src/features/library/presentation/widgets/game_cover_tile.dart';
+import 'package:tsumige/src/features/library/presentation/widgets/game_detail_pane.dart';
+import 'package:tsumige/src/features/library/presentation/widgets/library_grid.dart';
+import 'package:tsumige/src/utils/prefs/app_prefs.dart';
+import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 
 class GridFakeRepository implements LibraryRepository {
   GridFakeRepository(this.games);
@@ -75,7 +75,7 @@ Future<void> pumpLibrary(WidgetTester tester, List<core.Game> games) async {
         if (call.method == 'isMaximized') return false;
         return null;
       });
-  final temp = Directory.systemTemp.createTempSync('vnl_grid_test_');
+  final temp = Directory.systemTemp.createTempSync('tsumige_grid_test_');
   addTearDown(() => temp.deleteSync(recursive: true));
   SharedPreferences.setMockInitialValues({});
   await tester.pumpWidget(
@@ -88,7 +88,7 @@ Future<void> pumpLibrary(WidgetTester tester, List<core.Game> games) async {
         libraryRepositoryProvider.overrideWithValue(GridFakeRepository(games)),
         coverExistsProvider.overrideWithValue((_) => false),
       ],
-      child: RepaintBoundary(key: testRepaintKey, child: const VnlApp()),
+      child: RepaintBoundary(key: testRepaintKey, child: const TsumigeApp()),
     ),
   );
   await tester.pump();

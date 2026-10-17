@@ -18,7 +18,7 @@ final githubUrlOpenerProvider = Provider<Future<bool> Function(Uri)>(
   (ref) => launchUrl,
 );
 
-final _repoUri = Uri.parse('https://github.com/aaronbamblett/vn-launcher');
+final _repoUri = Uri.parse('https://github.com/aaronbamblett/tsumige');
 
 class AboutSection extends ConsumerWidget {
   const AboutSection({super.key});
@@ -32,9 +32,9 @@ class AboutSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('vnl', style: theme.textTheme.headlineSmall),
+        Text('Tsumige', style: theme.textTheme.headlineSmall),
         const SizedBox(height: 4),
-        Text('Version $vnlVersion', style: muted),
+        Text('Version $appVersion', style: muted),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 16),
           child: Divider(height: 1, color: theme.colorScheme.outlineVariant),

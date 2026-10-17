@@ -7,9 +7,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:vnl/src/constants/pref_keys.dart' as keys;
-import 'package:vnl/src/utils/prefs/app_prefs.dart';
-import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
+import 'package:tsumige/src/constants/pref_keys.dart' as keys;
+import 'package:tsumige/src/utils/prefs/app_prefs.dart';
+import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 
 ProviderContainer containerFor(SharedPreferences prefs) =>
     ProviderContainer(overrides: [
@@ -69,7 +69,7 @@ void main() {
     final container = containerFor(prefs);
     addTearDown(container.dispose);
 
-    expect(container.read(launchPrefixProvider), '~/Games/vnl/prefix');
+    expect(container.read(launchPrefixProvider), '~/Games/tsumige/prefix');
     expect(container.read(launchRunnerProvider), isNull);
     expect(container.read(launchLocaleProvider), 'ja_JP.UTF-8');
     expect(container.read(launchUmuGameIdProvider), 'umu-default');

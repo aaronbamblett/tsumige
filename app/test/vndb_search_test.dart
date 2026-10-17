@@ -9,7 +9,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:vnl/src/core/vndb.dart';
+import 'package:tsumige/src/core/vndb.dart';
 
 String _page(List<Map<String, Object?>> rows) =>
     jsonEncode({'results': rows, 'more': false});
@@ -67,7 +67,7 @@ void main() {
         'id,title,alttitle,titles.title,released,rating,votecount,'
         'image.url,image.sexual,description,'
         'tags.name,tags.rating,tags.spoiler,developers.name');
-    expect(seenHeaders!['User-Agent'], contains('vn-launcher/'));
+    expect(seenHeaders!['User-Agent'], contains('tsumige/'));
     expect(results.single.id, 'v1');
     expect(results.single.title, 'DEMO');
     expect(results.single.released, '2020-01-01');

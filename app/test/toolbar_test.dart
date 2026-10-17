@@ -12,22 +12,22 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:vnl/main.dart';
-import 'package:vnl/src/constants/pref_keys.dart' as keys;
-import 'package:vnl/src/core/covers.dart' as core;
-import 'package:vnl/src/core/model.dart' as core;
-import 'package:vnl/src/core/paths.dart' as core;
-import 'package:vnl/src/core/vndb.dart' as core;
-import 'package:vnl/src/features/library/data/library_repository.dart';
-import 'package:vnl/src/features/library/domain/cover_source.dart';
-import 'package:vnl/src/features/library/domain/selection.dart';
-import 'package:vnl/src/features/library/presentation/widgets/game_cover_tile.dart';
-import 'package:vnl/src/features/library/presentation/widgets/game_detail_pane.dart';
-import 'package:vnl/src/features/library/presentation/widgets/library_toolbar.dart';
-import 'package:vnl/src/utils/prefs/app_prefs.dart';
-import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
-import 'package:vnl/src/utils/theme/brand.dart';
-import 'package:vnl/src/widgets/desktop/desktop_window_scaffold.dart';
+import 'package:tsumige/main.dart';
+import 'package:tsumige/src/constants/pref_keys.dart' as keys;
+import 'package:tsumige/src/core/covers.dart' as core;
+import 'package:tsumige/src/core/model.dart' as core;
+import 'package:tsumige/src/core/paths.dart' as core;
+import 'package:tsumige/src/core/vndb.dart' as core;
+import 'package:tsumige/src/features/library/data/library_repository.dart';
+import 'package:tsumige/src/features/library/domain/cover_source.dart';
+import 'package:tsumige/src/features/library/domain/selection.dart';
+import 'package:tsumige/src/features/library/presentation/widgets/game_cover_tile.dart';
+import 'package:tsumige/src/features/library/presentation/widgets/game_detail_pane.dart';
+import 'package:tsumige/src/features/library/presentation/widgets/library_toolbar.dart';
+import 'package:tsumige/src/utils/prefs/app_prefs.dart';
+import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
+import 'package:tsumige/src/utils/theme/brand.dart';
+import 'package:tsumige/src/widgets/desktop/desktop_window_scaffold.dart';
 
 class ToolbarFakeRepository implements LibraryRepository {
   ToolbarFakeRepository(this.games);
@@ -69,7 +69,7 @@ Future<void> pumpToolbar(
       return null;
     },
   );
-  final temp = Directory.systemTemp.createTempSync('vnl_toolbar_test_');
+  final temp = Directory.systemTemp.createTempSync('tsumige_toolbar_test_');
   addTearDown(() => temp.deleteSync(recursive: true));
   SharedPreferences.setMockInitialValues({});
   await tester.pumpWidget(ProviderScope(
@@ -82,7 +82,7 @@ Future<void> pumpToolbar(
       ),
       coverExistsProvider.overrideWithValue((_) => false),
     ],
-    child: const VnlApp(),
+    child: const TsumigeApp(),
   ));
   await tester.pump();
   await tester.pump();
@@ -250,7 +250,7 @@ void main() {
     expect(find.byType(DesktopWindowScaffold), findsOneWidget);
     final context = tester.element(find.byType(DesktopWindowScaffold));
     expect(
-      vnlRouterBuilder(context, const SizedBox()),
+      tsumigeRouterBuilder(context, const SizedBox()),
       isA<DesktopWindowScaffold>(),
     );
   });

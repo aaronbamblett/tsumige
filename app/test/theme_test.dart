@@ -10,14 +10,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:vnl/main.dart';
-import 'package:vnl/src/constants/app_theme.dart';
-import 'package:vnl/src/core/model.dart' as core;
-import 'package:vnl/src/core/paths.dart' as core;
-import 'package:vnl/src/features/library/data/library_repository.dart';
-import 'package:vnl/src/features/settings/presentation/appearance/widgets/app_theme_selector/app_theme_providers.dart';
-import 'package:vnl/src/features/settings/widgets/app_theme_mode_tile/app_theme_mode_tile.dart';
-import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
+import 'package:tsumige/main.dart';
+import 'package:tsumige/src/constants/app_theme.dart';
+import 'package:tsumige/src/core/model.dart' as core;
+import 'package:tsumige/src/core/paths.dart' as core;
+import 'package:tsumige/src/features/library/data/library_repository.dart';
+import 'package:tsumige/src/features/settings/presentation/appearance/widgets/app_theme_selector/app_theme_providers.dart';
+import 'package:tsumige/src/features/settings/widgets/app_theme_mode_tile/app_theme_mode_tile.dart';
+import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 
 class DataLibrary extends Library {
   DataLibrary(this.loaded);
@@ -31,7 +31,7 @@ class DataLibrary extends Library {
 Future<ProviderContainer> pumpApp(WidgetTester tester) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
-  final temp = Directory.systemTemp.createTempSync('vnl_theme_test_');
+  final temp = Directory.systemTemp.createTempSync('tsumige_theme_test_');
   addTearDown(() => temp.deleteSync(recursive: true));
   await tester.pumpWidget(ProviderScope(
     overrides: [
@@ -41,10 +41,10 @@ Future<ProviderContainer> pumpApp(WidgetTester tester) async {
         () => DataLibrary(core.LoadedLibrary(library: core.Library())),
       ),
     ],
-    child: const VnlApp(),
+    child: const TsumigeApp(),
   ));
   await tester.pumpAndSettle();
-  return ProviderScope.containerOf(tester.element(find.byType(VnlApp)));
+  return ProviderScope.containerOf(tester.element(find.byType(TsumigeApp)));
 }
 
 MaterialApp appOf(WidgetTester tester) =>

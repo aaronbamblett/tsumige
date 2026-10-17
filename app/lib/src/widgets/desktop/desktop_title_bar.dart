@@ -40,7 +40,7 @@ class DesktopTitleBar extends StatelessWidget {
                 // depends on Localizations being in scope at the app-builder
                 // level, where AppLocalizations.of() isn't reliably available.
                 child: Text(
-                  'vnl',
+                  'Tsumige',
                   style: theme.textTheme.labelMedium?.copyWith(
                     color: scheme.onSurface.withValues(alpha: 0.7),
                   ),

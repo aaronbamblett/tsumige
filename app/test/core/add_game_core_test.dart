@@ -11,9 +11,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vnl/src/core/model.dart';
-import 'package:vnl/src/core/vndb.dart';
-import 'package:vnl/src/features/library/domain/add_game.dart';
+import 'package:tsumige/src/core/model.dart';
+import 'package:tsumige/src/core/vndb.dart';
+import 'package:tsumige/src/features/library/domain/add_game.dart';
 
 VnSearchResult _result() => const VnSearchResult(
       id: 'v900017',

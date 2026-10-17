@@ -8,9 +8,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:vnl/src/features/settings/presentation/appearance/widgets/app_theme_selector/app_theme_selector.dart';
-import 'package:vnl/src/l10n/generated/app_localizations.dart';
-import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
+import 'package:tsumige/src/features/settings/presentation/appearance/widgets/app_theme_selector/app_theme_selector.dart';
+import 'package:tsumige/src/l10n/generated/app_localizations.dart';
+import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 
 Future<void> pumpSelector(WidgetTester tester, Size surface) async {
   tester.view.physicalSize = surface;

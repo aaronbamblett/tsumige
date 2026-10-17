@@ -18,17 +18,17 @@ import 'package:http/testing.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:vnl/src/core/covers.dart' as core;
-import 'package:vnl/src/core/model.dart' as core;
-import 'package:vnl/src/core/paths.dart' as core;
-import 'package:vnl/src/core/vndb.dart' as core;
-import 'package:vnl/src/features/library/data/library_repository.dart';
-import 'package:vnl/src/features/library/domain/add_game.dart';
-import 'package:vnl/src/features/library/domain/game_editor.dart';
-import 'package:vnl/src/features/library/presentation/add_game/add_game_dialog.dart';
-import 'package:vnl/src/features/library/presentation/add_game/import_folder_dialog.dart';
-import 'package:vnl/src/utils/theme/brand.dart';
-import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
+import 'package:tsumige/src/core/covers.dart' as core;
+import 'package:tsumige/src/core/model.dart' as core;
+import 'package:tsumige/src/core/paths.dart' as core;
+import 'package:tsumige/src/core/vndb.dart' as core;
+import 'package:tsumige/src/features/library/data/library_repository.dart';
+import 'package:tsumige/src/features/library/domain/add_game.dart';
+import 'package:tsumige/src/features/library/domain/game_editor.dart';
+import 'package:tsumige/src/features/library/presentation/add_game/add_game_dialog.dart';
+import 'package:tsumige/src/features/library/presentation/add_game/import_folder_dialog.dart';
+import 'package:tsumige/src/utils/theme/brand.dart';
+import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 
 class _FakeRepository implements LibraryRepository {
   _FakeRepository(this.games);
@@ -181,7 +181,7 @@ Future<_Harness> _open(
     tester.view.resetPhysicalSize();
     tester.view.resetDevicePixelRatio();
   });
-  final temp = Directory.systemTemp.createTempSync('vnl_import_dialog_test_');
+  final temp = Directory.systemTemp.createTempSync('tsumige_import_dialog_test_');
   addTearDown(() => temp.deleteSync(recursive: true));
   final root = _fixture(temp, duplicate: duplicate);
   SharedPreferences.setMockInitialValues({});
@@ -661,7 +661,7 @@ Future<_Harness> _openAddDialog(
     tester.view.resetPhysicalSize();
     tester.view.resetDevicePixelRatio();
   });
-  final temp = Directory.systemTemp.createTempSync('vnl_import_entry_test_');
+  final temp = Directory.systemTemp.createTempSync('tsumige_import_entry_test_');
   addTearDown(() => temp.deleteSync(recursive: true));
   final root = _fixture(temp);
   SharedPreferences.setMockInitialValues({});

@@ -23,7 +23,7 @@ import 'src/utils/theme/app_theme_builder.dart';
 import 'src/widgets/app_error_app.dart';
 import 'src/widgets/desktop/desktop_window_scaffold.dart';
 
-Widget vnlRouterBuilder(BuildContext context, Widget? child) =>
+Widget tsumigeRouterBuilder(BuildContext context, Widget? child) =>
     DesktopWindowScaffold(child: FToastBuilder()(context, child));
 
 /// App entry. Never loads the library: the root widget does that through
@@ -37,13 +37,13 @@ Future<void> main() async {
   runApp(
     ProviderScope(
       overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
-      child: const VnlApp(),
+      child: const TsumigeApp(),
     ),
   );
 }
 
-class VnlApp extends ConsumerWidget {
-  const VnlApp({super.key});
+class TsumigeApp extends ConsumerWidget {
+  const TsumigeApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -79,7 +79,7 @@ class VnlApp extends ConsumerWidget {
       ),
       error: (error, _) => AppErrorApp(error: error),
       data: (_) => MaterialApp.router(
-        builder: vnlRouterBuilder,
+        builder: tsumigeRouterBuilder,
         theme: theme,
         darkTheme: darkTheme,
         themeMode: themeMode,

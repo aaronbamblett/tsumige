@@ -5,8 +5,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vnl/src/core/launch/launch_command.dart';
-import 'package:vnl/src/core/model.dart';
+import 'package:tsumige/src/core/launch/launch_command.dart';
+import 'package:tsumige/src/core/model.dart';
 
 const defaults = LaunchDefaults(
   mode: LaunchMode.proton,
@@ -42,12 +42,12 @@ void main() {
     );
     const tildeDefaults = LaunchDefaults(
       mode: LaunchMode.wine,
-      prefix: '~/Games/vnl/prefix',
+      prefix: '~/Games/tsumige/prefix',
       locale: '',
       umuGameId: 'umu-default',
     );
     final command = buildLaunchCommand(game, tildeDefaults, hostEnv: homeEnv);
-    expect(command.env['WINEPREFIX'], '/home/aaron/Games/vnl/prefix');
+    expect(command.env['WINEPREFIX'], '/home/aaron/Games/tsumige/prefix');
   });
 
   test('a ~/ runner expands with HOME', () {

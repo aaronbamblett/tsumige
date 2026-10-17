@@ -8,7 +8,7 @@ part of 'running_games.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// The launch phase of each game vnl can currently see.
+/// The launch phase of each game Tsumige can currently see.
 ///
 /// Entries exist only between `starting` and `ended`: the `ended` callback
 /// removes the game, so the button shows "Running" (or "Launching…") only
@@ -19,7 +19,7 @@ part of 'running_games.dart';
 @ProviderFor(RunningGames)
 final runningGamesProvider = RunningGamesProvider._();
 
-/// The launch phase of each game vnl can currently see.
+/// The launch phase of each game Tsumige can currently see.
 ///
 /// Entries exist only between `starting` and `ended`: the `ended` callback
 /// removes the game, so the button shows "Running" (or "Launching…") only
@@ -28,7 +28,7 @@ final runningGamesProvider = RunningGamesProvider._();
 /// exits, even if the pane was closed and reopened mid-session.
 final class RunningGamesProvider
     extends $NotifierProvider<RunningGames, Map<String, LaunchPhase>> {
-  /// The launch phase of each game vnl can currently see.
+  /// The launch phase of each game Tsumige can currently see.
   ///
   /// Entries exist only between `starting` and `ended`: the `ended` callback
   /// removes the game, so the button shows "Running" (or "Launching…") only
@@ -64,7 +64,7 @@ final class RunningGamesProvider
 
 String _$runningGamesHash() => r'10bd9c6c815b1d3e953461e61da6ce75de6c0242';
 
-/// The launch phase of each game vnl can currently see.
+/// The launch phase of each game Tsumige can currently see.
 ///
 /// Entries exist only between `starting` and `ended`: the `ended` callback
 /// removes the game, so the button shows "Running" (or "Launching…") only

@@ -10,8 +10,8 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/testing.dart';
-import 'package:vnl/src/core/model.dart';
-import 'package:vnl/src/core/vndb.dart';
+import 'package:tsumige/src/core/model.dart';
+import 'package:tsumige/src/core/vndb.dart';
 
 final _now = DateTime.utc(2026, 10, 16, 12);
 

@@ -95,7 +95,7 @@ String? _parentDir(String exe) {
 }
 
 /// Expands a leading `~/` with `HOME` so the default prefix pref
-/// (`~/Games/vnl/prefix`) resolves without a shell.
+/// (`~/Games/tsumige/prefix`) resolves without a shell.
 String expandTilde(String value, Map<String, String> hostEnv) {
   if (!value.startsWith('~/')) return value;
   final home = hostEnv['HOME'];

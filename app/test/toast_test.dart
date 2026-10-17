@@ -7,7 +7,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluttertoast/fluttertoast.dart' hide Toast;
-import 'package:vnl/src/utils/toast.dart';
+import 'package:tsumige/src/utils/toast.dart';
 
 void main() {
   testWidgets('toast shows on screen', (tester) async {

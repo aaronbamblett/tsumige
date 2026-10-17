@@ -7,8 +7,8 @@
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vnl/src/core/model.dart';
-import 'package:vnl/src/core/similar.dart';
+import 'package:tsumige/src/core/model.dart';
+import 'package:tsumige/src/core/similar.dart';
 
 VndbTag _tag(
   String name,

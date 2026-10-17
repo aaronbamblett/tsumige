@@ -17,7 +17,7 @@ import 'selection.dart';
 part 'game_editor.g.dart';
 
 const String changedOnDiskMessage =
-    "The library changed outside vnl, so that change wasn't saved. "
+    "The library changed outside Tsumige, so that change wasn't saved. "
     "It's reloaded now.";
 
 /// Every pane edit saves through here: apply [change] to the game with

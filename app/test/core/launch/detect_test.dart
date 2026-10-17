@@ -8,7 +8,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:vnl/src/core/launch/detect.dart';
+import 'package:tsumige/src/core/launch/detect.dart';
 
 const _fakeHome = '/home/testuser';
 
@@ -38,7 +38,7 @@ void _makeFileWith(String absolutePath, String content) {
 
 void main() {
   setUp(() {
-    _root = Directory.systemTemp.createTempSync('vnl_detect_test');
+    _root = Directory.systemTemp.createTempSync('tsumige_detect_test');
   });
 
   tearDown(() {

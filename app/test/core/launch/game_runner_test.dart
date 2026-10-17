@@ -10,12 +10,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:vnl/src/core/launch/game_runner.dart';
-import 'package:vnl/src/core/launch/launch_command.dart';
-import 'package:vnl/src/core/launch/process_table.dart';
-import 'package:vnl/src/core/launch/session_recorder.dart';
-import 'package:vnl/src/core/model.dart';
-import 'package:vnl/src/core/paths.dart';
+import 'package:tsumige/src/core/launch/game_runner.dart';
+import 'package:tsumige/src/core/launch/launch_command.dart';
+import 'package:tsumige/src/core/launch/process_table.dart';
+import 'package:tsumige/src/core/launch/session_recorder.dart';
+import 'package:tsumige/src/core/model.dart';
+import 'package:tsumige/src/core/paths.dart';
 
 class FakeStore implements SessionStore {
   FakeStore(this.current, {this.onSave});
@@ -118,7 +118,7 @@ void main() {
   final t0 = DateTime.utc(2026, 10, 17, 12);
 
   setUp(() {
-    temp = Directory.systemTemp.createTempSync('vnl_runner_test_');
+    temp = Directory.systemTemp.createTempSync('tsumige_runner_test_');
     dir = DataDir(temp.path);
     now = t0;
   });

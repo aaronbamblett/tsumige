@@ -50,7 +50,7 @@ Future<void> recordSession(
   var loaded = await store.load();
   var game = _findGame(loaded.library, gameId);
   if (game == null) {
-    _report(log, 'vn-launcher: dropping play session for missing game $gameId');
+    _report(log, 'tsumige: dropping play session for missing game $gameId');
     return;
   }
   game.playSessions.add(
@@ -63,7 +63,7 @@ Future<void> recordSession(
     game = _findGame(loaded.library, gameId);
     if (game == null) {
       _report(
-          log, 'vn-launcher: dropping play session for missing game $gameId');
+          log, 'tsumige: dropping play session for missing game $gameId');
       return;
     }
     game.playSessions.add(
@@ -121,7 +121,7 @@ Future<int> recoverSessions(
       startedAt = DateTime.parse('${data['started_at']}');
       lastSeen = DateTime.parse('${data['last_seen']}');
     } catch (e) {
-      _report(log, 'vn-launcher: ignoring unreadable running marker '
+      _report(log, 'tsumige: ignoring unreadable running marker '
           'for $gameId: $e');
       try {
         await file.delete();
@@ -133,7 +133,7 @@ Future<int> recoverSessions(
     try {
       await recordSession(store, gameId, startedAt, seconds, log: log);
     } catch (e) {
-      _report(log, 'vn-launcher: could not recover session for $gameId: $e');
+      _report(log, 'tsumige: could not recover session for $gameId: $e');
       continue;
     }
     try {

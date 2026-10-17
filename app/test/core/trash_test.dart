@@ -11,10 +11,10 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
-import 'package:vnl/src/core/covers.dart';
-import 'package:vnl/src/core/model.dart';
-import 'package:vnl/src/core/paths.dart';
-import 'package:vnl/src/core/trash.dart';
+import 'package:tsumige/src/core/covers.dart';
+import 'package:tsumige/src/core/model.dart';
+import 'package:tsumige/src/core/paths.dart';
+import 'package:tsumige/src/core/trash.dart';
 
 DataDir _dir(Directory temp) => DataDir(temp.path);
 
@@ -31,7 +31,7 @@ Future<void> _writeCover(DataDir dir, String gameId) async {
 
 void main() {
   test('game json and cover files move into trash/<ts>-<id>/', () async {
-    final temp = Directory.systemTemp.createTempSync('vnl_trash_test_');
+    final temp = Directory.systemTemp.createTempSync('tsumige_trash_test_');
     addTearDown(() => temp.deleteSync(recursive: true));
     final dir = _dir(temp);
     const id = '11111111-1111-4111-8111-111111111111';
@@ -59,7 +59,7 @@ void main() {
   });
 
   test('a game background moves into the same trash folder', () async {
-    final temp = Directory.systemTemp.createTempSync('vnl_trash_test_');
+    final temp = Directory.systemTemp.createTempSync('tsumige_trash_test_');
     addTearDown(() => temp.deleteSync(recursive: true));
     final dir = _dir(temp);
     const id = '33333333-3333-4333-8333-333333333333';
@@ -81,7 +81,7 @@ void main() {
 
   test('trashBackground moves only the background and keeps the cover',
       () async {
-    final temp = Directory.systemTemp.createTempSync('vnl_trash_test_');
+    final temp = Directory.systemTemp.createTempSync('tsumige_trash_test_');
     addTearDown(() => temp.deleteSync(recursive: true));
     final dir = _dir(temp);
     const id = '44444444-4444-4444-8444-444444444444';
@@ -105,7 +105,7 @@ void main() {
   });
 
   test('a missing cover file does not throw', () async {
-    final temp = Directory.systemTemp.createTempSync('vnl_trash_test_');
+    final temp = Directory.systemTemp.createTempSync('tsumige_trash_test_');
     addTearDown(() => temp.deleteSync(recursive: true));
     final dir = _dir(temp);
     const id = '22222222-2222-4222-8222-222222222222';

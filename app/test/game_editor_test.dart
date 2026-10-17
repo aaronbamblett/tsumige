@@ -10,17 +10,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:vnl/main.dart';
-import 'package:vnl/src/core/covers.dart' as core;
-import 'package:vnl/src/core/model.dart' as core;
-import 'package:vnl/src/core/paths.dart' as core;
-import 'package:vnl/src/core/vndb.dart' as core;
-import 'package:vnl/src/core/store.dart';
-import 'package:vnl/src/features/library/data/library_repository.dart';
-import 'package:vnl/src/features/library/domain/cover_source.dart';
-import 'package:vnl/src/features/library/domain/game_editor.dart';
-import 'package:vnl/src/features/library/presentation/widgets/game_detail_pane.dart';
-import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
+import 'package:tsumige/main.dart';
+import 'package:tsumige/src/core/covers.dart' as core;
+import 'package:tsumige/src/core/model.dart' as core;
+import 'package:tsumige/src/core/paths.dart' as core;
+import 'package:tsumige/src/core/vndb.dart' as core;
+import 'package:tsumige/src/core/store.dart';
+import 'package:tsumige/src/features/library/data/library_repository.dart';
+import 'package:tsumige/src/features/library/domain/cover_source.dart';
+import 'package:tsumige/src/features/library/domain/game_editor.dart';
+import 'package:tsumige/src/features/library/presentation/widgets/game_detail_pane.dart';
+import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 
 Finder paneField(WidgetTester tester) => find.descendant(
       of: find.byType(GameDetailPane),
@@ -65,7 +65,7 @@ Future<EditorFakeRepository> pumpEditorLibrary(
     tester.view.resetPhysicalSize();
     tester.view.resetDevicePixelRatio();
   });
-  final temp = Directory.systemTemp.createTempSync('vnl_editor_test_');
+  final temp = Directory.systemTemp.createTempSync('tsumige_editor_test_');
   addTearDown(() => temp.deleteSync(recursive: true));
   SharedPreferences.setMockInitialValues({});
   final fake = EditorFakeRepository(games);
@@ -77,7 +77,7 @@ Future<EditorFakeRepository> pumpEditorLibrary(
       libraryRepositoryProvider.overrideWithValue(fake),
       coverExistsProvider.overrideWithValue((_) => false),
     ],
-    child: const VnlApp(),
+    child: const TsumigeApp(),
   ));
   await tester.pump();
   await tester.pump();

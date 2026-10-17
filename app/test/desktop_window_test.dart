@@ -7,7 +7,7 @@
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vnl/src/utils/desktop/desktop_window.dart';
+import 'package:tsumige/src/utils/desktop/desktop_window.dart';
 
 void main() {
   test('minimum window size is 1000 by 640', () async {

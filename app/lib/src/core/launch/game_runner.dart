@@ -98,7 +98,7 @@ class IoProcessStarter implements ProcessStarter {
 ///
 /// `starting` covers everything before the game is visible: spawning the
 /// process, and for Steam, waiting for the game process to appear.
-/// `running` means vnl can see the game's process. `ended` fires exactly
+/// `running` means Tsumige can see the game's process. `ended` fires exactly
 /// once when the launch is over, including on errors.
 enum LaunchPhase { starting, running, ended }
 

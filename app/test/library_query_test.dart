@@ -5,9 +5,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vnl/src/constants/pref_keys.dart';
-import 'package:vnl/src/core/model.dart';
-import 'package:vnl/src/features/library/domain/library_query.dart';
+import 'package:tsumige/src/constants/pref_keys.dart';
+import 'package:tsumige/src/core/model.dart';
+import 'package:tsumige/src/features/library/domain/library_query.dart';
 
 Game game(
   String id,

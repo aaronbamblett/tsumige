@@ -11,21 +11,21 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:vnl/main.dart';
-import 'package:vnl/src/core/covers.dart' as core;
-import 'package:vnl/src/core/launch/detect.dart' as detect;
-import 'package:vnl/src/core/model.dart' as core;
-import 'package:vnl/src/core/paths.dart' as core;
-import 'package:vnl/src/core/vndb.dart' as core;
-import 'package:vnl/src/features/library/data/library_repository.dart';
-import 'package:vnl/src/features/library/domain/cover_source.dart';
-import 'package:vnl/src/features/library/domain/game_editor.dart';
-import 'package:vnl/src/features/library/domain/runner_detection.dart';
-import 'package:vnl/src/features/library/presentation/widgets/detail_tabs/launch_tab.dart';
-import 'package:vnl/src/features/library/presentation/widgets/library_toolbar.dart';
-import 'package:vnl/src/features/settings/presentation/sections/settings_widgets.dart';
-import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
-import 'package:vnl/src/utils/theme/brand.dart';
+import 'package:tsumige/main.dart';
+import 'package:tsumige/src/core/covers.dart' as core;
+import 'package:tsumige/src/core/launch/detect.dart' as detect;
+import 'package:tsumige/src/core/model.dart' as core;
+import 'package:tsumige/src/core/paths.dart' as core;
+import 'package:tsumige/src/core/vndb.dart' as core;
+import 'package:tsumige/src/features/library/data/library_repository.dart';
+import 'package:tsumige/src/features/library/domain/cover_source.dart';
+import 'package:tsumige/src/features/library/domain/game_editor.dart';
+import 'package:tsumige/src/features/library/domain/runner_detection.dart';
+import 'package:tsumige/src/features/library/presentation/widgets/detail_tabs/launch_tab.dart';
+import 'package:tsumige/src/features/library/presentation/widgets/library_toolbar.dart';
+import 'package:tsumige/src/features/settings/presentation/sections/settings_widgets.dart';
+import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
+import 'package:tsumige/src/utils/theme/brand.dart';
 
 class LaunchFakeRepository implements LibraryRepository {
   LaunchFakeRepository(this.games);
@@ -70,7 +70,7 @@ Future<LaunchFakeRepository> pumpLaunch(
     const MethodChannel('window_manager'),
     (call) async => call.method == 'isMaximized' ? false : null,
   );
-  final temp = Directory.systemTemp.createTempSync('vnl_launch_tab_test_');
+  final temp = Directory.systemTemp.createTempSync('tsumige_launch_tab_test_');
   addTearDown(() => temp.deleteSync(recursive: true));
   SharedPreferences.setMockInitialValues({});
   final fake = LaunchFakeRepository(games);
@@ -92,7 +92,7 @@ Future<LaunchFakeRepository> pumpLaunch(
       if (pathPicker != null)
         pathPickerProvider.overrideWithValue(pathPicker),
     ],
-    child: const VnlApp(),
+    child: const TsumigeApp(),
   ));
   await tester.pump();
   await tester.pump();

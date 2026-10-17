@@ -10,7 +10,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'vn-launcher';
+  String get appTitle => 'Tsumige';
 
   @override
   String get library => 'Library';

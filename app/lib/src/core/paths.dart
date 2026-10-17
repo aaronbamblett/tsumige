@@ -8,17 +8,21 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+String xdgDataHome(Map<String, String> env) {
+  final xdg = env['XDG_DATA_HOME'];
+  if (xdg != null && xdg.isNotEmpty) return xdg;
+  return p.join(env['HOME'] ?? '', '.local', 'share');
+}
+
 class DataDir {
   final String root;
 
   DataDir(this.root);
 
   static DataDir resolve(Map<String, String> env) {
-    final override = env['VNL_DATA_DIR'];
+    final override = env['TSUMIGE_DATA_DIR'];
     if (override != null && override.isNotEmpty) return DataDir(override);
-    final xdg = env['XDG_DATA_HOME'];
-    if (xdg != null && xdg.isNotEmpty) return DataDir(p.join(xdg, 'vnl'));
-    return DataDir(p.join(env['HOME'] ?? '', '.local', 'share', 'vnl'));
+    return DataDir(p.join(xdgDataHome(env), 'tsumige'));
   }
 
   File get libraryJson => File(p.join(root, 'library.json'));

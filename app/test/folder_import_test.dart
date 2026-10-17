@@ -8,8 +8,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:vnl/src/core/vndb.dart';
-import 'package:vnl/src/features/library/domain/folder_import.dart';
+import 'package:tsumige/src/core/vndb.dart';
+import 'package:tsumige/src/features/library/domain/folder_import.dart';
 
 VnSearchResult _vn(String id, String title, {List<String> titles = const []}) =>
     VnSearchResult(id: id, title: title, titles: titles);
@@ -24,7 +24,7 @@ void main() {
   late Directory temp;
 
   setUp(() {
-    temp = Directory.systemTemp.createTempSync('vnl_folder_import_test_');
+    temp = Directory.systemTemp.createTempSync('tsumige_folder_import_test_');
   });
 
   tearDown(() => temp.deleteSync(recursive: true));

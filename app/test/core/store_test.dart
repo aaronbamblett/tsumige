@@ -9,12 +9,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vnl/src/core/model.dart';
-import 'package:vnl/src/core/paths.dart';
-import 'package:vnl/src/core/store.dart';
+import 'package:tsumige/src/core/model.dart';
+import 'package:tsumige/src/core/paths.dart';
+import 'package:tsumige/src/core/store.dart';
 
 Future<DataDir> freshDir() async {
-  final tmp = await Directory.systemTemp.createTemp('vnl-store-');
+  final tmp = await Directory.systemTemp.createTemp('tsumige-store-');
   return DataDir(tmp.path);
 }
 

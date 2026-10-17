@@ -256,7 +256,7 @@ class VndbClient {
     final uri = Uri.parse('$baseUrl$path');
     Future<http.Response> send() => _client.post(uri, headers: {
           'Content-Type': 'application/json',
-          'User-Agent': 'vn-launcher/$vnlVersion',
+          'User-Agent': 'tsumige/$appVersion',
         }, body: jsonEncode(body));
     http.Response response;
     try {
@@ -320,7 +320,7 @@ class VndbClient {
     try {
       response = await _client.post(uri, headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'vn-launcher/$vnlVersion',
+        'User-Agent': 'tsumige/$appVersion',
       }, body: jsonEncode({
         'filters': ['id', '=', vndbId],
         'fields': 'id,image.url',

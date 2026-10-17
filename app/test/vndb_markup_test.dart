@@ -5,7 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vnl/src/features/library/domain/vndb_markup.dart';
+import 'package:tsumige/src/features/library/domain/vndb_markup.dart';
 
 void main() {
   test('[b]x[/b] parses to a bold node containing text x', () {

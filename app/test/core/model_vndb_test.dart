@@ -7,7 +7,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vnl/src/core/model.dart';
+import 'package:tsumige/src/core/model.dart';
 
 Game _full() => Game(
   id: 'g1',
