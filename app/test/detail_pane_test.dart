@@ -451,17 +451,33 @@ void main() {
     ]);
     await openPane(tester, 'Alpha');
     await openTab(tester, 'Routes');
-    expect(find.text('Rin'), findsOneWidget);
+    expect(find.text('2 routes'), findsOneWidget);
     expect(find.text('Saber'), findsOneWidget);
-    expect(find.text('Active'), findsOneWidget);
-    expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+    expect(
+        tester
+            .widget<Checkbox>(
+                find.byKey(const ValueKey('route-completed-Rin')))
+            .value,
+        isTrue);
+    expect(
+        tester
+            .widget<Checkbox>(
+                find.byKey(const ValueKey('route-completed-Saber')))
+            .value,
+        isFalse);
+    expect(
+        tester
+            .widget<DropdownButton<String?>>(
+                find.byKey(const Key('routes-active')))
+            .value,
+        'Rin');
   });
 
-  testWidgets('routes tab shows No routes when empty', (tester) async {
+  testWidgets('routes tab shows a zero count when empty', (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
     await openTab(tester, 'Routes');
-    expect(find.text('No routes'), findsOneWidget);
+    expect(find.text('0 routes'), findsOneWidget);
   });
 
   testWidgets('tapping a tile opens the pane; Escape closes it',
