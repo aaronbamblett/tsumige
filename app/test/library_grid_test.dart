@@ -8,6 +8,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -180,6 +181,89 @@ void main() {
         expect(rect.height,
             moreOrLessEquals(rect.width / kGameCoverAspectRatio, epsilon: 0.5));
       }
+    }
+  });
+
+  testWidgets('tile is exactly the cover plus the card margin', (tester) async {
+    await pumpLibrary(tester, fakeGames(6));
+    final tileRect = tester.getRect(find.byType(GameCoverTile).first);
+    final coverRect =
+        tester.getRect(find.byKey(const ValueKey('cover-game-0')));
+    expect(
+      tileRect.height,
+      moreOrLessEquals(
+          coverRect.width / kGameCoverAspectRatio + 8.0, epsilon: 0.5),
+    );
+    expect(tileRect.bottom - coverRect.bottom,
+        moreOrLessEquals(4.0, epsilon: 0.5));
+  });
+
+  testWidgets('title sits inside the cover rect', (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha Title')]);
+    final coverRect = tester.getRect(find.byKey(const ValueKey('cover-g1')));
+    final titleRect = tester.getRect(find.text('Alpha Title'));
+    expect(titleRect.left, greaterThanOrEqualTo(coverRect.left - 0.5));
+    expect(titleRect.right, lessThanOrEqualTo(coverRect.right + 0.5));
+    expect(titleRect.top, greaterThanOrEqualTo(coverRect.top - 0.5));
+    expect(titleRect.bottom, lessThanOrEqualTo(coverRect.bottom + 0.5));
+  });
+
+  testWidgets('rating shows inside the tile', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', vndbRating: 75.0),
+    ]);
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(Slider)));
+    container.read(coverWidthProvider.notifier).set(400);
+    await tester.pump();
+    await tester.pump();
+    final coverRect = tester.getRect(find.byKey(const ValueKey('cover-g1')));
+    final ratingRect = tester.getRect(find.text('VNDB Rating 7.5'));
+    expect(ratingRect.left, greaterThanOrEqualTo(coverRect.left - 0.5));
+    expect(ratingRect.right, lessThanOrEqualTo(coverRect.right + 0.5));
+    expect(ratingRect.top, greaterThanOrEqualTo(coverRect.top - 0.5));
+    expect(ratingRect.bottom, lessThanOrEqualTo(coverRect.bottom + 0.5));
+  });
+
+  testWidgets('rating never ellipsizes at small or large cover widths',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', vndbRating: 75.0),
+    ]);
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(Slider)));
+    for (final width in [100, 400]) {
+      container.read(coverWidthProvider.notifier).set(width);
+      await tester.pump();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      final ratings = find.textContaining('VNDB Rating');
+      if (width == 400) expect(ratings, findsOneWidget);
+      for (final element in ratings.evaluate()) {
+        final paragraph = tester.renderObject<RenderParagraph>(
+            find.byWidget(element.widget));
+        expect(paragraph.didExceedMaxLines, isFalse);
+      }
+    }
+  });
+
+  testWidgets('tags do not appear on tiles', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', tags: ['zzz-unique-tag']),
+    ]);
+    expect(find.textContaining('zzz-unique-tag'), findsNothing);
+  });
+
+  testWidgets('no overflow at slider values 100, 192 and 999',
+      (tester) async {
+    await pumpLibrary(tester, fakeGames(8));
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(Slider)));
+    for (final width in [100, 192, 999]) {
+      container.read(coverWidthProvider.notifier).set(width);
+      await tester.pump();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
     }
   });
 

@@ -264,7 +264,8 @@ void main() {
       core.Game(id: 'g1', title: 'Alpha', vndbRating: 85.0),
     ]);
     await openPane(tester, 'Alpha');
-    expect(find.textContaining('VNDB Rating 8.5'), findsNWidgets(2));
+    expect(find.text('VNDB Rating'), findsOneWidget);
+    expect(find.text('8.5'), findsOneWidget);
     expect(find.textContaining('votes'), findsNothing);
   });
 
@@ -273,7 +274,8 @@ void main() {
       core.Game(id: 'g1', title: 'Alpha', released: '2021-08-26'),
     ]);
     await openPane(tester, 'Alpha');
-    expect(find.text('Released 2021-08-26'), findsOneWidget);
+    expect(find.text('Released'), findsOneWidget);
+    expect(find.text('2021-08-26'), findsOneWidget);
   });
 
   testWidgets('description heading follows the description',
@@ -281,11 +283,11 @@ void main() {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
     expect(find.text('Description'), findsNothing);
-    expect(find.text('Play time'), findsOneWidget);
+    expect(find.text('Sessions'), findsNothing);
     expect(find.text('Routes'), findsNothing);
   });
 
-  testWidgets('description, play time and routes headings show with content',
+  testWidgets('description and routes headings show with content',
       (tester) async {
     await pumpLibrary(tester, [
       core.Game(
@@ -297,11 +299,28 @@ void main() {
     ]);
     await openPane(tester, 'Alpha');
     expect(find.text('Description'), findsOneWidget);
-    expect(find.text('Play time'), findsOneWidget);
+    expect(find.text('Sessions'), findsNothing);
     expect(find.text('Routes'), findsOneWidget);
   });
 
-  testWidgets('rating, release and tags render', (tester) async {
+  testWidgets('sessions heading shows only with sessions', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        playSessions: [
+          core.PlaySession(
+              startedAt: DateTime.utc(2024, 3, 4, 12, 30),
+              durationSeconds: 120),
+        ],
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(find.text('Sessions'), findsOneWidget);
+  });
+
+  testWidgets('rating, release and tags render beside the cover',
+      (tester) async {
     await pumpLibrary(tester, [
       core.Game(
         id: 'g1',
@@ -313,11 +332,55 @@ void main() {
       ),
     ]);
     await openPane(tester, 'Alpha');
-    expect(find.textContaining('VNDB Rating 8.5'), findsNWidgets(2));
-    expect(find.textContaining('(12 votes)'), findsOneWidget);
-    expect(find.textContaining('2024-05-06'), findsOneWidget);
+    expect(find.text('VNDB Rating'), findsOneWidget);
+    expect(find.text('8.5'), findsOneWidget);
+    expect(find.text('12 votes'), findsOneWidget);
+    expect(find.text('Released'), findsOneWidget);
+    expect(find.text('2024-05-06'), findsOneWidget);
     expect(find.text('Action'), findsOneWidget);
     expect(find.text('Romance'), findsOneWidget);
-    expect(find.textContaining('Total '), findsOneWidget);
+    expect(find.text('Total playtime'), findsOneWidget);
+    expect(find.text('0 min'), findsOneWidget);
+    expect(find.textContaining(RegExp(r'^Total \d')), findsNothing);
+  });
+
+  testWidgets('rating value divides by ten', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', vndbRating: 64),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(find.text('6.4'), findsOneWidget);
+  });
+
+  testWidgets('facts sit beside the cover', (tester) async {
+    setSurface(tester, 1280, 800);
+    final temp = Directory.systemTemp.createTempSync('vnl_hero_test_');
+    addTearDown(() => temp.deleteSync(recursive: true));
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        sharedPreferencesProvider
+            .overrideWithValue(await SharedPreferences.getInstance()),
+        dataDirProvider.overrideWithValue(core.DataDir(temp.path)),
+        libraryRepositoryProvider.overrideWithValue(DetailFakeRepository([
+          core.Game(
+              id: 'g1', title: 'Alpha', cover: 'cover.png', vndbRating: 64),
+        ])),
+        // No files on disk, so the images fall back — but the 190-wide
+        // hero cover box still lays out.
+        coverExistsProvider.overrideWithValue((_) => true),
+      ],
+      child: const VnlApp(),
+    ));
+    await tester.pump();
+    await tester.pump();
+    await openPane(tester, 'Alpha');
+    final coverRect =
+        tester.getRect(find.byKey(const ValueKey('detail-cover')));
+    expect(coverRect.width, moreOrLessEquals(190, epsilon: 0.5));
+    final labelTopLeft = tester.getTopLeft(find.text('VNDB Rating'));
+    expect(labelTopLeft.dx, greaterThan(coverRect.right));
+    expect((labelTopLeft.dy - coverRect.top).abs(), lessThanOrEqualTo(20));
+    expect(find.text('6.4'), findsOneWidget);
   });
 }

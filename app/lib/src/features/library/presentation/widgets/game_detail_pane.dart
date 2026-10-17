@@ -29,114 +29,69 @@ class GameDetailPane extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxCoverHeight = constraints.maxHeight * 0.4;
-        final contentWidth = constraints.maxWidth;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 0, 0),
-                    child: Text(
-                      game.title,
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Close',
-                  icon: const Icon(Icons.close_rounded),
-                  onPressed: () => ref
-                      .read(selectedGameIdProvider.notifier)
-                      .clear(),
-                ),
-              ],
-            ),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  spacing: 12,
-                  children: [
-                    _cover(context, ref, maxCoverHeight, contentWidth - 32),
-                    if (game.vndbRating != null)
-                      Text(
-                        game.vndbVotecount == null
-                            ? formatVndbRating(game.vndbRating!)
-                            : '${formatVndbRating(game.vndbRating!)} '
-                                '(${game.vndbVotecount} votes)',
-                      ),
-                    if (game.released != null && game.released!.isNotEmpty)
-                      Text('Released ${game.released!}'),
-                    if (game.tags.isNotEmpty)
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final tag in game.tags) Chip(label: Text(tag)),
-                        ],
-                      ),
-                    if (game.description.isNotEmpty) ...[
-                      _heading(context, 'Description'),
-                      VndbMarkupText(text: game.description),
-                    ],
-                    _heading(context, 'Play time'),
-                    Text(
-                      'Total '
-                      '${formatPlaytime(game.totalPlaytimeSeconds)}',
-                    ),
-                    for (final session in _newestFirst(game.playSessions))
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              DateFormat('yyyy-MM-dd HH:mm').format(
-                                session.startedAt.toLocal(),
-                              ),
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                          ),
-                          Text(
-                            formatPlaytime(session.durationSeconds),
-                            textAlign: TextAlign.right,
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                    if (game.routes.isNotEmpty) ...[
-                      _heading(context, 'Routes'),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        spacing: 4,
-                        children: [
-                          for (final route in game.routes)
-                            Row(
-                              children: [
-                                Expanded(child: Text(route.name)),
-                                if (route.completed)
-                                  const Icon(Icons.check_rounded),
-                                if (route.name == game.activeRoute)
-                                  const Padding(
-                                    padding: EdgeInsets.only(left: 8),
-                                    child: Text('Active'),
-                                  ),
-                              ],
-                            ),
-                        ],
-                      ),
-                    ],
-                  ],
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 0, 0),
+                child: Text(
+                  game.title,
+                  style: Theme.of(context).textTheme.headlineSmall,
                 ),
               ),
             ),
+            IconButton(
+              tooltip: 'Close',
+              icon: const Icon(Icons.close_rounded),
+              onPressed: () => ref
+                  .read(selectedGameIdProvider.notifier)
+                  .clear(),
+            ),
           ],
-        );
-      },
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: 12,
+              children: [
+                _hero(context, ref),
+                if (game.description.isNotEmpty) ...[
+                  _heading(context, 'Description'),
+                  VndbMarkupText(text: game.description),
+                ],
+                ..._sessionRows(context),
+                if (game.routes.isNotEmpty) ...[
+                  _heading(context, 'Routes'),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    spacing: 4,
+                    children: [
+                      for (final route in game.routes)
+                        Row(
+                          children: [
+                            Expanded(child: Text(route.name)),
+                            if (route.completed)
+                              const Icon(Icons.check_rounded),
+                            if (route.name == game.activeRoute)
+                              const Padding(
+                                padding: EdgeInsets.only(left: 8),
+                                child: Text('Active'),
+                              ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -155,50 +110,133 @@ class GameDetailPane extends ConsumerWidget {
     return sorted;
   }
 
-  Widget _cover(BuildContext context, WidgetRef ref, double maxHeight,
-      double width) {
+  List<Widget> _sessionRows(BuildContext context) {
+    final sessions = _newestFirst(game.playSessions);
+    if (sessions.isEmpty) return const [];
+    return [
+      _heading(context, 'Sessions'),
+      for (final session in sessions)
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                DateFormat('yyyy-MM-dd HH:mm').format(
+                  session.startedAt.toLocal(),
+                ),
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+            Text(
+              formatPlaytime(session.durationSeconds),
+              textAlign: TextAlign.right,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
+        ),
+    ];
+  }
+
+  Widget _hero(BuildContext context, WidgetRef ref) {
     final cover = game.cover;
-    if (cover == null || cover.isEmpty) return const SizedBox.shrink();
-    var coverWidth = width;
-    var coverHeight = coverWidth / kGameCoverAspectRatio;
-    if (coverHeight > maxHeight) {
-      coverHeight = maxHeight;
-      coverWidth = coverHeight * kGameCoverAspectRatio;
-    }
+    if (cover == null || cover.isEmpty) return _facts(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _heroCover(context, ref),
+        const SizedBox(width: 12),
+        Expanded(child: _facts(context)),
+      ],
+    );
+  }
+
+  Widget _facts(BuildContext context) {
+    final theme = Theme.of(context);
+    final labelStyle = theme.textTheme.labelMedium
+        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 10,
+      children: [
+        if (game.vndbRating != null) ...[
+          Text('VNDB Rating', style: labelStyle),
+          Text(
+            (game.vndbRating! / 10).toStringAsFixed(1),
+            style: theme.textTheme.headlineSmall,
+          ),
+          if (game.vndbVotecount != null)
+            Text(
+              '${game.vndbVotecount} votes',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+        ],
+        if (game.released != null && game.released!.isNotEmpty) ...[
+          Text('Released', style: labelStyle),
+          Text(game.released!, style: theme.textTheme.bodyLarge),
+        ],
+        Text('Total playtime', style: labelStyle),
+        Text(
+          formatPlaytime(game.totalPlaytimeSeconds),
+          style: theme.textTheme.bodyLarge,
+        ),
+        if (game.tags.isNotEmpty)
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final tag in game.tags)
+                Chip(
+                  label: Text(tag),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _heroCover(BuildContext context, WidgetRef ref) {
+    const width = 190.0;
     final dir = ref.watch(dataDirProvider);
     final exists = ref.watch(coverExistsProvider);
     final thumb = thumbPath(dir, game.id, 512);
     // The thumbnail paints first; the original fades in over it with no gap.
     final physicalWidth =
-        (coverWidth * MediaQuery.devicePixelRatioOf(context)).round().clamp(
+        (width * MediaQuery.devicePixelRatioOf(context)).round().clamp(
       1,
       1 << 16,
     );
-    final original = File(p.join(dir.coversOriginal.path, cover));
-    return Center(
-      child: SizedBox(
-        width: coverWidth,
-        height: coverHeight,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (exists(thumb))
+    final original = File(p.join(dir.coversOriginal.path, game.cover!));
+    return SizedBox(
+      key: const ValueKey('detail-cover'),
+      width: width,
+      child: AspectRatio(
+        aspectRatio: kGameCoverAspectRatio,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (exists(thumb))
+                Image.file(
+                  File(thumb),
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                ),
               Image.file(
-                File(thumb),
-                fit: BoxFit.contain,
+                original,
+                fit: BoxFit.cover,
                 gaplessPlayback: true,
+                cacheWidth: physicalWidth,
+                frameBuilder: (context, child, frame, _) =>
+                    frame == null ? const SizedBox.shrink() : child,
                 errorBuilder: (_, _, _) => const SizedBox.shrink(),
               ),
-            Image.file(
-              original,
-              fit: BoxFit.contain,
-              gaplessPlayback: true,
-              cacheWidth: physicalWidth,
-              frameBuilder: (context, child, frame, _) =>
-                  frame == null ? const SizedBox.shrink() : child,
-              errorBuilder: (_, _, _) => const SizedBox.shrink(),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

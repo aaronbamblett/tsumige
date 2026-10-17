@@ -12,9 +12,6 @@ import 'package:flutter/rendering.dart';
 /// Game covers are portrait art; 3:4 fits the library's covers.
 const kGameCoverAspectRatio = 3 / 4;
 
-/// Height reserved for the title, tags and rating lines under a grid cover.
-const kGridTitleExtent = 84.0;
-
 /// Total inset the tile's Card takes out of each axis — Flutter's default card
 /// margin of 4 on all four sides. The cell is grown by this so the artwork
 /// inside the card, not the cell, is what ends up at 3:4.
@@ -52,9 +49,9 @@ SliverGridRegularTileLayout _coverTileLayout(
 class GameCoverGridDelegate extends SliverGridDelegate {
   const GameCoverGridDelegate({
     required this.maxCrossAxisExtent,
-    this.mainAxisSpacing = 8.0,
-    this.crossAxisSpacing = 8.0,
-    this.titleExtent = kGridTitleExtent,
+    this.mainAxisSpacing = 2.0,
+    this.crossAxisSpacing = 2.0,
+    this.titleExtent = 0.0,
   }) : assert(maxCrossAxisExtent > 0);
 
   final double maxCrossAxisExtent;
@@ -88,9 +85,9 @@ class GameCoverGridDelegate extends SliverGridDelegate {
 class GameCoverFixedCountGridDelegate extends SliverGridDelegate {
   const GameCoverFixedCountGridDelegate({
     required this.crossAxisCount,
-    this.mainAxisSpacing = 8.0,
-    this.crossAxisSpacing = 8.0,
-    this.titleExtent = kGridTitleExtent,
+    this.mainAxisSpacing = 2.0,
+    this.crossAxisSpacing = 2.0,
+    this.titleExtent = 0.0,
   }) : assert(crossAxisCount > 0);
 
   final int crossAxisCount;
