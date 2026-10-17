@@ -4,11 +4,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -34,6 +35,7 @@ class _FakeRepository implements LibraryRepository {
 
   final List<core.Game> games;
   int saves = 0;
+  Completer<void>? saveGate;
 
   @override
   Future<core.LoadedLibrary> load() async =>
@@ -41,6 +43,7 @@ class _FakeRepository implements LibraryRepository {
 
   @override
   Future<void> save(core.LoadedLibrary loaded) async {
+    await saveGate?.future;
     saves++;
   }
 
@@ -543,4 +546,66 @@ void main() {
           closeTo(tester.getCenter(box).dy + 4, 2), reason: '$key typing');
     }
   });
+
+  testWidgets('a tag typed but not confirmed is saved with the game',
+      (tester) async {
+    final (fake, _, _) = await _pump(tester);
+    await tester.tap(find.byKey(const Key('add-game-manual')));
+    await tester.pumpAndSettle();
+    await _fillManual(tester);
+    await tester.tap(find.byKey(const Key('add-game-tag-add')));
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('add-game-tag-input')), 'Mystery');
+    await tester.tap(find.byKey(const Key('add-game-add')));
+    await _waitForSave(tester, fake);
+    expect(fake.games.single.tags, ['Mystery']);
+    await _drainToast(tester);
+  });
+
+  testWidgets('commas split typed tags and duplicates are skipped',
+      (tester) async {
+    final (fake, _, _) = await _pump(tester);
+    await tester.tap(find.byKey(const Key('add-game-manual')));
+    await tester.pumpAndSettle();
+    await _fillManual(tester);
+    await tester.tap(find.byKey(const Key('add-game-tag-add')));
+    await tester.pump();
+    await tester.enterText(
+        find.byKey(const Key('add-game-tag-input')), 'Alpha, beta, ALPHA, , gamma');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(find.byType(TagChip), findsNWidgets(3));
+    await tester.tap(find.byKey(const Key('add-game-add')));
+    await _waitForSave(tester, fake);
+    expect(fake.games.single.tags, ['Alpha', 'beta', 'gamma']);
+    await _drainToast(tester);
+  });
+
+  testWidgets('close is ignored while saving and the game is still added',
+      (tester) async {
+    final (fake, _, _) = await _pump(tester);
+    fake.saveGate = Completer<void>();
+    await tester.tap(find.byKey(const Key('add-game-manual')));
+    await tester.pumpAndSettle();
+    await _fillManual(tester);
+    await tester.tap(find.byKey(const Key('add-game-add')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('add-game-close')));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text('Set it up'), findsOneWidget);
+    fake.saveGate!.complete();
+    await _waitForSave(tester, fake);
+    expect(fake.games.single.title, 'Manual game');
+    await _drainToast(tester);
+  });
+}
+
+Future<void> _fillManual(WidgetTester tester) async {
+  await tester.enterText(
+      find.byKey(const Key('add-game-title')), 'Manual game');
+  await tester.enterText(
+      find.byKey(const Key('add-game-exe')), '/games/manual/run.exe');
+  await tester.pump();
 }

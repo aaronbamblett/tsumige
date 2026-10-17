@@ -171,16 +171,23 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
   }
 
   void _addTag(String raw) {
-    final tag = raw.trim();
     _tagInput.clear();
-    if (tag.isNotEmpty &&
-        !_tagList.any((t) => t.toLowerCase() == tag.toLowerCase())) {
-      setState(() => _tagList = [..._tagList, tag]);
+    final merged = [..._tagList];
+    for (final tag in parseTagsField(raw)) {
+      if (!merged.any((t) => t.toLowerCase() == tag.toLowerCase())) {
+        merged.add(tag);
+      }
+    }
+    if (merged.length != _tagList.length) {
+      setState(() => _tagList = merged);
     }
     _tagFocus.requestFocus();
   }
 
-  void _close() => Navigator.of(context).pop();
+  void _close() {
+    if (_saving) return;
+    Navigator.of(context).pop();
+  }
 
   Future<void> _chooseExe() async {
     final picked = await ref.read(pathPickerProvider)(mode: PathPickMode.file);
@@ -193,6 +200,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
   }
 
   Future<void> _add() async {
+    if (_tagInput.text.trim().isNotEmpty) _addTag(_tagInput.text);
     final title = _title.text.trim();
     if (title.isEmpty) {
       setState(() => _formError = 'Title is required');
