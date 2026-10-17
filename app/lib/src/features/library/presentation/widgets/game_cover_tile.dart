@@ -8,6 +8,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../core/model.dart';
@@ -30,6 +31,8 @@ class GameCoverTile extends ConsumerStatefulWidget {
 class _GameCoverTileState extends ConsumerState<GameCoverTile> {
   var _hovered = false;
   var _focused = false;
+  var _pointerFocused = false;
+  late final _focusNode = FocusNode(onKeyEvent: _onKeyEvent);
 
   @override
   void initState() {
@@ -40,11 +43,19 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
   @override
   void dispose() {
     FocusManager.instance.removeHighlightModeListener(_onHighlightModeChanged);
+    _focusNode.dispose();
     super.dispose();
   }
 
   void _onHighlightModeChanged(FocusHighlightMode mode) {
     if (_focused) setState(() {});
+  }
+
+  KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
+    if (_pointerFocused && event is KeyDownEvent) {
+      setState(() => _pointerFocused = false);
+    }
+    return KeyEventResult.ignored;
   }
 
   @override
@@ -61,6 +72,7 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
     const coverRadius = BorderRadius.all(Radius.circular(10));
     final keyboardFocus =
         _focused &&
+        !_pointerFocused &&
         FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
     return InkWell(
       borderRadius: coverRadius,
@@ -68,7 +80,10 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
       highlightColor: Colors.transparent,
       splashColor: Colors.transparent,
       focusColor: Colors.transparent,
+      focusNode: _focusNode,
       onTap: () {
+        setState(() => _pointerFocused = true);
+        _focusNode.requestFocus();
         final selection = ref.read(selectedGameIdProvider.notifier);
         if (selected) {
           selection.clear();
@@ -77,7 +92,10 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
         }
       },
       onHover: (hovered) => setState(() => _hovered = hovered),
-      onFocusChange: (focused) => setState(() => _focused = focused),
+      onFocusChange: (focused) => setState(() {
+        _focused = focused;
+        if (!focused) _pointerFocused = false;
+      }),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

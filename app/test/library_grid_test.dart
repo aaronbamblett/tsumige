@@ -600,23 +600,31 @@ void main() {
       expect(coverDecoration(tester, focusedTileId()!), isNull);
     });
 
-    testWidgets('a touch or mouse press leaves focus without a ring', (
+    testWidgets('a mouse click focuses the tile, then an arrow key moves on', (
       tester,
     ) async {
       await pumpLibrary(tester, fakeGames(20));
       final viewport = gridViewportRect(tester);
-      await tester.tap(find.byKey(const ValueKey('cover-game-0')));
+      await tester.tap(
+        find.byKey(const ValueKey('cover-game-0')),
+        kind: PointerDeviceKind.mouse,
+      );
       await tester.pump();
-      await tester.tapAt(Offset(viewport.left + 5, viewport.top + 100));
+      await tester.pump();
+      expect(find.byType(GameDetailPane), findsOneWidget);
+      expect(focusedTileId(), 'game-0');
+      final empty = Offset(viewport.left + 5, viewport.top + 100);
+      await tester.tapAt(empty, kind: PointerDeviceKind.mouse);
       await tester.pump();
       await tester.pump();
       expect(find.byType(GameDetailPane), findsNothing);
-      final focus = Focus.of(
-        tester.element(find.byKey(const ValueKey('cover-game-0'))),
-      );
-      focus.requestFocus();
-      await tester.pump();
       expect(focusedTileId(), 'game-0');
+      expect(coverDecoration(tester, 'game-0'), isNull);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      expect(focusedTileId(), 'game-1');
+      final border = coverDecoration(tester, 'game-1')!.border! as Border;
+      expect(border.top.width, 2);
       expect(coverDecoration(tester, 'game-0'), isNull);
     });
 
