@@ -44,6 +44,22 @@ Game gameFromVn(VnSearchResult r,
   );
 }
 
+/// Fills the VNDB data for a game just picked from search. A failed fetch
+/// leaves the basic fields from the search result in place.
+Future<void> fillVndbMetadata(Game game, VndbClient client,
+    {DateTime? now}) async {
+  final id = game.vndbId;
+  if (id == null) return;
+  final at = (now ?? DateTime.now()).toUtc();
+  try {
+    final vns = await client.fetchVnData([id]);
+    final adult = await client.fetchAdultVnIds([id]);
+    for (final vn in vns.where((v) => v.id == id)) {
+      applyVnData(game, vn, adult: adult.contains(id), fetchedAt: at);
+    }
+  } catch (_) {}
+}
+
 List<String> parseTagsField(String raw) {
   final out = <String>[];
   final seen = <String>{};

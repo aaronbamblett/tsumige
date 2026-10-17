@@ -10,6 +10,7 @@ import 'dart:math';
 
 import 'package:http/http.dart' as http;
 
+import 'json_read.dart';
 import 'model.dart';
 import 'version.dart';
 
@@ -24,15 +25,40 @@ class VndbException implements Exception {
   String toString() => 'VndbException: $message';
 }
 
-class VnRating {
+class VnData {
   final String id;
+  final String? title;
+  final String? alttitle;
   final double? rating;
   final int votecount;
   final String? released;
+  final int? lengthMinutes;
+  final int? lengthVotes;
+  final String? olang;
+  final List<Developer> developers;
+  final List<VndbTag> tags;
+  final List<VnRelation> relations;
 
-  const VnRating(
-      {required this.id, this.rating, this.votecount = 0, this.released});
+  const VnData({
+    required this.id,
+    this.title,
+    this.alttitle,
+    this.rating,
+    this.votecount = 0,
+    this.released,
+    this.lengthMinutes,
+    this.lengthVotes,
+    this.olang,
+    this.developers = const [],
+    this.tags = const [],
+    this.relations = const [],
+  });
 }
+
+const String _vnDataFields =
+    'id,title,alttitle,rating,votecount,released,length_minutes,length_votes,'
+    'olang,developers{id,name,original},tags{name,rating,spoiler,category},'
+    'relations{id,relation,relation_official,title,image.url}';
 
 class VnSearchResult {
   final String id;
@@ -161,8 +187,8 @@ class VndbClient {
       this.retryDelay = const Duration(seconds: 5)})
       : _client = client ?? http.Client();
 
-  Future<http.Response> _post(Map<String, Object?> body) async {
-    final uri = Uri.parse('$baseUrl/vn');
+  Future<http.Response> _post(String path, Map<String, Object?> body) async {
+    final uri = Uri.parse('$baseUrl$path');
     Future<http.Response> send() => _client.post(uri, headers: {
           'Content-Type': 'application/json',
           'User-Agent': 'vn-launcher/$vnlVersion',
@@ -190,7 +216,7 @@ class VndbClient {
   Future<List<VnSearchResult>> search(String query) async {
     final trimmed = query.trim();
     final id = vndbIdFromQuery(trimmed);
-    final response = await _post({
+    final response = await _post('/vn', {
       'filters': id == null ? ['search', '=', trimmed] : ['id', '=', id],
       'fields': _searchFields,
       'sort': 'searchrank',
@@ -262,68 +288,153 @@ class VndbClient {
     return null;
   }
 
-  Future<List<VnRating>> fetchPage(Map<String, Object?> body) async {
-    final response = await _post(body);
-    return parseRatings(response.body);
+  Future<({List<Map> results, bool more})> _postPage(
+      String path, Map<String, Object?> body) async {
+    final response = await _post(path, body);
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } catch (e) {
+      throw VndbException('invalid JSON: $e');
+    }
+    if (decoded is! Map || decoded['results'] is! List) {
+      throw const VndbException('unexpected VNDB response shape');
+    }
+    return (
+      results: [
+        for (final raw in decoded['results'] as List)
+          if (raw is Map) raw
+      ],
+      more: decoded['more'] == true,
+    );
+  }
+
+  Future<List<VnData>> fetchVnData(List<String> ids) async {
+    final out = <VnData>[];
+    for (var i = 0; i < ids.length; i += 100) {
+      final chunk = ids.sublist(i, min(i + 100, ids.length));
+      for (var page = 1;; page++) {
+        final result = await _postPage('/vn', {
+          'filters': _idFilter(chunk),
+          'fields': _vnDataFields,
+          'results': 100,
+          'page': page,
+        });
+        for (final raw in result.results) {
+          final vn = _parseVnData(raw);
+          if (vn != null) out.add(vn);
+        }
+        if (!result.more) break;
+      }
+    }
+    return out;
+  }
+
+  /// VN ids, among [ids], that have at least one release with `has_ero`.
+  Future<Set<String>> fetchAdultVnIds(List<String> ids) async {
+    final out = <String>{};
+    for (var i = 0; i < ids.length; i += 100) {
+      final chunk = ids.sublist(i, min(i + 100, ids.length));
+      final chunkSet = chunk.toSet();
+      for (var page = 1;; page++) {
+        final result = await _postPage('/release', {
+          'filters': [
+            'and',
+            ['has_ero', '=', 1],
+            ['vn', '=', _idFilter(chunk)],
+          ],
+          'fields': 'vns.id',
+          'results': 100,
+          'page': page,
+        });
+        for (final raw in result.results) {
+          final vns = raw['vns'];
+          if (vns is! List) continue;
+          for (final vn in vns) {
+            final id = vn is Map ? vn['id'] : null;
+            if (id is String && chunkSet.contains(id)) out.add(id);
+          }
+        }
+        if (!result.more) break;
+      }
+    }
+    return out;
   }
 }
 
-List<Map<String, Object?>> ratingRequestBodies(List<String> ids) {
-  final bodies = <Map<String, Object?>>[];
-  for (var i = 0; i < ids.length; i += 100) {
-    final chunk = ids.sublist(i, min(i + 100, ids.length));
-    final Object filters = chunk.length == 1
-        ? ['id', '=', chunk.single]
-        : ['or', for (final id in chunk) ['id', '=', id]];
-    bodies.add({
-      'filters': filters,
-      'fields': 'id,rating,votecount,released',
-      'results': 100,
-    });
-  }
-  return bodies;
+Object _idFilter(List<String> ids) => ids.length == 1
+    ? ['id', '=', ids.single]
+    : ['or', for (final id in ids) ['id', '=', id]];
+
+VnData? _parseVnData(Map raw) {
+  final id = raw['id'];
+  if (id is! String) return null;
+  return VnData(
+    id: id,
+    title: readStringOrNull(raw, 'title'),
+    alttitle: readStringOrNull(raw, 'alttitle'),
+    rating: readDoubleOrNull(raw, 'rating'),
+    votecount: readIntOrNull(raw, 'votecount') ?? 0,
+    released: readStringOrNull(raw, 'released'),
+    lengthMinutes: readIntOrNull(raw, 'length_minutes'),
+    lengthVotes: readIntOrNull(raw, 'length_votes'),
+    olang: readStringOrNull(raw, 'olang'),
+    developers: readList(raw, 'developers', Developer.fromJson),
+    tags: [
+      for (final tag in readList(raw, 'tags', VndbTag.fromJson))
+        if (tag.rating > 0) tag
+    ],
+    relations: readList(raw, 'relations', _parseRelation),
+  );
 }
 
-List<VnRating> parseRatings(String body) {
-  final Object? decoded;
-  try {
-    decoded = jsonDecode(body);
-  } catch (e) {
-    throw VndbException('invalid JSON: $e');
-  }
-  if (decoded is! Map || decoded['results'] is! List) {
-    throw const VndbException('unexpected VNDB response shape');
-  }
-  final out = <VnRating>[];
-  for (final raw in decoded['results'] as List) {
-    if (raw is! Map || raw['id'] is! String) continue;
-    final ratingRaw = raw['rating'];
-    final votecountRaw = raw['votecount'];
-    final releasedRaw = raw['released'];
-    out.add(VnRating(
-      id: raw['id'] as String,
-      rating: ratingRaw is num ? ratingRaw.toDouble() : null,
-      votecount: votecountRaw is int ? votecountRaw : 0,
-      released: releasedRaw is String ? releasedRaw : null,
-    ));
-  }
-  return out;
+VnRelation? _parseRelation(Object? raw) {
+  if (raw is! Map || raw['id'] is! String) return null;
+  final image = raw['image'];
+  final url = image is Map ? readStringOrNull(image, 'url') : null;
+  return VnRelation(
+    vndbId: raw['id'] as String,
+    relation: readString(raw, 'relation'),
+    title: readString(raw, 'title'),
+    imageUrl: url != null && url.startsWith('http') ? url : null,
+    official: raw['relation_official'] == true,
+  );
 }
 
-class RatingReport {
+class VndbRefreshReport {
   final int updated;
   final List<String> notFound;
   final String? error;
 
-  const RatingReport({this.updated = 0, List<String>? notFound, this.error})
+  const VndbRefreshReport(
+      {this.updated = 0, List<String>? notFound, this.error})
       : notFound = notFound ?? const [];
 
   Map<String, Object?> toJson() =>
       {'updated': updated, 'not_found': notFound, 'error': error};
 }
 
-Future<RatingReport> refreshRatings(LoadedLibrary loaded, VndbClient client,
-    {DateTime? now}) async {
+void applyVnData(Game game, VnData vn,
+    {required bool adult, required DateTime fetchedAt}) {
+  game.vndbRating = vn.rating;
+  game.vndbVotecount = vn.votecount;
+  game.released = vn.released;
+  game.vndbOriginalTitle = vn.alttitle;
+  game.developers = [...vn.developers];
+  game.lengthMinutes = vn.lengthMinutes;
+  game.lengthVotes = vn.lengthVotes;
+  game.originalLanguage = vn.olang;
+  game.vndbTags = [...vn.tags];
+  game.relations = [...vn.relations];
+  game.adultVndb = adult;
+  game.vndbFetchedAt = fetchedAt;
+  game.vndbDataFetchedAt = fetchedAt;
+}
+
+/// Fills every VNDB field for the library's games, 100 ids per chunk. A gap
+/// of [gap] separates requests, so a full library does not burst VNDB.
+Future<VndbRefreshReport> refreshVndbData(LoadedLibrary loaded, VndbClient client,
+    {DateTime? now, Duration gap = const Duration(seconds: 1)}) async {
   final fetchedAt = (now ?? DateTime.now()).toUtc();
   final seen = <String>{};
   final ids = <String>[];
@@ -334,27 +445,34 @@ Future<RatingReport> refreshRatings(LoadedLibrary loaded, VndbClient client,
   }
   var updated = 0;
   final found = <String>{};
-  for (final body in ratingRequestBodies(ids)) {
-    final List<VnRating> ratings;
+  var sent = 0;
+  Future<void> pace() async {
+    if (sent++ > 0) await Future<void>.delayed(gap);
+  }
+
+  for (var i = 0; i < ids.length; i += 100) {
+    final chunk = ids.sublist(i, min(i + 100, ids.length));
+    final List<VnData> vns;
+    final Set<String> adult;
     try {
-      ratings = await client.fetchPage(body);
+      await pace();
+      vns = await client.fetchVnData(chunk);
+      await pace();
+      adult = await client.fetchAdultVnIds(chunk);
     } catch (e) {
       // notFound is only meaningful for a complete fetch.
-      return RatingReport(updated: updated, error: '$e');
+      return VndbRefreshReport(updated: updated, error: '$e');
     }
-    final byId = {for (final r in ratings) r.id: r};
+    final byId = {for (final vn in vns) vn.id: vn};
     found.addAll(byId.keys);
     for (final game in loaded.library.games) {
-      final rating = byId[game.vndbId];
-      if (rating == null) continue;
-      game.vndbRating = rating.rating;
-      game.vndbVotecount = rating.votecount;
-      game.released = rating.released;
-      game.vndbFetchedAt = fetchedAt;
+      final vn = byId[game.vndbId];
+      if (vn == null) continue;
+      applyVnData(game, vn, adult: adult.contains(vn.id), fetchedAt: fetchedAt);
       updated++;
     }
   }
-  return RatingReport(
+  return VndbRefreshReport(
       updated: updated,
       notFound: [for (final id in ids) if (!found.contains(id)) id]);
 }
