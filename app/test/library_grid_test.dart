@@ -8,6 +8,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -451,6 +452,47 @@ void main() {
       core.Game(id: 'g1', title: 'Alpha', vndbRating: 75.0),
     ]);
     expect(find.textContaining('VNDB Rating'), findsNothing);
+  });
+
+  testWidgets('tile title area has no fill when selected or hovered', (
+    tester,
+  ) async {
+    await pumpLibrary(tester, fakeGames(3));
+    final tile = find.byType(GameCoverTile).first;
+    final cover = tester.getRect(
+      find.descendant(of: tile, matching: find.byType(AspectRatio)),
+    );
+    await tester.tap(tile);
+    await tester.pump();
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+    await mouse.moveTo(Offset(tester.getCenter(tile).dx, cover.bottom + 8));
+    await tester.pump();
+    final ink = tester.widget<InkWell>(
+      find.descendant(of: tile, matching: find.byType(InkWell)),
+    );
+    for (final color in [
+      ink.hoverColor,
+      ink.highlightColor,
+      ink.splashColor,
+      ink.focusColor,
+    ]) {
+      expect(color, Colors.transparent);
+    }
+    final filled = find.descendant(
+      of: tile,
+      matching: find.byWidgetPredicate(
+        (w) => (w is Container && w.decoration != null) || w is DecoratedBox,
+      ),
+    );
+    for (var i = 0; i < filled.evaluate().length; i++) {
+      expect(
+        tester.getTopLeft(filled.at(i)).dy,
+        lessThan(cover.bottom),
+        reason: 'decorated widget below the cover',
+      );
+    }
   });
 
   testWidgets('tapping the selected tile closes the pane', (tester) async {

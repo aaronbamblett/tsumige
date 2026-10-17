@@ -341,7 +341,6 @@ class _VndbTagChip extends ConsumerWidget {
       child: Container(
         height: _kChipHeight,
         padding: const EdgeInsets.symmetric(horizontal: 11),
-        alignment: Alignment.center,
         decoration: _chipDecoration.copyWith(
           color: scheme.onSurface.withValues(alpha: 0.03),
         ),

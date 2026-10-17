@@ -109,7 +109,7 @@ class _LibrarySectionState extends ConsumerState<LibrarySection> {
       children: [
         SettingsGroup(
           rowKey: const Key('settings-row-vndb'),
-          title: 'VNDB ratings',
+          title: 'VNDB data',
           subtitle:
               'Ratings, tags, developers and related VNs are fetched for every game with a VNDB id.',
           control: IntrinsicWidth(

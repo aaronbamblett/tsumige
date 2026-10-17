@@ -626,18 +626,6 @@ class _Footer extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         spacing: 10,
         children: [
-          if (showRunExe)
-            Tooltip(
-              message: _phaseLabel(phase),
-              child: BrandGlassButton(
-                height: 44,
-                onPressed: busy
-                    ? null
-                    : () => actions.runExeInPrefix(context, game),
-                icon: const Icon(Icons.terminal_rounded),
-                label: const Text('Run .exe inside prefix…'),
-              ),
-            ),
           Tooltip(
             message: launchTip ?? '',
             child: BrandButton(
@@ -667,6 +655,18 @@ class _Footer extends ConsumerWidget {
               }),
             ),
           ),
+          if (showRunExe)
+            Tooltip(
+              message: _phaseLabel(phase),
+              child: BrandGlassButton(
+                height: 44,
+                onPressed: busy
+                    ? null
+                    : () => actions.runExeInPrefix(context, game),
+                icon: const Icon(Icons.terminal_rounded),
+                label: const Text('Run .exe inside prefix…'),
+              ),
+            ),
         ],
       ),
     );

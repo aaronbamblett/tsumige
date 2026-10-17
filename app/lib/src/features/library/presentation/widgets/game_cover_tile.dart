@@ -42,6 +42,10 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
     const coverRadius = BorderRadius.all(Radius.circular(10));
     return InkWell(
       borderRadius: coverRadius,
+      hoverColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      splashColor: Colors.transparent,
+      focusColor: Colors.transparent,
       onTap: () {
         final selection = ref.read(selectedGameIdProvider.notifier);
         if (selected) {

@@ -438,6 +438,13 @@ void main() {
     expect(localeSize.height, lessThanOrEqualTo(80), reason: 'locale');
   });
 
+  testWidgets('library section heading reads VNDB data', (tester) async {
+    await pumpSettings(tester, SettingsFakeRepository());
+    await openSection(tester, 'library');
+    expect(find.text('VNDB data'), findsOneWidget);
+    expect(find.text('VNDB ratings'), findsNothing);
+  });
+
   testWidgets('game language dropdown is as wide as the proton dropdown', (
     tester,
   ) async {

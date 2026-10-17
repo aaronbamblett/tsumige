@@ -429,6 +429,15 @@ void main() {
         findsOneWidget);
   });
 
+  testWidgets('play sits above run exe inside prefix', (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openPane(tester, 'Alpha');
+    final play = tester.getTopLeft(find.widgetWithText(BrandButton, 'Play'));
+    final runExe = tester.getTopLeft(
+        find.widgetWithText(BrandGlassButton, 'Run .exe inside prefix…'));
+    expect(play.dy, lessThan(runExe.dy));
+  });
+
   testWidgets('launch tab falls back to global defaults', (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
@@ -992,6 +1001,25 @@ void main() {
     expect(paneText(tester, 'Secret Twist'), findsNothing);
     expect(paneText(tester, 'Show all 3'), findsOneWidget);
     expect(paneText(tester, 'Show spoilers'), findsOneWidget);
+  });
+
+  testWidgets('VNDB tag chips wrap inline at content width', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', vndbTags: const [
+        core.VndbTag(name: 'Romance', rating: 2.5, spoiler: 0, category: 'cont'),
+        core.VndbTag(name: 'Kissing', rating: 2.4, spoiler: 0, category: 'cont'),
+      ]),
+    ]);
+    await openPane(tester, 'Alpha');
+    final romance = tester.getRect(paneText(tester, 'Romance'));
+    final kissing = tester.getRect(paneText(tester, 'Kissing'));
+    expect(kissing.top, romance.top);
+    final pane = tester.getRect(find.byType(GameDetailPane));
+    final chip = tester.getRect(find.ancestor(
+      of: paneText(tester, 'Romance'),
+      matching: find.byType(InkWell),
+    ).first);
+    expect(chip.width, lessThan(pane.width / 2));
   });
 
   testWidgets('show all and show spoilers reveal tags and reset on game change',
