@@ -64,6 +64,16 @@ void main() {
     expect(back.tags, isEmpty);
   });
 
+  test('background round-trips and a game without it uses the cover', () {
+    final game = Game(id: 'g4', title: 'Bg', cover: 'g4.png', background: 'g4.jpg');
+    final json = jsonDecode(jsonEncode(game.toJson())) as Map<String, Object?>;
+    expect(json['background'], 'g4.jpg');
+    expect(Game.fromJson(json).background, 'g4.jpg');
+    final old = Game.fromJson({'id': 'g5', 'cover': 'g5.png'});
+    expect(old.background, isNull);
+    expect(old.cover, 'g5.png');
+  });
+
   test('a game saved without the new fields loads', () {
     final old = Game.fromJson({
       'id': 'g2',

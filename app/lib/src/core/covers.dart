@@ -56,8 +56,7 @@ String _thumbPath(String root, String gameId, int width) => p.join(root,
 String thumbPath(DataDir dir, String gameId, int width) =>
     _thumbPath(dir.root, gameId, width);
 
-Future<String> storeOriginal(
-    DataDir dir, String gameId, Uint8List bytes) async {
+String _extensionFor(Uint8List bytes, String gameId) {
   if (bytes.isEmpty) {
     throw const CoverException.unknownFormat('empty bytes');
   }
@@ -72,6 +71,12 @@ Future<String> storeOriginal(
     throw CoverException.unknownFormat(
         'unrecognised image bytes for game $gameId');
   }
+  return ext;
+}
+
+Future<String> storeOriginal(
+    DataDir dir, String gameId, Uint8List bytes) async {
+  final ext = _extensionFor(bytes, gameId);
   await dir.coversOriginal.create(recursive: true);
   for (final other in _originalExtensions) {
     if (other == ext) continue;
@@ -84,6 +89,25 @@ Future<String> storeOriginal(
   }
   final name = '$gameId.$ext';
   final dest = File(p.join(dir.coversOriginal.path, name));
+  final tmp = File('${dest.path}.$pid.tmp');
+  await tmp.writeAsBytes(bytes, flush: true);
+  await tmp.rename(dest.path);
+  return name;
+}
+
+/// Stores a pane background under `covers/background`. Backgrounds have no
+/// thumbnails: the pane draws the full image at its own width.
+Future<String> storeBackground(
+    DataDir dir, String gameId, Uint8List bytes) async {
+  final ext = _extensionFor(bytes, gameId);
+  await dir.coversBackground.create(recursive: true);
+  for (final other in _originalExtensions) {
+    if (other == ext) continue;
+    final stale = File(p.join(dir.coversBackground.path, '$gameId.$other'));
+    if (await stale.exists()) await stale.delete();
+  }
+  final name = '$gameId.$ext';
+  final dest = File(p.join(dir.coversBackground.path, name));
   final tmp = File('${dest.path}.$pid.tmp');
   await tmp.writeAsBytes(bytes, flush: true);
   await tmp.rename(dest.path);

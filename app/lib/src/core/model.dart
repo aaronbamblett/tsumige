@@ -49,6 +49,7 @@ class Game {
   DateTime? vndbFetchedAt;
   Language? language;
   String? cover;
+  String? background;
   LaunchOverrides launch;
   List<PlaySession> playSessions;
   String? vndbOriginalTitle;
@@ -77,6 +78,7 @@ class Game {
     this.vndbFetchedAt,
     this.language,
     this.cover,
+    this.background,
     LaunchOverrides? launch,
     List<PlaySession>? playSessions,
     this.vndbOriginalTitle,
@@ -112,6 +114,7 @@ class Game {
         vndbFetchedAt: readDateOrNull(m, 'vndb_fetched_at'),
         language: parseLanguage(readStringOrNull(m, 'language')),
         cover: readStringOrNull(m, 'cover'),
+        background: readStringOrNull(m, 'background'),
         launch: m['launch'] is Map
             ? LaunchOverrides.fromJson(m['launch'] as Map)
             : LaunchOverrides(),
@@ -144,6 +147,7 @@ class Game {
         'vndb_fetched_at': vndbFetchedAt?.toUtc().toIso8601String(),
         'language': language?.name,
         'cover': cover,
+        'background': background,
         'launch': launch.toJson(),
         'play_sessions': [for (final s in playSessions) s.toJson()],
         'original_title': vndbOriginalTitle,

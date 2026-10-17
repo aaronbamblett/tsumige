@@ -31,6 +31,44 @@ Future<String> storeFixture(DataDir dir, String id, String name) =>
     storeOriginal(dir, id, fixtureBytes(name));
 
 void main() {
+  group('storeBackground', () {
+    test('writes under covers/background and makes no thumbnails', () async {
+      final dir = freshDir();
+      final id = const Uuid().v4();
+      final name = await storeBackground(dir, id, fixtureBytes('png_named.jpg'));
+      expect(name, '$id.png');
+      final file = File('${dir.coversBackground.path}/$id.png');
+      expect(img.findFormatForData(file.readAsBytesSync()), img.ImageFormat.png);
+      expect(dir.coversOriginal.existsSync(), isFalse);
+      expect(File(thumbPath(dir, id, 256)).existsSync(), isFalse);
+    });
+
+    test('replaces a stored background with a different extension', () async {
+      final dir = freshDir();
+      final id = const Uuid().v4();
+      await storeBackground(dir, id, fixtureBytes('png_named.jpg'));
+      final name = await storeBackground(dir, id, fixtureBytes('tall.jpg'));
+      expect(name, '$id.jpg');
+      expect(File('${dir.coversBackground.path}/$id.png').existsSync(), isFalse);
+      expect(File('${dir.coversBackground.path}/$id.jpg').existsSync(), isTrue);
+    });
+
+    test('rejects empty and text bytes without writing', () async {
+      final dir = freshDir();
+      await expectLater(
+        storeBackground(dir, const Uuid().v4(), fixtureBytes('empty.jpg')),
+        throwsA(isA<CoverException>().having(
+            (e) => e.error, 'error', CoverError.unknownFormat)),
+      );
+      await expectLater(
+        storeBackground(dir, const Uuid().v4(), fixtureBytes('text.jpg')),
+        throwsA(isA<CoverException>().having(
+            (e) => e.error, 'error', CoverError.unknownFormat)),
+      );
+      expect(dir.coversBackground.existsSync(), isFalse);
+    });
+  });
+
   group('storeOriginal', () {
     test('png named jpg stored as png', () async {
       final dir = freshDir();

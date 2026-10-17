@@ -67,7 +67,8 @@ Future<void> pumpLibrary(WidgetTester tester, List<core.Game> games,
     double height = 800,
     void Function(Directory)? exposeTemp,
     Future<String?> Function()? coverPicker,
-    Future<bool> Function(Uri)? urlOpener}) async {
+    Future<bool> Function(Uri)? urlOpener,
+    bool Function(String)? exists}) async {
   setSurface(tester, width, height);
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
       .setMockMethodCallHandler(
@@ -85,7 +86,7 @@ Future<void> pumpLibrary(WidgetTester tester, List<core.Game> games,
       dataDirProvider.overrideWithValue(core.DataDir(temp.path)),
       libraryRepositoryProvider
           .overrideWithValue(DetailFakeRepository(games)),
-      coverExistsProvider.overrideWithValue((_) => false),
+      coverExistsProvider.overrideWithValue(exists ?? (_) => false),
       if (coverPicker != null)
         coverPickerProvider.overrideWithValue(coverPicker),
       if (urlOpener != null)
@@ -96,6 +97,16 @@ Future<void> pumpLibrary(WidgetTester tester, List<core.Game> games,
   await tester.pump();
   await tester.pump();
 }
+
+Finder _fileImage(String path) => find.byWidgetPredicate((w) {
+      if (w is! Image) return false;
+      final provider = w.image;
+      final file = provider is ResizeImage ? provider.imageProvider : provider;
+      return file is FileImage && file.file.path == path;
+    });
+
+Finder _paneFileImage(String path) => find.descendant(
+    of: find.byType(GameDetailPane), matching: _fileImage(path));
 
 Future<void> openPane(WidgetTester tester, String title) async {
   await tester.tap(find.text(title).first);
@@ -885,6 +896,42 @@ void main() {
     expect(File(p.join(dir.coversOriginal.path, 'g1.png')).existsSync(),
         isTrue);
     expect(File(core.thumbPath(dir, 'g1', 256)).existsSync(), isTrue);
+  });
+
+  testWidgets('the hero draws the background file when one is set',
+      (tester) async {
+    late Directory temp;
+    final bytes = Uint8List.fromList(
+        img.encodePng(img.Image(width: 16, height: 16)));
+    await pumpLibrary(tester,
+        [core.Game(id: 'g1', title: 'Alpha', cover: 'g1.png', background: 'g1.png')],
+        exposeTemp: (dir) {
+          temp = dir;
+          final bgDir = Directory(p.join(dir.path, 'covers', 'background'))
+            ..createSync(recursive: true);
+          File(p.join(bgDir.path, 'g1.png')).writeAsBytesSync(bytes);
+        },
+        exists: (path) => File(path).existsSync());
+    final bgPath = p.join(temp.path, 'covers', 'background', 'g1.png');
+    final coverPath = p.join(temp.path, 'covers', 'original', 'g1.png');
+    await openPane(tester, 'Alpha');
+    expect(_paneFileImage(bgPath), findsOneWidget);
+    expect(_paneFileImage(coverPath), findsNothing);
+  });
+
+  testWidgets('the hero draws the cover when no background is set',
+      (tester) async {
+    late Directory temp;
+    await pumpLibrary(tester,
+        [core.Game(id: 'g1', title: 'Alpha', cover: 'g1.png')],
+        exposeTemp: (dir) => temp = dir,
+        exists: (path) => File(path).existsSync());
+    await openPane(tester, 'Alpha');
+    expect(
+        _fileImage(p.join(temp.path, 'covers', 'background', 'g1.png')),
+        findsNothing);
+    expect(_paneFileImage(p.join(temp.path, 'covers', 'original', 'g1.png')),
+        findsOneWidget);
   });
 
   testWidgets('a portal cover path is rejected with a toast', (tester) async {

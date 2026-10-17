@@ -58,6 +58,52 @@ void main() {
     expect(File(thumbPath(dir, id, 512)).existsSync(), isFalse);
   });
 
+  test('a game background moves into the same trash folder', () async {
+    final temp = Directory.systemTemp.createTempSync('vnl_trash_test_');
+    addTearDown(() => temp.deleteSync(recursive: true));
+    final dir = _dir(temp);
+    const id = '33333333-3333-4333-8333-333333333333';
+    final game = Game(id: id, title: 'Alpha', background: '$id.jpg');
+    await dir.coversBackground.create(recursive: true);
+    File(p.join(dir.coversBackground.path, '$id.jpg'))
+        .writeAsBytesSync([1, 2, 3]);
+
+    await moveToTrash(dir, game,
+        now: DateTime.utc(2026, 10, 17, 8, 30, 5, 123));
+
+    final folder = Directory(
+        p.join(dir.trash.path, '20261017T083005.123Z-$id'));
+    expect(File(p.join(folder.path, 'background-$id.jpg')).readAsBytesSync(),
+        [1, 2, 3]);
+    expect(File(p.join(dir.coversBackground.path, '$id.jpg')).existsSync(),
+        isFalse);
+  });
+
+  test('trashBackground moves only the background and keeps the cover',
+      () async {
+    final temp = Directory.systemTemp.createTempSync('vnl_trash_test_');
+    addTearDown(() => temp.deleteSync(recursive: true));
+    final dir = _dir(temp);
+    const id = '44444444-4444-4444-8444-444444444444';
+    final game = Game(id: id, title: 'Alpha', cover: '$id.png', background: '$id.png');
+    await _writeCover(dir, id);
+    await dir.coversBackground.create(recursive: true);
+    File(p.join(dir.coversBackground.path, '$id.png'))
+        .writeAsBytesSync([4, 5]);
+
+    await trashBackground(dir, game,
+        now: DateTime.utc(2026, 10, 17, 8, 30, 5, 123));
+
+    final folder = Directory(
+        p.join(dir.trash.path, '20261017T083005.123Z-$id'));
+    expect(File(p.join(folder.path, 'background-$id.png')).readAsBytesSync(),
+        [4, 5]);
+    expect(File(p.join(dir.coversBackground.path, '$id.png')).existsSync(),
+        isFalse);
+    expect(File(p.join(dir.coversOriginal.path, '$id.png')).existsSync(),
+        isTrue);
+  });
+
   test('a missing cover file does not throw', () async {
     final temp = Directory.systemTemp.createTempSync('vnl_trash_test_');
     addTearDown(() => temp.deleteSync(recursive: true));

@@ -54,6 +54,7 @@ class GameDetailPane extends HookConsumerWidget {
     final historyScroll = useScrollController();
     final relatedScroll = useScrollController();
     final hasCover = game.cover != null && game.cover!.isNotEmpty;
+    final hasBackground = game.background?.isNotEmpty ?? false;
     return DefaultTabController(
       length: 4,
       child: LayoutBuilder(
@@ -72,7 +73,8 @@ class GameDetailPane extends HookConsumerWidget {
                   fit: StackFit.expand,
                   children: [
                     ColoredBox(color: colorScheme.surfaceContainerHigh),
-                    if (hasCover) _heroArt(context, ref, constraints.maxWidth),
+                    if (hasCover || hasBackground)
+                      _heroArt(context, ref, constraints.maxWidth),
                     DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
@@ -204,10 +206,27 @@ class GameDetailPane extends HookConsumerWidget {
   Widget _heroArt(BuildContext context, WidgetRef ref, double width) {
     final dir = ref.watch(dataDirProvider);
     final exists = ref.watch(coverExistsProvider);
-    final thumb = thumbPath(dir, game.id, 512);
     final physicalWidth = (width * MediaQuery.devicePixelRatioOf(context))
         .round()
         .clamp(1, 1 << 16);
+    final background = game.background;
+    if (background != null && background.isNotEmpty) {
+      final file = File(p.join(dir.coversBackground.path, background));
+      if (exists(file.path)) {
+        return Image.file(
+          file,
+          fit: BoxFit.cover,
+          alignment: Alignment.topCenter,
+          gaplessPlayback: true,
+          cacheWidth: physicalWidth,
+          frameBuilder: (context, child, frame, _) =>
+              frame == null ? const SizedBox.shrink() : child,
+          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+        );
+      }
+    }
+    if (game.cover == null || game.cover!.isEmpty) return const SizedBox.shrink();
+    final thumb = thumbPath(dir, game.id, 512);
     final original = File(p.join(dir.coversOriginal.path, game.cover!));
     return Stack(
       fit: StackFit.expand,
@@ -516,6 +535,7 @@ Future<void> _storeCoverBytes(
   }
   await FileImage(File(p.join(dir.coversOriginal.path, name))).evict();
 }
+
 
 Future<void> _changeCover(
   BuildContext context,

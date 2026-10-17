@@ -45,4 +45,20 @@ Future<void> moveToTrash(DataDir dir, Game game, {DateTime? now}) async {
     await _moveIfPresent(
         thumbPath(dir, game.id, width), p.join(folder.path, 'thumb-$width.webp'));
   }
+  await _moveBackgroundIfSet(dir, game, folder);
+}
+
+/// Moves a game's pane background into a new trash folder, for when the
+/// user drops a background and keeps the cover.
+Future<void> trashBackground(DataDir dir, Game game, {DateTime? now}) async {
+  final folder = Directory(p.join(
+      dir.trash.path, trashFolderName((now ?? DateTime.now()).toUtc(), game.id)));
+  await _moveBackgroundIfSet(dir, game, folder);
+}
+
+Future<void> _moveBackgroundIfSet(DataDir dir, Game game, Directory folder) async {
+  final background = game.background;
+  if (background == null || background.isEmpty) return;
+  await _moveIfPresent(p.join(dir.coversBackground.path, background),
+      p.join(folder.path, 'background-$background'));
 }

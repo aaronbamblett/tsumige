@@ -27,6 +27,9 @@ class DataDir {
 
   Directory get coversOriginal => Directory(p.join(root, 'covers', 'original'));
 
+  Directory get coversBackground =>
+      Directory(p.join(root, 'covers', 'background'));
+
   Directory get trash => Directory(p.join(root, 'trash'));
 
   Directory get logs => Directory(p.join(root, 'logs'));
