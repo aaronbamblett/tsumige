@@ -65,7 +65,9 @@ class SettingsFakeRepository implements LibraryRepository {
   }
 
   @override
-  Future<core.VndbRefreshReport> refreshVndbData(core.LoadedLibrary loaded) async {
+  Future<core.VndbRefreshReport> refreshVndbData(
+    core.LoadedLibrary loaded,
+  ) async {
     refreshCount++;
     final pending = gate;
     if (pending != null) return pending.future;
@@ -182,7 +184,7 @@ void main() {
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: const Scaffold(body: LibraryToolbar(shown: 1, total: 1)),
+          home: const Scaffold(body: LibraryToolbar(gridRight: 800)),
         ),
       ),
     );
@@ -420,7 +422,9 @@ void main() {
   testWidgets('setting rows stay one line at 1400x980', (tester) async {
     await pumpSettings(tester, SettingsFakeRepository());
     await openSection(tester, 'library');
-    for (final key in ['vndb', 'data-folder', 'launch-logs']) {
+    final vndbSize = tester.getSize(find.byKey(const Key('settings-row-vndb')));
+    expect(vndbSize.height, lessThanOrEqualTo(80), reason: 'vndb');
+    for (final key in ['data-folder', 'launch-logs']) {
       final size = tester.getSize(find.byKey(Key('settings-row-$key')));
       expect(size.height, lessThanOrEqualTo(72), reason: key);
     }
