@@ -94,6 +94,15 @@ String? _parentDir(String exe) {
   return dir;
 }
 
+/// Expands a leading `~/` with `HOME` so the default prefix pref
+/// (`~/Games/vnl/prefix`) resolves without a shell.
+String expandTilde(String value, Map<String, String> hostEnv) {
+  if (!value.startsWith('~/')) return value;
+  final home = hostEnv['HOME'];
+  if (home == null || home.isEmpty) return value;
+  return '$home/${value.substring(2)}';
+}
+
 LaunchCommand buildLaunchCommand(
   Game game,
   LaunchDefaults defaults, {
@@ -125,10 +134,11 @@ LaunchCommand buildLaunchCommand(
       throw const LaunchConfigError(
           'Run .exe inside prefix needs Proton or Wine');
     }
-    final exe = overrideExe ?? game.launch.executable;
-    if (exe == null || exe.isEmpty) {
+    final rawExe = overrideExe ?? game.launch.executable;
+    if (rawExe == null || rawExe.isEmpty) {
       throw const LaunchConfigError('No executable set');
     }
+    final exe = expandTilde(rawExe, hostEnv);
     final extraArgs = splitArgs(game.launch.arguments ?? '');
     final workingDirectory = _parentDir(exe);
     switch (mode) {
@@ -140,10 +150,12 @@ LaunchCommand buildLaunchCommand(
           workingDirectory: workingDirectory,
         );
       case LaunchMode.wine:
-        final runner = game.launch.runner ?? defaults.runner ?? 'wine';
+        final runner = expandTilde(
+            game.launch.runner ?? defaults.runner ?? 'wine', hostEnv);
         final locale = game.launch.locale ?? defaults.locale;
         final env = <String, String>{
-          'WINEPREFIX': game.launch.prefix ?? defaults.prefix,
+          'WINEPREFIX': expandTilde(
+              game.launch.prefix ?? defaults.prefix, hostEnv),
         };
         if (locale.isNotEmpty) {
           env['LANG'] = locale;
@@ -160,10 +172,13 @@ LaunchCommand buildLaunchCommand(
         if (umuRunPath == null) {
           throw const LaunchConfigError('umu-run not found on PATH');
         }
-        final runner = game.launch.runner ?? defaults.runner;
+        final rawRunner = game.launch.runner ?? defaults.runner;
+        final runner =
+            rawRunner == null ? null : expandTilde(rawRunner, hostEnv);
         final locale = game.launch.locale ?? defaults.locale;
         final env = <String, String>{
-          'WINEPREFIX': game.launch.prefix ?? defaults.prefix,
+          'WINEPREFIX': expandTilde(
+              game.launch.prefix ?? defaults.prefix, hostEnv),
           'GAMEID': game.launch.umuGameId ?? defaults.umuGameId,
         };
         if (runner != null) env['PROTONPATH'] = runner;
