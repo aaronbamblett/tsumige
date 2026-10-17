@@ -49,8 +49,8 @@ class EditorFakeRepository implements LibraryRepository {
   }
 
   @override
-  Future<core.RatingReport> refreshRatings(core.LoadedLibrary loaded) async =>
-      const core.RatingReport();
+  Future<core.VndbRefreshReport> refreshVndbData(core.LoadedLibrary loaded) async =>
+      const core.VndbRefreshReport();
 
   @override
   Future<core.ThumbReport> ensureThumbnails(core.Library library) async =>

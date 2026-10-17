@@ -31,15 +31,15 @@ import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
 
 class SettingsFakeRepository implements LibraryRepository {
   SettingsFakeRepository({
-    this.report = const core.RatingReport(),
+    this.report = const core.VndbRefreshReport(),
     this.saveError,
     this.gate,
     this.skipped = const [],
   });
 
-  core.RatingReport report;
+  core.VndbRefreshReport report;
   Object? saveError;
-  Completer<core.RatingReport>? gate;
+  Completer<core.VndbRefreshReport>? gate;
   List<core.SkippedEntry> skipped;
   int loadCount = 0;
   int refreshCount = 0;
@@ -64,7 +64,7 @@ class SettingsFakeRepository implements LibraryRepository {
   }
 
   @override
-  Future<core.RatingReport> refreshRatings(core.LoadedLibrary loaded) async {
+  Future<core.VndbRefreshReport> refreshVndbData(core.LoadedLibrary loaded) async {
     refreshCount++;
     final pending = gate;
     if (pending != null) return pending.future;
@@ -127,10 +127,10 @@ void setTallSurface(WidgetTester tester) {
 
 void main() {
   testWidgets('refresh tile disabled while running', (tester) async {
-    final gate = Completer<core.RatingReport>();
+    final gate = Completer<core.VndbRefreshReport>();
     final repo = SettingsFakeRepository(
       gate: gate,
-      report: const core.RatingReport(updated: 1),
+      report: const core.VndbRefreshReport(updated: 1),
     );
     await pumpSettings(tester, repo);
     await tester.tap(refreshTile());
@@ -140,7 +140,7 @@ void main() {
     await tester.tap(refreshTile());
     await tester.pump();
     expect(repo.refreshCount, 1);
-    gate.complete(const core.RatingReport(updated: 1));
+    gate.complete(const core.VndbRefreshReport(updated: 1));
     await tester.pump();
     await tester.pump();
     await tester.pump();
@@ -151,7 +151,7 @@ void main() {
 
   testWidgets('changed on disk reloads', (tester) async {
     final repo = SettingsFakeRepository(
-      report: const core.RatingReport(updated: 2),
+      report: const core.VndbRefreshReport(updated: 2),
       saveError: core.ChangedOnDisk('x'),
     );
     await pumpSettings(tester, repo);
@@ -167,7 +167,7 @@ void main() {
 
   testWidgets('skipped entries never fetch ratings', (tester) async {
     final repo = SettingsFakeRepository(
-      report: const core.RatingReport(updated: 2),
+      report: const core.VndbRefreshReport(updated: 2),
       skipped: const [core.SkippedEntry(index: 0, reason: 'bad id')],
     );
     await pumpSettings(tester, repo);
@@ -184,7 +184,7 @@ void main() {
 
   testWidgets('generic save failure reloads', (tester) async {
     final repo = SettingsFakeRepository(
-      report: const core.RatingReport(updated: 2),
+      report: const core.VndbRefreshReport(updated: 2),
       saveError: const FileSystemException('disk gone'),
     );
     await pumpSettings(tester, repo);
@@ -200,7 +200,7 @@ void main() {
 
   testWidgets('zero updates skips save', (tester) async {
     final repo = SettingsFakeRepository(
-      report: const core.RatingReport(updated: 0),
+      report: const core.VndbRefreshReport(updated: 0),
     );
     await pumpSettings(tester, repo);
     await tester.tap(refreshTile());

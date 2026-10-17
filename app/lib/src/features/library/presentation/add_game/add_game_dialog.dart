@@ -203,6 +203,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
       game.title = title;
       game.description = _description.text;
       game.tags = parseTagsField(_tags.text);
+      await fillVndbMetadata(game, ref.read(vndbSearchClientProvider));
     } else {
       game = Game(
         id: const Uuid().v4(),

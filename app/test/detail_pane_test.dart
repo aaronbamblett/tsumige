@@ -42,8 +42,8 @@ class DetailFakeRepository implements LibraryRepository {
   Future<void> save(core.LoadedLibrary loaded) async {}
 
   @override
-  Future<core.RatingReport> refreshRatings(core.LoadedLibrary loaded) async =>
-      const core.RatingReport();
+  Future<core.VndbRefreshReport> refreshVndbData(core.LoadedLibrary loaded) async =>
+      const core.VndbRefreshReport();
 
   @override
   Future<core.ThumbReport> ensureThumbnails(core.Library library) async =>

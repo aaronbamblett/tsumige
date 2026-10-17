@@ -25,7 +25,7 @@ core.DataDir dataDir(Ref ref) => core.DataDir.resolve(Platform.environment);
 abstract class LibraryRepository {
   Future<core.LoadedLibrary> load();
   Future<void> save(core.LoadedLibrary loaded);
-  Future<core.RatingReport> refreshRatings(core.LoadedLibrary loaded);
+  Future<core.VndbRefreshReport> refreshVndbData(core.LoadedLibrary loaded);
   Future<core.ThumbReport> ensureThumbnails(core.Library library);
 }
 
@@ -42,8 +42,8 @@ class IoLibraryRepository implements LibraryRepository {
       core.saveLibrary(dir, loaded);
 
   @override
-  Future<core.RatingReport> refreshRatings(core.LoadedLibrary loaded) =>
-      core.refreshRatings(loaded, core.VndbClient());
+  Future<core.VndbRefreshReport> refreshVndbData(core.LoadedLibrary loaded) =>
+      core.refreshVndbData(loaded, core.VndbClient());
 
   @override
   Future<core.ThumbReport> ensureThumbnails(core.Library library) =>

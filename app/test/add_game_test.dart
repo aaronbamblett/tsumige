@@ -42,8 +42,8 @@ class _FakeRepository implements LibraryRepository {
   }
 
   @override
-  Future<core.RatingReport> refreshRatings(core.LoadedLibrary loaded) async =>
-      const core.RatingReport();
+  Future<core.VndbRefreshReport> refreshVndbData(core.LoadedLibrary loaded) async =>
+      const core.VndbRefreshReport();
 
   @override
   Future<core.ThumbReport> ensureThumbnails(core.Library library) async =>
@@ -57,12 +57,28 @@ class _Http {
   int posts = 0;
   int gets = 0;
   bool failSearch = false;
+  bool failMetadata = false;
+  List<Map<String, Object?>> metadataRows = const [];
+  List<Map<String, Object?>> releaseRows = const [];
   Uint8List? coverBytes;
 
   MockClient get client => MockClient((request) async {
         if (request.method == 'POST') {
           posts++;
           if (failSearch) return http.Response('boom', 500);
+          if (request.url.path.endsWith('/release')) {
+            return http.Response(
+                jsonEncode({'results': releaseRows, 'more': false}), 200);
+          }
+          final fields = (jsonDecode(request.body) as Map)['fields'] as String;
+          if (fields.contains('length_minutes')) {
+            if (failMetadata) return http.Response('boom', 500);
+            return http.Response.bytes(
+                utf8.encode(jsonEncode({'results': metadataRows, 'more': false})),
+                200,
+                headers: {'content-type': 'application/json; charset=utf-8'},
+            );
+          }
           return http.Response(
               jsonEncode({'results': rows, 'more': false}), 200);
         }
@@ -291,6 +307,74 @@ void main() {
     expect(game.launch.executable, '/games/demo/run.exe');
     expect(game.cover, isNotNull);
     expect(container.read(selectedGameIdProvider), game.id);
+    expect(find.text('Added DEMO'), findsOneWidget);
+    await _drainToast(tester);
+  });
+
+  testWidgets('Add fills the VNDB metadata before saving', (tester) async {
+    final (fake, http, _) = await _pump(tester, rows: [
+      _row('v900017', 'DEMO', imageUrl: null)
+    ]);
+    http.metadataRows = [
+      {
+        'id': 'v900017',
+        'alttitle': 'デモ',
+        'length_minutes': 1200,
+        'length_votes': 88,
+        'olang': 'ja',
+        'developers': [
+          {'id': 'p1', 'name': 'Sample Studio'}
+        ],
+        'tags': [
+          {'name': 'Romance', 'rating': 2.5, 'spoiler': 0, 'category': 'cont'}
+        ],
+        'relations': [],
+      }
+    ];
+    http.releaseRows = [
+      {
+        'vns': [
+          {'id': 'v900017'}
+        ]
+      }
+    ];
+    await _search(tester, 'DEMO', http);
+    await tester.tap(_resultRow('DEMO'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('add-game-exe')), '/games/demo/run.exe');
+    await tester.tap(find.byKey(const Key('add-game-add')));
+    await _waitForSave(tester, fake);
+    expect(fake.saves, 1);
+    final game = fake.games.single;
+    expect(game.vndbOriginalTitle, 'デモ');
+    expect(game.lengthMinutes, 1200);
+    expect(game.originalLanguage, 'ja');
+    expect(game.developers.single.name, 'Sample Studio');
+    expect(game.vndbTags.single.name, 'Romance');
+    expect(game.adultVndb, isTrue);
+    expect(find.text('Added DEMO'), findsOneWidget);
+    await _drainToast(tester);
+  });
+
+  testWidgets('a VNDB metadata failure still adds the game', (tester) async {
+    final (fake, http, _) = await _pump(tester, rows: [
+      _row('v900017', 'DEMO', imageUrl: null)
+    ]);
+    http.failMetadata = true;
+    await _search(tester, 'DEMO', http);
+    await tester.tap(_resultRow('DEMO'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('add-game-exe')), '/games/demo/run.exe');
+    await tester.tap(find.byKey(const Key('add-game-add')));
+    await _waitForSave(tester, fake);
+    expect(fake.saves, 1);
+    final game = fake.games.single;
+    expect(game.title, 'DEMO');
+    expect(game.vndbId, 'v900017');
+    expect(game.vndbOriginalTitle, isNull);
+    expect(game.adultVndb, isNull);
     expect(find.text('Added DEMO'), findsOneWidget);
     await _drainToast(tester);
   });

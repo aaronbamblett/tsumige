@@ -51,6 +51,16 @@ class Game {
   String? cover;
   LaunchOverrides launch;
   List<PlaySession> playSessions;
+  String? vndbOriginalTitle;
+  List<Developer> developers;
+  int? lengthMinutes;
+  int? lengthVotes;
+  String? originalLanguage;
+  List<VndbTag> vndbTags;
+  List<VnRelation> relations;
+  bool? adultVndb;
+  bool? adultOverride;
+  DateTime? vndbDataFetchedAt;
 
   Game({
     required this.id,
@@ -69,10 +79,23 @@ class Game {
     this.cover,
     LaunchOverrides? launch,
     List<PlaySession>? playSessions,
+    this.vndbOriginalTitle,
+    List<Developer>? developers,
+    this.lengthMinutes,
+    this.lengthVotes,
+    this.originalLanguage,
+    List<VndbTag>? vndbTags,
+    List<VnRelation>? relations,
+    this.adultVndb,
+    this.adultOverride,
+    this.vndbDataFetchedAt,
   })  : tags = tags ?? [],
         addedAt = addedAt ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
         launch = launch ?? LaunchOverrides(),
-        playSessions = playSessions ?? [];
+        playSessions = playSessions ?? [],
+        developers = developers ?? [],
+        vndbTags = vndbTags ?? [],
+        relations = relations ?? [];
 
   factory Game.fromJson(Map m) => Game(
         id: readString(m, 'id'),
@@ -94,6 +117,16 @@ class Game {
             : LaunchOverrides(),
         playSessions:
             readList(m, 'play_sessions', (e) => PlaySession.fromJson(e)),
+        vndbOriginalTitle: readStringOrNull(m, 'original_title'),
+        developers: readList(m, 'developers', (e) => Developer.fromJson(e)),
+        lengthMinutes: readIntOrNull(m, 'length_minutes'),
+        lengthVotes: readIntOrNull(m, 'length_votes'),
+        originalLanguage: readStringOrNull(m, 'original_language'),
+        vndbTags: readList(m, 'vndb_tags', (e) => VndbTag.fromJson(e)),
+        relations: readList(m, 'relations', (e) => VnRelation.fromJson(e)),
+        adultVndb: _boolOrNull(m, 'adult_vndb'),
+        adultOverride: _boolOrNull(m, 'adult_override'),
+        vndbDataFetchedAt: readDateOrNull(m, 'vndb_data_fetched_at'),
       );
 
   Map<String, Object?> toJson() => {
@@ -113,7 +146,19 @@ class Game {
         'cover': cover,
         'launch': launch.toJson(),
         'play_sessions': [for (final s in playSessions) s.toJson()],
+        'original_title': vndbOriginalTitle,
+        'developers': [for (final d in developers) d.toJson()],
+        'length_minutes': lengthMinutes,
+        'length_votes': lengthVotes,
+        'original_language': originalLanguage,
+        'vndb_tags': [for (final t in vndbTags) t.toJson()],
+        'relations': [for (final r in relations) r.toJson()],
+        'adult_vndb': adultVndb,
+        'adult_override': adultOverride,
+        'vndb_data_fetched_at': vndbDataFetchedAt?.toUtc().toIso8601String(),
       };
+
+  bool get isAdult => adultOverride ?? adultVndb ?? false;
 
   int get totalPlaytimeSeconds =>
       playSessions.fold(0, (sum, s) => sum + s.durationSeconds);
@@ -125,6 +170,103 @@ class Game {
     }
     return latest;
   }
+}
+
+bool? _boolOrNull(Map m, String k) {
+  final v = m[k];
+  return v is bool ? v : null;
+}
+
+class Developer {
+  final String id;
+  final String name;
+  final String? original;
+
+  const Developer({required this.id, this.name = '', this.original});
+
+  factory Developer.fromJson(Object? raw) {
+    if (raw is! Map || raw['id'] is! String) {
+      throw const FormatException('developer needs an id');
+    }
+    return Developer(
+      id: raw['id'] as String,
+      name: readString(raw, 'name'),
+      original: readStringOrNull(raw, 'original'),
+    );
+  }
+
+  Map<String, Object?> toJson() =>
+      {'id': id, 'name': name, 'original': original};
+}
+
+class VndbTag {
+  final String name;
+  final double rating;
+  final int spoiler;
+  final String category;
+
+  const VndbTag({
+    required this.name,
+    required this.rating,
+    required this.spoiler,
+    required this.category,
+  });
+
+  factory VndbTag.fromJson(Object? raw) {
+    if (raw is! Map || raw['name'] is! String) {
+      throw const FormatException('tag needs a name');
+    }
+    return VndbTag(
+      name: raw['name'] as String,
+      rating: readDoubleOrNull(raw, 'rating') ?? 0,
+      spoiler: readIntOrNull(raw, 'spoiler') ?? 0,
+      category: readString(raw, 'category'),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+        'name': name,
+        'rating': rating,
+        'spoiler': spoiler,
+        'category': category,
+      };
+}
+
+class VnRelation {
+  final String vndbId;
+  final String relation;
+  final String title;
+  final String? imageUrl;
+  final bool official;
+
+  const VnRelation({
+    required this.vndbId,
+    required this.relation,
+    required this.title,
+    this.imageUrl,
+    required this.official,
+  });
+
+  factory VnRelation.fromJson(Object? raw) {
+    if (raw is! Map || raw['vndb_id'] is! String) {
+      throw const FormatException('relation needs a vndb_id');
+    }
+    return VnRelation(
+      vndbId: raw['vndb_id'] as String,
+      relation: readString(raw, 'relation'),
+      title: readString(raw, 'title'),
+      imageUrl: readStringOrNull(raw, 'image_url'),
+      official: _boolOrNull(raw, 'official') ?? false,
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+        'vndb_id': vndbId,
+        'relation': relation,
+        'title': title,
+        'image_url': imageUrl,
+        'official': official,
+      };
 }
 
 class LaunchOverrides {

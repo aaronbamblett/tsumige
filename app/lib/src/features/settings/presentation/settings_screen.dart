@@ -74,7 +74,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         }
         return;
       }
-      final report = await repository.refreshRatings(loaded);
+      final report = await repository.refreshVndbData(loaded);
       if (report.updated > 0) {
         try {
           await repository.save(loaded);

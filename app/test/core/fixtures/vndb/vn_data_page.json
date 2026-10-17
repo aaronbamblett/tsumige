@@ -1,0 +1,44 @@
+{
+  "results": [
+    {
+      "id": "v900017",
+      "title": "Demo Story -First Light-",
+      "alttitle": "デモストーリー -First Light-",
+      "rating": 84.23,
+      "votecount": 1337,
+      "released": "2017-01-27",
+      "length_minutes": 1200,
+      "length_votes": 88,
+      "olang": "ja",
+      "developers": [
+        {"id": "p1", "name": "Sample Studio", "original": "サンプルスタジオ"},
+        {"id": "p2", "name": "Overseas", "original": null}
+      ],
+      "tags": [
+        {"name": "Romance", "rating": 2.5, "spoiler": 0, "category": "cont"},
+        {"name": "Time Loop", "rating": 2.0, "spoiler": 2, "category": "cont"},
+        {"name": "Unvoted", "rating": 0, "spoiler": 0, "category": "tech"},
+        {"name": "Long Text", "rating": 1.6, "spoiler": 0, "category": "tech"}
+      ],
+      "relations": [
+        {"id": "v18", "relation": "seq", "relation_official": true, "title": "Sequel", "image": {"url": "https://t.vndb.org/cv/18.jpg"}},
+        {"id": "v19", "relation": "alt", "relation_official": false, "title": "Alternate", "image": null}
+      ]
+    },
+    {
+      "id": "v199",
+      "title": "Unrated",
+      "alttitle": null,
+      "rating": null,
+      "votecount": 0,
+      "released": "TBA",
+      "length_minutes": null,
+      "length_votes": null,
+      "olang": "en",
+      "developers": [],
+      "tags": [],
+      "relations": []
+    }
+  ],
+  "more": false
+}
