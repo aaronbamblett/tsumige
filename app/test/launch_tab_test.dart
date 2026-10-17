@@ -400,7 +400,9 @@ void main() {
     await openLaunch(tester, 'Alpha');
     await openAdvanced(tester);
     Finder boxOf(String key) => find.descendant(
-        of: find.byKey(Key(key)), matching: find.byType(TextField));
+        of: find.byKey(Key(key)), matching: find.byType(InputDecorator));
+    Finder borderOf(String key) => find.descendant(
+        of: find.byKey(Key(key)), matching: find.byType(SettingsTextBox));
     for (final key in [
       'launch-executable',
       'launch-prefix-custom',
@@ -408,6 +410,11 @@ void main() {
       'launch-arguments',
     ]) {
       expect(tester.getSize(boxOf(key)).height, closeTo(40, 1), reason: key);
+      expect(tester.getSize(borderOf(key)).height, closeTo(40, 1),
+          reason: '$key border');
+      expect(tester.getCenter(borderOf(key)).dy,
+          closeTo(tester.getCenter(boxOf(key)).dy, 1),
+          reason: '$key decorator centre');
     }
     for (final pair in [
       ('launch-executable', 'launch-executable-choose'),
@@ -427,9 +434,16 @@ void main() {
     final env = find.descendant(
         of: find.byKey(const Key('launch-environment')),
         matching: find.byType(TextField));
-    expect(tester.getSize(env).height, greaterThanOrEqualTo(72));
+    expect(tester.getSize(find.descendant(
+        of: find.byKey(const Key('launch-environment')),
+        matching: find.byType(SettingsTextBox))).height,
+        greaterThanOrEqualTo(72));
     expect(tester.widget<TextField>(env).textAlignVertical,
         TextAlignVertical.top);
+    expect(tester.getSize(find.descendant(
+        of: find.byKey(const Key('launch-environment')),
+        matching: find.byType(SettingsTextBox))).height,
+        greaterThanOrEqualTo(72));
     expect(find.text('KEY=value, one per line'), findsOneWidget);
     expect(find.text('None'), findsOneWidget);
   });
@@ -446,5 +460,29 @@ void main() {
       expect(find.text(name), findsWidgets);
     }
     expect(find.text('ja_JP.UTF-8'), findsNothing);
+  });
+
+  testWidgets('an unfocused path overlay sits inside the 1 px border',
+      (tester) async {
+    await pumpLaunch(tester, [
+      core.Game(
+          id: 'g1',
+          title: 'Alpha',
+          launch: core.LaunchOverrides(executable: '/games/alpha/run.exe')),
+    ]);
+    await openLaunch(tester, 'Alpha');
+    final box = tester.getRect(find.descendant(
+        of: find.byKey(const Key('launch-executable')),
+        matching: find.byType(SettingsTextBox)));
+    final overlay = find.descendant(
+        of: find.byKey(const Key('launch-executable')),
+        matching: find.byType(MiddleEllipsisValue));
+    expect(overlay, findsOneWidget);
+    final clip = tester.getRect(find.descendant(
+        of: overlay, matching: find.byType(ClipRRect)));
+    expect(clip.top, closeTo(box.top + 1, 0.5));
+    expect(clip.bottom, closeTo(box.bottom - 1, 0.5));
+    expect(clip.left, closeTo(box.left + 1, 0.5));
+    expect(clip.right, closeTo(box.right - 1, 0.5));
   });
 }

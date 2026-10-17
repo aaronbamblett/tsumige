@@ -562,17 +562,10 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   const SizedBox(height: 14),
                   launchFieldLabel(context, 'Steam App ID', false),
                   const SizedBox(height: 6),
-                  SizedBox(
-                    height: 40,
-                    child: TextField(
-                      key: const Key('add-game-steam-app-id'),
-                      controller: _steamAppId,
-                      keyboardType: TextInputType.number,
-                      style: theme.textTheme.bodyMedium,
-                      textAlignVertical: TextAlignVertical.center,
-                      maxLines: 1,
-                      decoration: settingsInputDecoration(context),
-                    ),
+                  SettingsTextBox(
+                    key: const Key('add-game-steam-app-id'),
+                    controller: _steamAppId,
+                    keyboardType: TextInputType.number,
                   ),
                 ],
                 const SizedBox(height: 14),
@@ -583,19 +576,12 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   const SizedBox(height: 14),
                   launchFieldLabel(context, 'Description', false),
                   const SizedBox(height: 6),
-                  TextField(
+                  SettingsTextBox(
                     key: const Key('add-game-description'),
                     controller: _description,
                     minLines: 3,
                     maxLines: 5,
-                    style: theme.textTheme.bodyMedium,
-                    decoration:
-                        settingsInputDecoration(
-                          context,
-                          contentPadding: const EdgeInsets.all(10),
-                        ).copyWith(
-                          constraints: const BoxConstraints(minHeight: 96),
-                        ),
+                    minHeight: 96,
                   ),
                 ],
                 if (!_manual) ...[
@@ -655,20 +641,13 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                 }
                 return KeyEventResult.ignored;
               },
-              child: TextField(
+              child: SettingsTextBox(
                 key: const Key('add-game-tag-input'),
                 controller: _tagInput,
                 focusNode: _tagFocus,
                 autofocus: true,
-                style: const TextStyle(fontSize: 12.5),
-                decoration:
-                    settingsInputDecoration(
-                      context,
-                      hint: 'New tag',
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                    ).copyWith(
-                      constraints: const BoxConstraints.tightFor(height: 28),
-                    ),
+                hint: 'New tag',
+                height: 28,
                 onSubmitted: _addTag,
               ),
             ),

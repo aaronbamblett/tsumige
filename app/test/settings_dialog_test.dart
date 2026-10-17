@@ -23,6 +23,7 @@ import 'package:vnl/src/features/library/data/library_repository.dart';
 import 'package:vnl/src/features/library/domain/game_editor.dart';
 import 'package:vnl/src/features/library/domain/runner_detection.dart';
 import 'package:vnl/src/features/library/presentation/widgets/library_toolbar.dart';
+import 'package:vnl/src/features/settings/presentation/sections/settings_widgets.dart';
 import 'package:vnl/src/features/settings/presentation/settings_dialog.dart';
 import 'package:vnl/src/features/settings/widgets/app_theme_mode_tile/app_theme_mode_tile.dart';
 import 'package:vnl/src/l10n/generated/app_localizations.dart';
@@ -371,6 +372,33 @@ void main() {
     await openSection(tester, 'launching');
     final size = tester.getSize(find.byKey(const Key('settings-prefix')));
     expect(size.height, closeTo(40, 1));
+    final field = find.byKey(const Key('settings-prefix'));
+    expect(
+      tester
+          .getSize(find.descendant(
+            of: field,
+            matching: find.byType(InputDecorator),
+          ))
+          .height,
+      closeTo(40, 1),
+    );
+    expect(
+      tester
+          .getSize(find.descendant(
+            of: field,
+            matching: find.byType(SettingsTextBox),
+          ))
+          .height,
+      closeTo(40, 1),
+    );
+    final decorator = tester.getCenter(find.descendant(
+      of: field,
+      matching: find.byType(SettingsTextBox),
+    ));
+    final choose = tester.getCenter(
+      find.byKey(const Key('settings-prefix-choose')),
+    );
+    expect(decorator.dy, closeTo(choose.dy, 1));
   });
 
   testWidgets('action buttons use the brand styles', (tester) async {

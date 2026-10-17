@@ -413,39 +413,19 @@ class _LaunchTextFieldState extends ConsumerState<_LaunchTextField> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final field = TextField(
+    final unfocusedPath = widget.isPath && !_focused;
+    final control = SettingsTextBox(
       controller: _controller,
       focusNode: _focusNode,
+      hint: widget.hint,
+      height: 40,
+      minHeight: _singleLine ? null : 72,
       minLines: widget.minLines,
       maxLines: widget.maxLines,
       keyboardType: widget.keyboardType,
-      style: theme.textTheme.bodyMedium,
-      textAlignVertical: _singleLine
-          ? TextAlignVertical.center
-          : TextAlignVertical.top,
-      decoration:
-          settingsInputDecoration(
-            context,
-            hint: widget.hint,
-            contentPadding: _singleLine ? null : const EdgeInsets.all(10),
-          ).copyWith(
-            constraints: _singleLine
-                ? null
-                : const BoxConstraints(minHeight: 72),
-          ),
+      overlay: _singleLine && unfocusedPath ? _controller.text : null,
       onSubmitted: _singleLine ? (_) => _submit() : null,
     );
-    Widget control = field;
-    if (widget.isPath && !_focused && _controller.text.isNotEmpty) {
-      control = Stack(
-        fit: StackFit.expand,
-        children: [
-          field,
-          MiddleEllipsisValue(text: _controller.text),
-        ],
-      );
-    }
-    if (_singleLine) control = SizedBox(height: 40, child: control);
     final footer = widget.footerBuilder?.call(context, _controller.text);
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

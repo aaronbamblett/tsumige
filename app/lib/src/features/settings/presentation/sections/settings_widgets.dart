@@ -337,44 +337,116 @@ class _SettingsControlBoxState extends State<SettingsControlBox> {
   }
 }
 
-InputDecoration settingsInputDecoration(
-  BuildContext context, {
-  String? hint,
-  bool hovered = false,
-  Widget? suffixIcon,
-  EdgeInsets? contentPadding,
-}) {
-  final scheme = Theme.of(context).colorScheme;
-  final theme = Theme.of(context);
-  final border = OutlineInputBorder(
-    borderRadius: BorderRadius.circular(10),
-    borderSide: BorderSide(
-      color: hovered
-          ? scheme.onSurface.withValues(alpha: 0.18)
-          : scheme.outlineVariant,
-    ),
-  );
-  return InputDecoration(
-    hintText: hint,
-    hintStyle: theme.textTheme.bodyMedium?.copyWith(
-      color: scheme.onSurfaceVariant,
-    ),
-    isCollapsed: true,
-    filled: true,
-    fillColor: scheme.surfaceContainer,
-    contentPadding:
-        contentPadding ??
-        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    constraints: const BoxConstraints.tightFor(height: 40),
-    border: border,
-    enabledBorder: border,
-    disabledBorder: border,
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: scheme.primary, width: 2),
-    ),
-    suffixIcon: suffixIcon,
-  );
+/// The shared text box: a filled, outlined box exactly [height] px tall (or
+/// at least [minHeight] when multi-line). The border is painted over the
+/// content, so the field inside keeps the full height. [overlay] paints a middle-ellipsized value over an
+/// unfocused path.
+class SettingsTextBox extends StatefulWidget {
+  const SettingsTextBox({
+    super.key,
+    this.controller,
+    this.focusNode,
+    this.hint,
+    this.height = 40,
+    this.minHeight,
+    this.minLines,
+    this.maxLines = 1,
+    this.keyboardType,
+    this.autofocus = false,
+    this.onSubmitted,
+    this.overlay,
+  });
+
+  final TextEditingController? controller;
+  final FocusNode? focusNode;
+  final String? hint;
+  final double height;
+  final double? minHeight;
+  final int? minLines;
+  final int? maxLines;
+  final TextInputType? keyboardType;
+  final bool autofocus;
+  final ValueChanged<String>? onSubmitted;
+  final String? overlay;
+
+  @override
+  State<SettingsTextBox> createState() => _SettingsTextBoxState();
+}
+
+class _SettingsTextBoxState extends State<SettingsTextBox> {
+  bool _hovered = false;
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final multiline = widget.maxLines != 1;
+    final edge = _focused
+        ? scheme.primary
+        : _hovered
+        ? scheme.onSurface.withValues(alpha: 0.18)
+        : scheme.outlineVariant;
+    final field = Focus(
+      canRequestFocus: false,
+      onFocusChange: (focused) => setState(() => _focused = focused),
+      child: TextField(
+        controller: widget.controller,
+        focusNode: widget.focusNode,
+        autofocus: widget.autofocus,
+        keyboardType: widget.keyboardType,
+        minLines: widget.minLines,
+        maxLines: widget.maxLines,
+        style: theme.textTheme.bodyMedium,
+        textAlignVertical: multiline
+            ? TextAlignVertical.top
+            : TextAlignVertical.center,
+        decoration: InputDecoration.collapsed(
+          hintText: widget.hint,
+          hintStyle: theme.textTheme.bodyMedium?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+        onSubmitted: widget.onSubmitted,
+      ),
+    );
+    final inner = Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: multiline ? 10 : 0,
+      ),
+      child: field,
+    );
+    final overlay = widget.overlay;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Container(
+        height: multiline ? null : widget.height,
+        constraints: multiline && widget.minHeight != null
+            ? BoxConstraints(minHeight: widget.minHeight!)
+            : null,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainer,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        foregroundDecoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: edge, width: _focused ? 2 : 1),
+        ),
+        child: overlay == null || _focused || overlay.isEmpty
+            ? inner
+            : Stack(
+                fit: StackFit.expand,
+                children: [
+                  inner,
+                  MiddleEllipsisValue(text: overlay),
+                ],
+              ),
+      ),
+    );
+  }
 }
 
 /// A 40 px outlined dropdown with the shared control look.
@@ -438,30 +510,14 @@ class SettingsTextField extends StatefulWidget {
 }
 
 class _SettingsTextFieldState extends State<SettingsTextField> {
-  bool _hovered = false;
-
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: SizedBox(
-        height: 40,
-        child: TextField(
-          controller: widget.controller,
-          focusNode: widget.focusNode,
-          autofocus: widget.autofocus,
-          style: Theme.of(context).textTheme.bodyMedium,
-          textAlignVertical: TextAlignVertical.center,
-          maxLines: 1,
-          decoration: settingsInputDecoration(
-            context,
-            hint: widget.hint,
-            hovered: _hovered,
-          ),
-          onSubmitted: widget.onSubmitted,
-        ),
-      ),
+    return SettingsTextBox(
+      controller: widget.controller,
+      focusNode: widget.focusNode,
+      hint: widget.hint,
+      autofocus: widget.autofocus,
+      onSubmitted: widget.onSubmitted,
     );
   }
 }
@@ -526,7 +582,6 @@ class _PrefTextFieldState extends ConsumerState<PrefTextField> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
   String _focusValue = '';
-  bool _hovered = false;
   bool _focused = false;
 
   @override
@@ -586,45 +641,24 @@ class _PrefTextFieldState extends ConsumerState<PrefTextField> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final field = TextField(
-      controller: _controller,
-      focusNode: _focusNode,
-      style: theme.textTheme.bodyMedium,
-      textAlignVertical: TextAlignVertical.center,
-      maxLines: 1,
-      decoration: settingsInputDecoration(
-        context,
+    final overlay = widget.middleEllipsis && !_focused
+        ? _controller.text
+        : null;
+    return Focus(
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.escape) {
+          _cancel();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: SettingsTextBox(
+        controller: _controller,
+        focusNode: _focusNode,
         hint: widget.hint,
-        hovered: _hovered,
-      ),
-      onSubmitted: (_) => _submit(),
-    );
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: Focus(
-        onKeyEvent: (node, event) {
-          if (event is KeyDownEvent &&
-              event.logicalKey == LogicalKeyboardKey.escape) {
-            _cancel();
-            return KeyEventResult.handled;
-          }
-          return KeyEventResult.ignored;
-        },
-        child: SizedBox(
-          height: 40,
-          child: widget.middleEllipsis
-              ? Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    field,
-                    if (!_focused && _controller.text.isNotEmpty)
-                      MiddleEllipsisValue(text: _controller.text),
-                  ],
-                )
-              : field,
-        ),
+        overlay: overlay,
+        onSubmitted: (_) => _submit(),
       ),
     );
   }

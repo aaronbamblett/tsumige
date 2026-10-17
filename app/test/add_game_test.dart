@@ -25,6 +25,7 @@ import 'package:vnl/src/features/library/domain/add_game.dart';
 import 'package:vnl/src/features/library/domain/selection.dart';
 import 'package:vnl/src/features/library/presentation/add_game/add_game_dialog.dart';
 import 'package:vnl/src/features/library/presentation/widgets/detail_tabs/info_tab.dart';
+import 'package:vnl/src/features/settings/presentation/sections/settings_widgets.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
 import 'package:vnl/src/utils/theme/brand.dart';
 
@@ -501,10 +502,15 @@ void main() {
     await tester.tap(find.byKey(const Key('add-game-manual')));
     await tester.pumpAndSettle();
     Finder boxOf(String key) => find.descendant(
-        of: find.byKey(Key(key)), matching: find.byType(TextField));
-    expect(tester.getSize(boxOf('add-game-title')).height, closeTo(40, 1));
-    expect(tester.getSize(boxOf('add-game-exe')).height, closeTo(40, 1));
-    final exe = tester.getCenter(boxOf('add-game-exe')).dy;
+        of: find.byKey(Key(key)), matching: find.byType(InputDecorator));
+    Finder borderOf(String key) => find.descendant(
+        of: find.byKey(Key(key)), matching: find.byType(SettingsTextBox));
+    for (final key in ['add-game-title', 'add-game-exe']) {
+      expect(tester.getSize(boxOf(key)).height, closeTo(40, 1), reason: key);
+      expect(tester.getSize(borderOf(key)).height, closeTo(40, 1),
+          reason: '$key border');
+    }
+    final exe = tester.getCenter(borderOf('add-game-exe')).dy;
     final choose =
         tester.getCenter(find.byKey(const Key('add-game-exe-choose'))).dy;
     expect((exe - choose).abs(), lessThanOrEqualTo(1));
