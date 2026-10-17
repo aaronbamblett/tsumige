@@ -8,18 +8,13 @@ import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../features/library/presentation/library_screen.dart';
-import '../features/settings/presentation/settings_screen.dart';
 
-/// App routes: `/` is the library, `/settings` the settings page.
+/// App routes: `/` is the library. Settings opens as a dialog over it.
 final routerProvider = Provider<GoRouter>((ref) => GoRouter(
       routes: [
         GoRoute(
           path: '/',
           builder: (context, state) => const LibraryScreen(),
-        ),
-        GoRoute(
-          path: '/settings',
-          builder: (context, state) => const SettingsScreen(),
         ),
       ],
     ));

@@ -1,0 +1,459 @@
+// Copyright (c) 2026 Aaron Bamblett
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:vnl/src/core/covers.dart' as core;
+import 'package:vnl/src/core/launch/detect.dart' as detect;
+import 'package:vnl/src/core/model.dart' as core;
+import 'package:vnl/src/core/paths.dart' as core;
+import 'package:vnl/src/core/store.dart' as core;
+import 'package:vnl/src/core/vndb.dart' as core;
+import 'package:vnl/src/features/library/data/library_repository.dart';
+import 'package:vnl/src/features/library/domain/game_editor.dart';
+import 'package:vnl/src/features/library/domain/runner_detection.dart';
+import 'package:vnl/src/features/library/presentation/widgets/library_toolbar.dart';
+import 'package:vnl/src/features/settings/presentation/settings_dialog.dart';
+import 'package:vnl/src/features/settings/widgets/app_theme_mode_tile/app_theme_mode_tile.dart';
+import 'package:vnl/src/l10n/generated/app_localizations.dart';
+import 'package:vnl/src/utils/prefs/app_prefs.dart';
+import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
+
+class SettingsFakeRepository implements LibraryRepository {
+  SettingsFakeRepository({
+    this.report = const core.RatingReport(),
+    this.saveError,
+    this.gate,
+    this.skipped = const [],
+  });
+
+  core.RatingReport report;
+  Object? saveError;
+  Completer<core.RatingReport>? gate;
+  List<core.SkippedEntry> skipped;
+  int loadCount = 0;
+  int refreshCount = 0;
+  int saveCount = 0;
+
+  @override
+  Future<core.LoadedLibrary> load() async {
+    loadCount++;
+    return core.LoadedLibrary(
+      library: core.Library(
+        games: [core.Game(id: 'g1', title: 'Alpha', vndbId: 'v1')],
+      ),
+      skipped: skipped,
+    );
+  }
+
+  @override
+  Future<void> save(core.LoadedLibrary loaded) async {
+    saveCount++;
+    final error = saveError;
+    if (error != null) throw error;
+  }
+
+  @override
+  Future<core.RatingReport> refreshRatings(core.LoadedLibrary loaded) async {
+    refreshCount++;
+    final pending = gate;
+    if (pending != null) return pending.future;
+    return report;
+  }
+
+  @override
+  Future<core.ThumbReport> ensureThumbnails(core.Library library) async =>
+      core.ThumbReport();
+}
+
+void setWindowSize(WidgetTester tester, Size size) {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+}
+
+Future<ProviderContainer> pumpSettings(
+  WidgetTester tester,
+  SettingsFakeRepository repo, {
+  core.DataDir? dir,
+  List<detect.ProtonRunner> protonRunners = const [],
+  Future<String?> Function({String? initialDirectory, PathPickMode mode})?
+  pathPicker,
+  List<Uri>? openedUris,
+  Size windowSize = const Size(1400, 980),
+}) async {
+  setWindowSize(tester, windowSize);
+  SharedPreferences.setMockInitialValues({});
+  final prefs = await SharedPreferences.getInstance();
+  SettingsDialog.lastSection = SettingsSection.appearance;
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        dataDirProvider.overrideWithValue(dir ?? core.DataDir('/tmp/vnl_test')),
+        libraryRepositoryProvider.overrideWithValue(repo),
+        protonRunnersProvider.overrideWith(
+          (ref) => Future.value(protonRunners),
+        ),
+        if (pathPicker != null)
+          pathPickerProvider.overrideWithValue(pathPicker),
+        folderOpenerProvider.overrideWithValue((uri) async {
+          openedUris?.add(uri);
+          return true;
+        }),
+      ],
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: ElevatedButton(
+                key: const Key('open-settings'),
+                onPressed: () => showSettingsDialog(context),
+                child: const Text('Open settings'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pump();
+  await tester.tap(find.byKey(const Key('open-settings')));
+  await tester.pumpAndSettle();
+  return ProviderScope.containerOf(tester.element(find.byType(SettingsDialog)));
+}
+
+Future<void> openSection(WidgetTester tester, String name) async {
+  await tester.tap(find.byKey(Key('settings-nav-$name')));
+  await tester.pumpAndSettle();
+}
+
+Finder refreshButton() => find.byKey(const Key('settings-refresh-ratings'));
+
+Future<ProviderContainer> pumpLibrarySection(
+  WidgetTester tester,
+  SettingsFakeRepository repo, {
+  core.DataDir? dir,
+  List<Uri>? openedUris,
+  Size windowSize = const Size(1400, 980),
+}) async {
+  final container = await pumpSettings(
+    tester,
+    repo,
+    dir: dir,
+    openedUris: openedUris,
+    windowSize: windowSize,
+  );
+  await openSection(tester, 'library');
+  await tester.pump();
+  return container;
+}
+
+void main() {
+  testWidgets('toolbar button opens the dialog, Esc and close close it', (
+    tester,
+  ) async {
+    setWindowSize(tester, const Size(1600, 980));
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          dataDirProvider.overrideWithValue(core.DataDir('/tmp/vnl_test')),
+          libraryRepositoryProvider.overrideWithValue(SettingsFakeRepository()),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const Scaffold(body: LibraryToolbar(shown: 1, total: 1)),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsDialog), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsDialog), findsNothing);
+
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsDialog), findsOneWidget);
+    await tester.tap(find.byKey(const Key('settings-close')));
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsDialog), findsNothing);
+  });
+
+  testWidgets('nav switches sections and marks the selected item', (
+    tester,
+  ) async {
+    await pumpSettings(tester, SettingsFakeRepository());
+    expect(
+      find.byKey(const Key('settings-nav-selected-appearance')),
+      findsOneWidget,
+    );
+    expect(find.text('Theme mode'), findsOneWidget);
+
+    await openSection(tester, 'library');
+    expect(find.text('Data folder'), findsOneWidget);
+    expect(
+      find.byKey(const Key('settings-nav-selected-library')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('settings-nav-selected-appearance')),
+      findsNothing,
+    );
+
+    await openSection(tester, 'launching');
+    expect(find.text('Default mode'), findsOneWidget);
+    await openSection(tester, 'advanced');
+    expect(find.text('UMU game id'), findsOneWidget);
+    await openSection(tester, 'about');
+    expect(find.text('Version 0.1.0'), findsOneWidget);
+    expect(find.text('MPL-2.0'), findsOneWidget);
+  });
+
+  testWidgets('dialog size follows the window', (tester) async {
+    await pumpSettings(tester, SettingsFakeRepository());
+    expect(
+      tester.getSize(find.byKey(const Key('settings-dialog'))),
+      const Size(960, 720),
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(1000, 700);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('open-settings')));
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(find.byKey(const Key('settings-dialog'))),
+      const Size(900, 630),
+    );
+  });
+
+  testWidgets('theme mode radios write the pref', (tester) async {
+    final container = await pumpSettings(tester, SettingsFakeRepository());
+    await tester.tap(find.byKey(const Key('settings-theme-mode-light')));
+    await tester.pump();
+    expect(container.read(appThemeModeProvider), ThemeMode.light);
+    expect(find.byKey(const Key('settings-true-black')), findsNothing);
+    await tester.tap(find.byKey(const Key('settings-theme-mode-dark')));
+    await tester.pump();
+    expect(container.read(appThemeModeProvider), ThemeMode.dark);
+  });
+
+  testWidgets('cover slider writes the pref', (tester) async {
+    final container = await pumpSettings(tester, SettingsFakeRepository());
+    expect(container.read(coverWidthProvider), 192);
+    final slider = find.byKey(const Key('cover-size-slider'));
+    await tester.ensureVisible(slider);
+    await tester.pumpAndSettle();
+    await tester.drag(slider, const Offset(120, 0));
+    await tester.pump();
+    expect(container.read(coverWidthProvider), greaterThan(192));
+  });
+
+  testWidgets('refresh disabled while running', (tester) async {
+    final gate = Completer<core.RatingReport>();
+    final repo = SettingsFakeRepository(
+      gate: gate,
+      report: const core.RatingReport(updated: 1),
+    );
+    await pumpLibrarySection(tester, repo);
+    await tester.tap(refreshButton());
+    await tester.pump();
+    expect(tester.widget<FilledButton>(refreshButton()).onPressed, isNull);
+    expect(repo.refreshCount, 1);
+    await tester.tap(refreshButton());
+    await tester.pump();
+    expect(repo.refreshCount, 1);
+    gate.complete(const core.RatingReport(updated: 1));
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    expect(tester.widget<FilledButton>(refreshButton()).onPressed, isNotNull);
+    expect(repo.refreshCount, 1);
+    await tester.pump(const Duration(seconds: 6));
+  });
+
+  testWidgets('changed on disk reloads', (tester) async {
+    final repo = SettingsFakeRepository(
+      report: const core.RatingReport(updated: 2),
+      saveError: core.ChangedOnDisk('x'),
+    );
+    await pumpLibrarySection(tester, repo);
+    expect(repo.loadCount, 1);
+    await tester.tap(refreshButton());
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    expect(repo.saveCount, 1);
+    expect(repo.loadCount, 2);
+    await tester.pump(const Duration(seconds: 6));
+  });
+
+  testWidgets('skipped entries never fetch ratings', (tester) async {
+    final repo = SettingsFakeRepository(
+      report: const core.RatingReport(updated: 2),
+      skipped: const [core.SkippedEntry(index: 0, reason: 'bad id')],
+    );
+    await pumpLibrarySection(tester, repo);
+    expect(repo.loadCount, 1);
+    await tester.tap(refreshButton());
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    expect(repo.refreshCount, 0);
+    expect(repo.saveCount, 0);
+    expect(repo.loadCount, 1);
+    await tester.pump(const Duration(seconds: 6));
+  });
+
+  testWidgets('generic save failure reloads', (tester) async {
+    final repo = SettingsFakeRepository(
+      report: const core.RatingReport(updated: 2),
+      saveError: const FileSystemException('disk gone'),
+    );
+    await pumpLibrarySection(tester, repo);
+    expect(repo.loadCount, 1);
+    await tester.tap(refreshButton());
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    expect(repo.saveCount, 1);
+    expect(repo.loadCount, 2);
+    await tester.pump(const Duration(seconds: 6));
+  });
+
+  testWidgets('zero updates skips save', (tester) async {
+    final repo = SettingsFakeRepository(
+      report: const core.RatingReport(updated: 0),
+    );
+    await pumpLibrarySection(tester, repo);
+    await tester.tap(refreshButton());
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    expect(repo.saveCount, 0);
+    expect(repo.loadCount, 2);
+    await tester.pump(const Duration(seconds: 6));
+  });
+
+  testWidgets('mode cards write the pref and mark the selection', (
+    tester,
+  ) async {
+    final container = await pumpSettings(tester, SettingsFakeRepository());
+    await openSection(tester, 'launching');
+    expect(container.read(launchModeProvider), core.LaunchMode.proton);
+    expect(
+      find.byKey(const Key('launch-mode-selected-proton')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('launch-mode-card-wine')));
+    await tester.pump();
+    expect(container.read(launchModeProvider), core.LaunchMode.wine);
+    expect(find.byKey(const Key('launch-mode-selected-wine')), findsOneWidget);
+    expect(find.byKey(const Key('launch-mode-selected-proton')), findsNothing);
+  });
+
+  testWidgets('game language presets and custom text write the pref', (
+    tester,
+  ) async {
+    final container = await pumpSettings(tester, SettingsFakeRepository());
+    await openSection(tester, 'launching');
+    final korean = find.byKey(const Key('settings-locale-korean'));
+    await tester.ensureVisible(korean);
+    await tester.pumpAndSettle();
+    await tester.tap(korean);
+    await tester.pump();
+    expect(container.read(launchLocaleProvider), 'ko_KR.UTF-8');
+    await tester.tap(find.byKey(const Key('settings-locale-japanese')));
+    await tester.pump();
+    expect(container.read(launchLocaleProvider), 'ja_JP.UTF-8');
+
+    await tester.tap(find.byKey(const Key('settings-locale-custom')));
+    await tester.pump();
+    final field = find.byKey(const Key('settings-locale-custom-field'));
+    await tester.ensureVisible(field);
+    await tester.pumpAndSettle();
+    await tester.enterText(field, 'fr_FR.UTF-8');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump();
+    expect(container.read(launchLocaleProvider), 'fr_FR.UTF-8');
+  });
+
+  testWidgets('portal prefix is rejected', (tester) async {
+    final container = await pumpSettings(tester, SettingsFakeRepository());
+    await openSection(tester, 'launching');
+    final field = find.byKey(const Key('settings-prefix'));
+    await tester.ensureVisible(field);
+    await tester.pumpAndSettle();
+    await tester.enterText(field, '/run/user/1000/prefix');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump();
+    expect(container.read(launchPrefixProvider), '~/Games/vnl/prefix');
+    await tester.pump(const Duration(seconds: 6));
+  });
+
+  testWidgets('open folder buttons call the injected launcher', (tester) async {
+    final temp = Directory.systemTemp.createTempSync('vnl_settings_test_');
+    addTearDown(() => temp.deleteSync(recursive: true));
+    final opened = <Uri>[];
+    await pumpLibrarySection(
+      tester,
+      SettingsFakeRepository(),
+      dir: core.DataDir(temp.path),
+      openedUris: opened,
+    );
+    await tester.tap(find.byKey(const Key('settings-open-data')));
+    await tester.pump();
+    await tester.pump();
+    expect(opened, [Uri.file(temp.path)]);
+
+    await tester.tap(find.byKey(const Key('settings-open-logs')));
+    await tester.pump();
+    await tester.pump();
+    expect(opened, [Uri.file(temp.path), Uri.file(p.join(temp.path, 'logs'))]);
+    expect(Directory(p.join(temp.path, 'logs')).existsSync(), isTrue);
+  });
+
+  testWidgets('no overflow at 1000x700', (tester) async {
+    await pumpSettings(
+      tester,
+      SettingsFakeRepository(),
+      windowSize: const Size(1000, 700),
+    );
+    for (final section in [
+      'appearance',
+      'library',
+      'launching',
+      'advanced',
+      'about',
+    ]) {
+      await openSection(tester, section);
+      expect(tester.takeException(), isNull, reason: section);
+    }
+  });
+}

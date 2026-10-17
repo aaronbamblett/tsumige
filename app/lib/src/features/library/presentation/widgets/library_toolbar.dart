@@ -5,7 +5,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../constants/pref_keys.dart' as keys;
@@ -13,6 +12,7 @@ import '../../data/library_repository.dart';
 import '../../domain/cover_source.dart';
 import '../../domain/library_query.dart';
 import '../../../../utils/prefs/app_prefs.dart';
+import '../../../settings/presentation/settings_dialog.dart';
 import '../add_game/add_game_dialog.dart';
 
 const Map<keys.SortField, String> sortFieldLabels = {
@@ -196,7 +196,7 @@ class LibraryToolbar extends ConsumerWidget {
                     IconButton(
                       tooltip: 'Settings',
                       icon: const Icon(Icons.settings_rounded),
-                      onPressed: () => context.push('/settings'),
+                      onPressed: () => showSettingsDialog(context),
                     ),
                   ],
                 ),
