@@ -116,13 +116,10 @@ class _Parser {
       }
       final open = _parseOpenTag(s, pos);
       if (open == null) {
-        final end = s.indexOf(']', pos + 1);
-        if (end < 0) {
-          text.write(s.substring(pos));
-          return (nodes..add(TextNode(text.toString())), s.length, false);
-        }
-        text.write(s.substring(pos, end + 1));
-        pos = end + 1;
+        // Not a known tag: only the bracket is literal, so an inner
+        // known tag (e.g. in "[From [url=..]..[/url]]") still parses.
+        text.write('[');
+        pos++;
         continue;
       }
       final (kind, arg, length) = open;

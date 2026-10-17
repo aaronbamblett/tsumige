@@ -64,6 +64,21 @@ void main() {
     expect((nodes.first as TextNode).text, '[foo]x[/foo]');
   });
 
+  test('[From [url=..]..[/url]] keeps the brackets and the link', () {
+    final nodes =
+        parseVndbMarkup('[From [url=https://example.org]Example[/url]]');
+    expect(nodes, hasLength(3));
+    expect(nodes[0], isA<TextNode>());
+    expect((nodes[0] as TextNode).text, '[From ');
+    expect(nodes[1], isA<LinkNode>());
+    final link = nodes[1] as LinkNode;
+    expect(link.url, 'https://example.org');
+    expect(link.children, hasLength(1));
+    expect((link.children.first as TextNode).text, 'Example');
+    expect(nodes[2], isA<TextNode>());
+    expect((nodes[2] as TextNode).text, ']');
+  });
+
   test('plain text gives a single text node', () {
     final nodes = parseVndbMarkup('hello world');
     expect(nodes, hasLength(1));
