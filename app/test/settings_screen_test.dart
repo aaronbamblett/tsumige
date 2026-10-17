@@ -347,7 +347,5 @@ void main() {
     await tester.pump();
     expect(opened, [Uri.file(temp.path), Uri.file(p.join(temp.path, 'logs'))]);
     expect(Directory(p.join(temp.path, 'logs')).existsSync(), isTrue);
-    expect(find.text('Logs: one file per launch, plus latest.log'),
-        findsOneWidget);
   });
 }

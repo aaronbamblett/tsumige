@@ -202,15 +202,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-                child: Text(
-                  'Logs: one file per launch, plus latest.log',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
                 child: Text('Launching', style: headingStyle),
               ),
