@@ -6,6 +6,7 @@
 
 import 'dart:io';
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -63,6 +64,10 @@ void setSurface(WidgetTester tester, double width, double height) {
   });
 }
 
+/// Repaint boundary around the whole test app so pixel tests can capture
+/// exactly what renders.
+final testRepaintKey = GlobalKey();
+
 Future<void> pumpLibrary(WidgetTester tester, List<core.Game> games) async {
   setSurface(tester, 1280, 800);
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -84,7 +89,7 @@ Future<void> pumpLibrary(WidgetTester tester, List<core.Game> games) async {
       libraryRepositoryProvider.overrideWithValue(GridFakeRepository(games)),
       coverExistsProvider.overrideWithValue((_) => false),
     ],
-    child: const VnlApp(),
+    child: RepaintBoundary(key: testRepaintKey, child: const VnlApp()),
   ));
   await tester.pump();
   await tester.pump();
@@ -103,7 +108,9 @@ int firstRowColumns(WidgetTester tester) {
 /// The scrollbar's track lane, derived from the laid-out [Scrollbar] plus
 /// the theme margins [LibraryGrid] applies. The thumb hugs the trailing
 /// edge (no cross-axis inset), so the lane is the full bar minus the top
-/// and bottom [LibraryGrid.topInset].
+/// and bottom [LibraryGrid.topInset]. The bar spans the full row height;
+/// the grid viewport starts [LibraryGrid.topInset] below its top, so the
+/// track top lands exactly on the viewport top.
 Rect scrollbarTrackRect(WidgetTester tester) {
   final bar = tester.getRect(find.descendant(
     of: find.byType(LibraryGrid),
@@ -116,6 +123,12 @@ Rect scrollbarTrackRect(WidgetTester tester) {
     bar.bottom - LibraryGrid.topInset,
   );
 }
+
+/// The grid's scroll viewport.
+Rect gridViewportRect(WidgetTester tester) => tester.getRect(find.descendant(
+      of: find.byType(LibraryGrid),
+      matching: find.byType(Viewport),
+    ));
 
 /// The first row of covers.
 List<Rect> firstRowCovers(WidgetTester tester) {
@@ -309,6 +322,75 @@ void main() {
         tester.getRect(find.byKey(const ValueKey('cover-game-0')));
     final pane = tester.getRect(find.byType(GameDetailPane));
     expect((track.top - firstCover.top).abs(), lessThanOrEqualTo(1.0));
+    expect((track.top - pane.top).abs(), lessThanOrEqualTo(1.0));
+  });
+
+  testWidgets('first covers start at the viewport top, level with the pane',
+      (tester) async {
+    await pumpLibrary(tester, fakeGames(20));
+    // Pane closed: no top padding inside the viewport.
+    var firstCover =
+        tester.getRect(find.byKey(const ValueKey('cover-game-0')));
+    expect((firstCover.top - gridViewportRect(tester).top).abs(),
+        lessThanOrEqualTo(1.0));
+    // Pane open: the first row lines up with the pane top.
+    await tester.tap(find.text('Game 0'));
+    await tester.pump();
+    await tester.pump();
+    firstCover = tester.getRect(find.byKey(const ValueKey('cover-game-0')));
+    final pane = tester.getRect(find.byType(GameDetailPane));
+    expect((firstCover.top - pane.top).abs(), lessThanOrEqualTo(1.0));
+  });
+
+  testWidgets('scrolled covers clip at the pane top line', (tester) async {
+    await pumpLibrary(tester, fakeGames(2000));
+    await tester.tap(find.text('Game 0'));
+    await tester.pump();
+    await tester.pump();
+    final pane = tester.getRect(find.byType(GameDetailPane));
+    expect((gridViewportRect(tester).top - pane.top).abs(),
+        lessThanOrEqualTo(1.0));
+    await tester.drag(
+      find.byKey(const ValueKey('cover-game-0')),
+      const Offset(0, -300),
+    );
+    await tester.pump();
+    await tester.pump();
+    final grid = tester.getRect(find.byType(LibraryGrid));
+    final track = scrollbarTrackRect(tester);
+    final boundary = testRepaintKey.currentContext!.findRenderObject()!
+        as RenderRepaintBoundary;
+    final (image, bytes) = await tester.runAsync(() async {
+      final image = await boundary.toImage();
+      final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      return (image, data!);
+    }) as (ui.Image, ByteData);
+    final top = (pane.top - LibraryGrid.topInset).round();
+    final bottom = pane.top.round() - 1;
+    final left = grid.left.round();
+    final right = track.left.round();
+    expect(bottom - top, greaterThanOrEqualTo(8));
+    int pixelAt(int x, int y) =>
+        bytes.getUint32((y * image.width + x) * 4);
+    final background = pixelAt(left, top);
+    var different = 0;
+    for (var y = top; y <= bottom; y++) {
+      for (var x = left; x < right; x++) {
+        if (pixelAt(x, y) != background) different++;
+      }
+    }
+    expect(different, 0,
+        reason: 'covers render in the band above the viewport top');
+  });
+
+  testWidgets('scrollbar track top sits on the pane top line',
+      (tester) async {
+    await pumpLibrary(tester, fakeGames(20));
+    await tester.tap(find.text('Game 0'));
+    await tester.pump();
+    await tester.pump();
+    final track = scrollbarTrackRect(tester);
+    final pane = tester.getRect(find.byType(GameDetailPane));
     expect((track.top - pane.top).abs(), lessThanOrEqualTo(1.0));
   });
 
