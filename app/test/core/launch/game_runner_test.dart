@@ -18,7 +18,9 @@ import 'package:vnl/src/core/model.dart';
 import 'package:vnl/src/core/paths.dart';
 
 class FakeStore implements SessionStore {
-  FakeStore(this.current);
+  FakeStore(this.current, {this.onSave});
+
+  final void Function()? onSave;
 
   LoadedLibrary current;
 
@@ -34,17 +36,25 @@ class FakeStore implements SessionStore {
   @override
   Future<void> save(LoadedLibrary loaded) async {
     current = loaded;
+    onSave?.call();
   }
 }
 
 class FakeStartedProcess implements StartedProcess {
-  FakeStartedProcess({required this.pid, required this.exitCode});
+  FakeStartedProcess({
+    required this.pid,
+    required this.exitCode,
+    Future<void>? logClosed,
+  }) : logClosed = logClosed ?? Future.value();
 
   @override
   final int pid;
 
   @override
   final Future<int> exitCode;
+
+  @override
+  final Future<void> logClosed;
 }
 
 class FakeStarter implements ProcessStarter {
@@ -167,25 +177,87 @@ void main() {
     expect(starter.started, hasLength(1));
   });
 
-  test('a quick non-zero exit is reported with the log path', () async {
+  test('a quick non-zero exit records no session', () async {
     final store = storeWith(nativeGame());
     final starter = FakeStarter((command, log) async {
       Future<int> exit() async {
-        now = now.add(const Duration(seconds: 3));
-        return 25;
+        now = now.add(const Duration(seconds: 2));
+        return 1;
       }
 
       return FakeStartedProcess(pid: 7, exitCode: exit());
     });
     final result = await runner(store: store, starter: starter)
         .launch(nativeGame(), defaults);
-    expect(result.exitCode, 25);
+    expect(result.exitCode, 1);
     expect(result.quickFailure, isTrue);
+    expect(result.sessionSeconds, isNull);
     expect(result.logFile.path, endsWith('.log'));
     expect(result.logFile.path, contains('Test-Game'));
+    expect(store.current.library.games.single.playSessions, isEmpty);
+    expect(markerFile().existsSync(), isFalse);
+    expect(latestFile().existsSync(), isTrue);
+  });
+
+  test('a clean 2s exit still records a 2s session', () async {
+    final store = storeWith(nativeGame());
+    final starter = FakeStarter((command, log) async {
+      Future<int> exit() async {
+        now = now.add(const Duration(seconds: 2));
+        return 0;
+      }
+
+      return FakeStartedProcess(pid: 7, exitCode: exit());
+    });
+    final result = await runner(store: store, starter: starter)
+        .launch(nativeGame(), defaults);
+    expect(result.exitCode, 0);
+    expect(result.quickFailure, isFalse);
+    expect(result.sessionSeconds, 2);
     final sessions = store.current.library.games.single.playSessions;
     expect(sessions, hasLength(1));
-    expect(sessions.single.durationSeconds, 3);
+    expect(sessions.single.durationSeconds, 2);
+  });
+
+  test('stuck log streams do not stretch the session', () async {
+    // Gated on the session write: the launch reads the end time before
+    // recording, and only then awaits the drain, so the drain's 5 s may
+    // not run first. Mirrors production, where the 5 s timeout is real
+    // time and cannot move the fake clock early.
+    final sessionSaved = Completer<void>();
+    final store = FakeStore(
+      LoadedLibrary(library: Library(games: [nativeGame()])),
+      onSave: () {
+        if (!sessionSaved.isCompleted) sessionSaved.complete();
+      },
+    );
+    final starter = FakeStarter((command, log) async {
+      final exit = () async {
+        now = now.add(const Duration(seconds: 90));
+        return 0;
+      }();
+      // Streams stay open: the drain only finishes 5 s after exit, on the
+      // fake clock, with no real waiting.
+      final closed = () async {
+        await exit;
+        await sessionSaved.future;
+        now = now.add(const Duration(seconds: 5));
+      }();
+      return FakeStartedProcess(pid: 7, exitCode: exit, logClosed: closed);
+    });
+    final result = await runner(store: store, starter: starter)
+        .launch(nativeGame(), defaults);
+    expect(result.exitCode, 0);
+    expect(result.quickFailure, isFalse);
+    expect(result.sessionSeconds, 90);
+    final sessions = store.current.library.games.single.playSessions;
+    expect(sessions, hasLength(1));
+    expect(sessions.single.startedAt, t0);
+    expect(sessions.single.durationSeconds, 90);
+    // The launch waited for the drain: the fake clock ran 5 s past exit.
+    expect(now, t0.add(const Duration(seconds: 95)));
+    expect(markerFile().existsSync(), isFalse);
+    expect(latestFile().existsSync(), isTrue);
   });
 
   test('run-exe-in-prefix records no session', () async {

@@ -14,11 +14,14 @@ import 'log_files.dart';
 import 'process_table.dart';
 import 'session_recorder.dart';
 
-/// A started game process. `exitCode` completes only after all output has
-/// been appended to the log, so copying `latest.log` right after is safe.
+/// A started game process. `exitCode` completes as soon as the OS process
+/// exits. `logClosed` completes when the output streams have drained and the
+/// log sink is closed, or 5 s after exit, whichever comes first, so awaiting
+/// it before copying `latest.log` is safe.
 abstract class StartedProcess {
   int get pid;
   Future<int> get exitCode;
+  Future<void> get logClosed;
 }
 
 /// Starts a [LaunchCommand] with its output appended to [log].
@@ -27,13 +30,16 @@ abstract class ProcessStarter {
 }
 
 class _IoStartedProcess implements StartedProcess {
-  _IoStartedProcess(this.pid, this.exitCode);
+  _IoStartedProcess(this.pid, this.exitCode, this.logClosed);
 
   @override
   final int pid;
 
   @override
   final Future<int> exitCode;
+
+  @override
+  final Future<void> logClosed;
 }
 
 class IoProcessStarter implements ProcessStarter {
@@ -58,21 +64,33 @@ class IoProcessStarter implements ProcessStarter {
         process.stdout.listen(sink.add, onError: (_) {}, cancelOnError: false);
     final stderrSub =
         process.stderr.listen(sink.add, onError: (_) {}, cancelOnError: false);
-    final done = () async {
-      final code = await process.exitCode;
+    // `exitCode` fires at OS exit. Draining starts only after that: Wine
+    // and Proton children can inherit the pipes and hold them open long
+    // after the game quits, so the drain waits at most 5 s past exit, then
+    // cancels the subscriptions and closes the sink.
+    final logClosed = () async {
       try {
-        await stdoutSub.asFuture<void>();
+        await process.exitCode;
       } catch (_) {}
       try {
-        await stderrSub.asFuture<void>();
+        await Future.wait<void>([
+          stdoutSub.asFuture<void>(),
+          stderrSub.asFuture<void>(),
+        ]).timeout(const Duration(seconds: 5));
+      } on TimeoutException {
+        try {
+          await stdoutSub.cancel();
+        } catch (_) {}
+        try {
+          await stderrSub.cancel();
+        } catch (_) {}
       } catch (_) {}
       try {
         await sink.flush();
         await sink.close();
       } catch (_) {}
-      return code;
     }();
-    return _IoStartedProcess(process.pid, done);
+    return _IoStartedProcess(process.pid, process.exitCode, logClosed);
   }
 }
 
@@ -156,6 +174,7 @@ class GameRunner {
         if (session != null) {
           await recordSession(store, game.id, session.start, session.seconds);
         }
+        await process.logClosed;
         await updateLatestLog(dir, logFile);
         await deleteRunningMarker(dir, game.id);
         return LaunchResult(
@@ -165,21 +184,26 @@ class GameRunner {
           sessionSeconds: session?.seconds,
         );
       }
+      // End the session at OS exit: lingering Wine/Proton children can hold
+      // the log pipes open, so anything measured after the drain would run
+      // late. The drain is still awaited before copying `latest.log`.
       final code = await process.exitCode;
       final elapsed = clock().difference(startedAt);
       var seconds = elapsed.inSeconds;
       if (seconds < 0) seconds = 0;
+      final quickFailure = code != 0 && elapsed < quickFailWindow;
       int? recorded;
-      if (overrideExe == null) {
+      if (overrideExe == null && !quickFailure) {
         await recordSession(store, game.id, startedAt, seconds);
         recorded = seconds;
       }
+      await process.logClosed;
       await updateLatestLog(dir, logFile);
       await deleteRunningMarker(dir, game.id);
       return LaunchResult(
         logFile: logFile,
         exitCode: code,
-        quickFailure: code != 0 && elapsed < quickFailWindow,
+        quickFailure: quickFailure,
         sessionSeconds: recorded,
       );
     } finally {
