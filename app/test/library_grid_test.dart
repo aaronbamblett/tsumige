@@ -18,6 +18,7 @@ import 'package:vnl/src/core/paths.dart' as core;
 import 'package:vnl/src/core/vndb.dart' as core;
 import 'package:vnl/src/features/library/data/library_repository.dart';
 import 'package:vnl/src/features/library/domain/cover_source.dart';
+import 'package:vnl/src/features/library/presentation/widgets/game_cover_grid_delegate.dart';
 import 'package:vnl/src/features/library/presentation/widgets/game_cover_tile.dart';
 import 'package:vnl/src/utils/prefs/app_prefs.dart';
 import 'package:vnl/src/utils/prefs/prefs_mixin.dart';
@@ -138,6 +139,48 @@ void main() {
     await tester.pump();
     expect(find.byType(Slider), findsNothing);
     expect(find.text('20 games'), findsOneWidget);
+  });
+
+  testWidgets('every cover has the same height at any slider value',
+      (tester) async {
+    const longTitle =
+        'A very long game title that keeps going until it must wrap onto '
+        'two full lines no matter how wide the tile gets in the grid view';
+    final games = List.generate(
+      12,
+      (i) => i.isEven
+          ? core.Game(id: 'game-$i', title: 'Up', vndbRating: 8.5)
+          : core.Game(
+              id: 'game-$i',
+              title: '$longTitle $i',
+              tags: ['tag-a', 'tag-b', 'tag-c', 'tag-d'],
+            ),
+    );
+    await pumpLibrary(tester, games);
+    setSurface(tester, 1280, 900);
+    await tester.pump();
+    await tester.pump();
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(Slider)));
+    for (final width in [100, 192, 999]) {
+      container.read(coverWidthProvider.notifier).set(width);
+      await tester.pump();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      final rects = <Rect>[];
+      for (final game in games) {
+        final finder = find.byKey(ValueKey('cover-${game.id}'));
+        if (finder.evaluate().isNotEmpty) rects.add(tester.getRect(finder));
+      }
+      expect(rects.length, greaterThan(1));
+      final heights = rects.map((r) => r.height).toList();
+      expect(heights.reduce(max) - heights.reduce(min),
+          lessThanOrEqualTo(0.5));
+      for (final rect in rects) {
+        expect(rect.height,
+            moreOrLessEquals(rect.width / kGameCoverAspectRatio, epsilon: 0.5));
+      }
+    }
   });
 
   testWidgets('cover source follows the settled width', (tester) async {

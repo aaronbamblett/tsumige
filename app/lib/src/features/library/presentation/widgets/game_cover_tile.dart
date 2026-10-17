@@ -47,11 +47,13 @@ class GameCoverTile extends ConsumerWidget {
       child: InkWell(
         onTap: () =>
             ref.read(selectedGameIdProvider.notifier).select(game.id),
+        // Both heights are fixed so the cover never depends on the text.
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(child: _cover(context, source, settledPhysical)),
-            _info(context),
+            _cover(context, source, settledPhysical),
+            SizedBox(height: kGridTitleExtent, child: _info(context)),
           ],
         ),
       ),
@@ -61,7 +63,14 @@ class GameCoverTile extends ConsumerWidget {
   Widget _cover(
       BuildContext context, CoverSource? source, double settledPhysical) {
     if (source == null) {
-      return const Center(child: Text('No cover'));
+      return SizedBox(
+        key: ValueKey('cover-${game.id}'),
+        width: double.infinity,
+        child: const AspectRatio(
+          aspectRatio: kGameCoverAspectRatio,
+          child: Center(child: Text('No cover')),
+        ),
+      );
     }
     final file = File(source.path);
     // Thumbnails decode at their own size, keeping a stable image-cache key
@@ -83,6 +92,7 @@ class GameCoverTile extends ConsumerWidget {
                 const Center(child: Text('No cover')),
           );
     return SizedBox(
+      key: ValueKey('cover-${game.id}'),
       width: double.infinity,
       child: AspectRatio(
         aspectRatio: kGameCoverAspectRatio,
