@@ -93,6 +93,10 @@ jobs:
             flatpak/app.tsumige.Tsumige.yml
           gpg-sign: ${{ secrets.FLATPAK_GPG_KEY_ID }}
           upload-pages-artifact: true
+          upload-pages-includes: |
+            flatpak/tsumige-repo.gpg
+            flatpak/app.tsumige.Tsumige.flatpakref
+            flatpak/index.flatpakrepo
 
   deploy:
     name: Deploy Pages

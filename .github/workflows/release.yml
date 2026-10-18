@@ -161,6 +161,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Upload test build as a workflow artifact
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: tsumige-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
     name: Publish the release
     # Runs only after EVERY matrix build job succeeds. If any platform fails,
@@ -173,6 +182,7 @@ jobs:
       contents: write
     steps:
       - name: Publish now that all platforms have attached
+        id: publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -190,8 +200,23 @@ jobs:
           # publish it, but never as Latest, so updaters that ask for the
           # latest release keep pointing at the last full one.
           pre=$(gh release view "$TAG" --repo "$REPO" --json isPrerelease -q .isPrerelease)
+          echo "prerelease=$pre" >> "$GITHUB_OUTPUT"
           if [ "$pre" = "true" ]; then
             gh release edit "$TAG" --repo "$REPO" --draft=false --prerelease
           else
             gh release edit "$TAG" --repo "$REPO" --draft=false --latest
           fi
+      # The website bakes release data in at build time; nudge it to rebuild so
+      # tsumige.app shows this release at once. Best-effort: never fail the release.
+      - name: Trigger website rebuild
+        if: success() && steps.publish.outputs.prerelease != 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.WEBSITE_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::WEBSITE_DISPATCH_TOKEN not set; skipping website rebuild."
+            exit 0
+          fi
+          gh api repos/aaronbamblett/tsumige-website/dispatches \
+            -f event_type=app-release
