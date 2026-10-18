@@ -1107,16 +1107,6 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                     minHeight: 96,
                   ),
                 ],
-                if (!_manual) ...[
-                  const SizedBox(height: 14),
-                  Text(
-                    'Description, VNDB tags and art come from VNDB. Launch '
-                    'settings can be changed later in the Launch tab.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.outline,
-                    ),
-                  ),
-                ],
                 if (_formError != null) ...[
                   const SizedBox(height: 10),
                   Text(

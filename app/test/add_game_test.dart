@@ -354,7 +354,7 @@ void main() {
         'Description, VNDB tags and art come from VNDB. Launch '
         'settings can be changed later in the Launch tab.',
       ),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.byType(TagChip), findsNothing);
     expect(find.text('Romance'), findsNothing);
