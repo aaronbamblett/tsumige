@@ -870,7 +870,8 @@ void main() {
     expect(paneText(tester, 'No description'), findsOneWidget);
     expect(paneText(tester, 'Notes'), findsOneWidget);
     expect(paneText(tester, 'No notes'), findsOneWidget);
-    expect(find.text('Tags'), findsNothing);
+    expect(paneText(tester, 'Tags'), findsOneWidget);
+    expect(paneText(tester, '+'), findsOneWidget);
     expect(find.text('VNDB Rating'), findsNothing);
   });
 
@@ -880,6 +881,26 @@ void main() {
     ]);
     await openPane(tester, 'Alpha');
     expect(richPaneText(tester, '6.4'), findsOneWidget);
+  });
+
+  testWidgets('empty tags still show the section, and adding saves',
+      (tester) async {
+    final games = [core.Game(id: 'g1', title: 'Alpha')];
+    await pumpLibrary(tester, games);
+    await openPane(tester, 'Alpha');
+    expect(paneText(tester, 'Tags'), findsOneWidget);
+    await tester.ensureVisible(paneText(tester, '+'));
+    await tester.tap(paneText(tester, '+'));
+    await tester.pump();
+    final field = find.descendant(
+      of: find.byType(GameDetailPane),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(field, 'Cozy');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Cozy'), findsOneWidget);
+    expect(games.single.tags, ['Cozy']);
   });
 
   testWidgets('removing a tag through its close saves', (tester) async {

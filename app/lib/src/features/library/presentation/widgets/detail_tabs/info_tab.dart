@@ -90,9 +90,7 @@ class InfoTab extends ConsumerWidget {
       getValue: (g) => g.description,
       setValue: (g, v) => g.description = v,
     ));
-    if (game.tags.isNotEmpty) {
-      blocks.add(_TagsSection(key: ValueKey('tags-${game.id}'), game: game));
-    }
+    blocks.add(_TagsSection(key: ValueKey('tags-${game.id}'), game: game));
     if (game.vndbTags.isNotEmpty) {
       blocks.add(
           _VndbTagsSection(key: ValueKey('vndb-tags-${game.id}'), game: game));
