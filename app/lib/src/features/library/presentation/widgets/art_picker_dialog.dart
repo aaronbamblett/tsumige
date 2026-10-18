@@ -262,7 +262,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
             thumbVisibility: true,
             child: SingleChildScrollView(
               controller: _scroll,
-              padding: const EdgeInsets.fromLTRB(24, 4, 12, 20),
+              padding: const EdgeInsets.fromLTRB(24, 4, 24, 20),
               child: _body(),
             ),
           ),
