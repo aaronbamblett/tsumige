@@ -96,52 +96,76 @@ const _maxGameDepth = 3;
 Future<ImportFolder> scanGameFolder(String path, HostPlatform platform) =>
     _importFolder(path, platform);
 
-/// The game folders under [root]. When [root] itself holds a launchable it is
-/// the only game. Otherwise each subfolder is classified by [_collectGames].
-/// Folders with no launchable within [_maxGameDepth] levels are never listed.
+/// Subfolders named like these hold a game's binaries or one language build,
+/// so the game is the folder above them. `game` is not listed: a folder named
+/// Game is itself a game, as in `Studio/Game/Game.exe`.
+const _genericFolderNames = {
+  'bin',
+  'bin32',
+  'bin64',
+  'x64',
+  'x86',
+  'win32',
+  'win64',
+  'windows',
+  'binaries',
+  'binary',
+  'exe',
+  'program',
+  'app',
+  'data',
+  'system',
+  'release',
+  'launcher',
+  'jp',
+  'ja',
+  'en',
+  'eng',
+};
+
+/// The games under [root]. When [root] itself holds a launchable it is the
+/// only game. Otherwise each folder holding a launchable (an exe dir) is
+/// walked up to its game folder: past generic subfolders, never above [root].
+/// Exe dirs nested inside another exe dir belong to that game.
 Future<List<ImportFolder>> scanImportFolder(
-  String root,
+  String rootPath,
   HostPlatform platform,
 ) async {
+  final root = p.normalize(rootPath);
   if (await _holdsLaunchable(root, platform)) {
     return [await _importFolder(root, platform)];
   }
-  final folders = <ImportFolder>[];
-  for (final sub in await _subfolders(root)) {
-    await _collectGames(sub, 1, platform, folders);
-  }
+  final exeDirs = await _launchableFolders(root, 0, platform);
+  final exeDirSet = exeDirs.toSet();
+  final games = <String>{
+    for (final dir in exeDirs)
+      if (!_hasExeDirAbove(dir, exeDirSet, root)) _gameFolder(dir, root),
+  };
+  final folders = <ImportFolder>[
+    for (final game in games) await _importFolder(game, platform),
+  ];
   folders.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
   return folders;
 }
 
-/// Classifies [dir], which sits [level] folders below the picked folder. A
-/// folder that holds a launchable is one game. Otherwise, when every
-/// launchable beneath it sits under one immediate child, it is one game with
-/// its exes beneath. When they sit under two or more children, it is a
-/// collection, and each child is classified the same way.
-Future<void> _collectGames(
-  String dir,
-  int level,
-  HostPlatform platform,
-  List<ImportFolder> out,
-) async {
-  if (level > _maxGameDepth) return;
-  if (await _holdsLaunchable(dir, platform)) {
-    out.add(await _importFolder(dir, platform));
-    return;
+String _gameFolder(String exeDir, String root) {
+  var game = exeDir;
+  while (game != root &&
+      _genericFolderNames.contains(p.basename(game).toLowerCase())) {
+    game = p.dirname(game);
   }
-  final hits = await _launchableFolders(dir, level, platform);
-  if (hits.isEmpty) return;
-  final children = {
-    for (final hit in hits) p.split(p.relative(hit, from: dir)).first,
-  };
-  if (children.length == 1) {
-    out.add(await _importFolder(dir, platform));
-    return;
+  return game;
+}
+
+bool _hasExeDirAbove(String dir, Set<String> exeDirs, String root) {
+  for (
+    var parent = p.dirname(dir);
+    p.isWithin(root, parent);
+    parent = p.dirname(parent)
+  ) {
+    if (exeDirs.contains(parent)) return true;
   }
-  for (final sub in await _subfolders(dir)) {
-    await _collectGames(sub, level + 1, platform, out);
-  }
+  return false;
 }
 
 /// The folders beneath [dir], at most [_maxGameDepth] levels below the picked

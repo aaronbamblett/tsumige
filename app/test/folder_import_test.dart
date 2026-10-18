@@ -75,13 +75,12 @@ void main() {
       expect([for (final e in folder.exes) e.relative], ['Launcher.exe']);
     });
 
-    test('a game at level 3 is found as its level 1 folder', () async {
+    test('a game at level 3 is found by its own folder name', () async {
       _exe(temp.path, 'Gamma/a/b/Deep.exe');
       final folder = (await scanImportFolder(temp.path, _linux)).single;
-      expect(folder.path, p.join(temp.path, 'Gamma'));
-      expect([for (final e in folder.exes) e.relative], [
-        p.join('a', 'b', 'Deep.exe'),
-      ]);
+      expect(folder.name, 'b');
+      expect(folder.path, p.join(temp.path, 'Gamma', 'a', 'b'));
+      expect([for (final e in folder.exes) e.relative], ['Deep.exe']);
     });
 
     test('a game at level 4 is not searched', () async {
@@ -148,8 +147,38 @@ void main() {
       },
     );
 
-    test('a folder whose games all sit under one child is one game', () async {
+    test('a generic bin folder names its game by the folder above', () async {
       _exe(temp.path, 'Game/bin/Game.exe');
+      final folders = await scanImportFolder(temp.path, _linux);
+      expect([for (final f in folders) f.name], ['Game']);
+    });
+
+    test('picking the game folder itself with a bin exe gives that folder', () async {
+      _exe(temp.path, 'Game/bin/Game.exe');
+      final folders = await scanImportFolder(p.join(temp.path, 'Game'), _linux);
+      expect(folders.single.name, 'Game');
+      expect(folders.single.path, p.join(temp.path, 'Game'));
+    });
+
+    test('two exe dirs under one game folder are one game', () async {
+      _exe(temp.path, 'Game/bin/Game.exe', size: 10);
+      _exe(temp.path, 'Game/x64/Game64.exe', size: 20);
+      final folders = await scanImportFolder(temp.path, _linux);
+      expect([for (final f in folders) f.name], ['Game']);
+      expect(
+        [for (final e in folders.single.exes) e.relative]..sort(),
+        [p.join('bin', 'Game.exe'), p.join('x64', 'Game64.exe')],
+      );
+    });
+
+    test('a lone game folder holding one exe is named by that folder', () async {
+      _exe(temp.path, 'OnlyGame/OnlyGame.exe');
+      final folders = await scanImportFolder(temp.path, _linux);
+      expect([for (final f in folders) f.name], ['OnlyGame']);
+    });
+
+    test('a studio folder is not a game when its child is', () async {
+      _exe(temp.path, 'Studio/Game/Game.exe');
       final folders = await scanImportFolder(temp.path, _linux);
       expect([for (final f in folders) f.name], ['Game']);
     });
