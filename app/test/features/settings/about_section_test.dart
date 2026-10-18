@@ -7,7 +7,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tsumige/src/features/settings/presentation/sections/about_section.dart';
+import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 import 'package:tsumige/src/utils/theme/brand.dart';
 
 void main() {
@@ -15,9 +17,13 @@ void main() {
     tester,
   ) async {
     final opened = <Uri>[];
+    SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          sharedPreferencesProvider.overrideWithValue(
+            await SharedPreferences.getInstance(),
+          ),
           githubUrlOpenerProvider.overrideWithValue((uri) async {
             opened.add(uri);
             return true;

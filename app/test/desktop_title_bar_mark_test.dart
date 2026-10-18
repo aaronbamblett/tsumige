@@ -7,9 +7,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tsumige/src/constants/app_theme.dart';
+import 'package:tsumige/src/features/settings/presentation/appearance/widgets/app_theme_selector/app_theme_providers.dart';
+import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 import 'package:tsumige/src/utils/theme/app_theme_builder.dart';
 import 'package:tsumige/src/widgets/desktop/desktop_title_bar.dart';
+import 'package:tsumige/src/widgets/tsumige_logo.dart';
+
+class _Theme extends AppThemeKey {
+  _Theme(this.value);
+
+  final AppTheme value;
+
+  @override
+  AppTheme? build() => value;
+}
 
 void main() {
   setUp(() {
@@ -29,34 +43,37 @@ void main() {
     WidgetTester tester,
     AppTheme appTheme,
     Brightness brightness,
-  ) {
+  ) async {
+    SharedPreferences.setMockInitialValues({});
     return tester.pumpWidget(
-      MaterialApp(
-        theme: buildAppTheme(
-          theme: appTheme,
-          brightness: brightness,
-          customSeed: Colors.blue,
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(
+            await SharedPreferences.getInstance(),
+          ),
+          appThemeKeyProvider.overrideWith(() => _Theme(appTheme)),
+        ],
+        child: MaterialApp(
+          theme: buildAppTheme(
+            theme: appTheme,
+            brightness: brightness,
+            customSeed: Colors.blue,
+          ),
+          home: const Scaffold(body: DesktopTitleBar()),
         ),
-        home: const Scaffold(body: DesktopTitleBar()),
       ),
     );
   }
 
   for (final appTheme in [AppTheme.royal, AppTheme.plum]) {
     for (final brightness in [Brightness.dark, Brightness.light]) {
-      final asset = brightness == Brightness.dark
-          ? 'assets/icon/tsumige_mark.png'
-          : 'assets/icon/tsumige_mark_on_light.png';
       testWidgets(
-        'title bar shows the $asset mark in full colour under ${appTheme.name} ${brightness.name}',
+        'title bar shows the Tsumige logo at 18 under ${appTheme.name} ${brightness.name}',
         (tester) async {
           await pumpBar(tester, appTheme, brightness);
 
-          expect(find.byType(ImageIcon), findsNothing);
-          final image = tester.widget<Image>(find.byType(Image));
-          expect((image.image as AssetImage).assetName, asset);
-          expect(image.height, 18);
-          expect(image.color, isNull);
+          expect(find.byType(TsumigeLogo), findsOneWidget);
+          expect(tester.getSize(find.byType(TsumigeLogo)), const Size(18, 18));
         },
       );
     }
