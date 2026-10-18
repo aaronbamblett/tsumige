@@ -96,10 +96,9 @@ const _maxGameDepth = 3;
 Future<ImportFolder> scanGameFolder(String path, HostPlatform platform) =>
     _importFolder(path, platform);
 
-/// The game folders under [root]. A folder that directly holds a launchable
-/// is a game and its subfolders are not searched. When [root] itself holds
-/// one, it is the only game. Folders with no launchable within
-/// [_maxGameDepth] levels are never listed.
+/// The game folders under [root]. When [root] itself holds a launchable it is
+/// the only game. Otherwise each subfolder is classified by [_collectGames].
+/// Folders with no launchable within [_maxGameDepth] levels are never listed.
 Future<List<ImportFolder>> scanImportFolder(
   String root,
   HostPlatform platform,
@@ -108,24 +107,63 @@ Future<List<ImportFolder>> scanImportFolder(
     return [await _importFolder(root, platform)];
   }
   final folders = <ImportFolder>[];
-  await _collectGames(root, 1, platform, folders);
+  for (final sub in await _subfolders(root)) {
+    await _collectGames(sub, 1, platform, folders);
+  }
   folders.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
   return folders;
 }
 
+/// Classifies [dir], which sits [level] folders below the picked folder. A
+/// folder that holds a launchable is one game. Otherwise, when every
+/// launchable beneath it sits under one immediate child, it is one game with
+/// its exes beneath. When they sit under two or more children, it is a
+/// collection, and each child is classified the same way.
 Future<void> _collectGames(
   String dir,
-  int depth,
+  int level,
   HostPlatform platform,
   List<ImportFolder> out,
 ) async {
-  for (final sub in await _subfolders(dir)) {
-    if (await _holdsLaunchable(sub, platform)) {
-      out.add(await _importFolder(sub, platform));
-    } else if (depth < _maxGameDepth) {
-      await _collectGames(sub, depth + 1, platform, out);
-    }
+  if (level > _maxGameDepth) return;
+  if (await _holdsLaunchable(dir, platform)) {
+    out.add(await _importFolder(dir, platform));
+    return;
   }
+  final hits = await _launchableFolders(dir, level, platform);
+  if (hits.isEmpty) return;
+  final children = {
+    for (final hit in hits) p.split(p.relative(hit, from: dir)).first,
+  };
+  if (children.length == 1) {
+    out.add(await _importFolder(dir, platform));
+    return;
+  }
+  for (final sub in await _subfolders(dir)) {
+    await _collectGames(sub, level + 1, platform, out);
+  }
+}
+
+/// The folders beneath [dir], at most [_maxGameDepth] levels below the picked
+/// folder, that directly hold a launchable.
+Future<List<String>> _launchableFolders(
+  String dir,
+  int level,
+  HostPlatform platform,
+) async {
+  final found = <String>[];
+  var frontier = [dir];
+  for (var depth = level; depth < _maxGameDepth; depth++) {
+    final next = <String>[];
+    for (final folder in frontier) {
+      for (final sub in await _subfolders(folder)) {
+        if (await _holdsLaunchable(sub, platform)) found.add(sub);
+        next.add(sub);
+      }
+    }
+    frontier = next;
+  }
+  return found;
 }
 
 Future<List<String>> _subfolders(String dir) async {

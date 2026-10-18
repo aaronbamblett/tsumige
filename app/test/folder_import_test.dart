@@ -75,11 +75,13 @@ void main() {
       expect([for (final e in folder.exes) e.relative], ['Launcher.exe']);
     });
 
-    test('a game at level 3 is found', () async {
+    test('a game at level 3 is found as its level 1 folder', () async {
       _exe(temp.path, 'Gamma/a/b/Deep.exe');
       final folder = (await scanImportFolder(temp.path, _linux)).single;
-      expect(folder.path, p.join(temp.path, 'Gamma', 'a', 'b'));
-      expect([for (final e in folder.exes) e.relative], ['Deep.exe']);
+      expect(folder.path, p.join(temp.path, 'Gamma'));
+      expect([for (final e in folder.exes) e.relative], [
+        p.join('a', 'b', 'Deep.exe'),
+      ]);
     });
 
     test('a game at level 4 is not searched', () async {
@@ -146,10 +148,36 @@ void main() {
       },
     );
 
-    test('a game nested in a studio folder within depth is found', () async {
-      _exe(temp.path, 'Studio/Game/Game.exe');
+    test('a folder whose games all sit under one child is one game', () async {
+      _exe(temp.path, 'Game/bin/Game.exe');
       final folders = await scanImportFolder(temp.path, _linux);
       expect([for (final f in folders) f.name], ['Game']);
+    });
+
+    test('a bin subfolder with a junk tools exe is still one game', () async {
+      _exe(temp.path, 'Game/bin/game.exe');
+      _exe(temp.path, 'Game/tools/config.exe');
+      final folders = await scanImportFolder(temp.path, _linux);
+      expect([for (final f in folders) f.name], ['Game']);
+      expect([for (final e in folders.single.exes) e.relative], [
+        p.join('bin', 'game.exe'),
+      ]);
+    });
+
+    test('a game folder with movie, savedata and system is one game', () async {
+      _exe(temp.path, 'Game/Game.exe');
+      _exe(temp.path, 'Game/movie/intro.exe');
+      _exe(temp.path, 'Game/savedata/save.exe');
+      _exe(temp.path, 'Game/system/system.exe');
+      final folders = await scanImportFolder(temp.path, _linux);
+      expect([for (final f in folders) f.name], ['Game']);
+    });
+
+    test('games in two child folders of a studio are two games', () async {
+      _exe(temp.path, 'Studio/GameA/a.exe');
+      _exe(temp.path, 'Studio/GameB/b.exe');
+      final folders = await scanImportFolder(temp.path, _linux);
+      expect([for (final f in folders) f.name], ['GameA', 'GameB']);
     });
 
     test('a game deeper than depth 3 is not found', () async {
