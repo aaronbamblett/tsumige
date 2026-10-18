@@ -458,11 +458,28 @@ double similarity(String folder, String title) {
   if (a.isNotEmpty && b.isNotEmpty) {
     if ((' $b ').contains(' $a ') || (' $a ').contains(' $b ')) {
       ratio = math.max(ratio, _containmentScore(a, b));
-    } else if (sa.isNotEmpty && sa.length < sb.length && sb.startsWith(sa)) {
+    } else if (sa.isNotEmpty &&
+        sa.length < sb.length &&
+        sb.startsWith(sa) &&
+        _endsAtWordBoundary(b, sa.length)) {
       ratio = math.max(ratio, _containmentScore(sa, sb));
     }
   }
   return ratio;
+}
+
+/// Whether the first [length] non-space characters of [spaced] end a word,
+/// so that `GameB` does not count as the start of `GameBook`.
+bool _endsAtWordBoundary(String spaced, int length) {
+  var seen = 0;
+  for (var i = 0; i < spaced.length; i++) {
+    if (spaced[i] == ' ') continue;
+    seen++;
+    if (seen == length) {
+      return i + 1 == spaced.length || spaced[i + 1] == ' ';
+    }
+  }
+  return false;
 }
 
 double _containmentScore(String x, String y) {

@@ -344,6 +344,32 @@ void main() {
     });
   });
 
+  group('word boundaries', () {
+    test('a folder that starts mid-word in a longer title is not matched', () {
+      final results = [
+        VnSearchResult(
+          id: 'v1',
+          title: 'GameBook DS Aquarian Age Perpetual Period',
+        ),
+      ];
+      final match = matchFolder('GameB', results);
+      expect(match.state, isNot(ImportMatchState.matched));
+      expect(match.state, ImportMatchState.none);
+    });
+
+    test('a folder that is the words at the start of a title still matches', () {
+      final results = [
+        VnSearchResult(
+          id: 'v1',
+          title: "Café Stella and the Reaper's Butterflies",
+        ),
+      ];
+      final match = matchFolder('CafeStella', results);
+      expect(match.state, ImportMatchState.matched);
+      expect(match.vn!.id, 'v1');
+    });
+  });
+
   group('aliases', () {
     test('an alias equal to the folder name is a match', () {
       final results = [

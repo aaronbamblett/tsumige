@@ -29,6 +29,7 @@ import 'package:tsumige/src/features/library/domain/game_editor.dart';
 import 'package:tsumige/src/features/library/presentation/add_game/add_game_dialog.dart';
 import 'package:tsumige/src/features/library/presentation/add_game/import_folder_dialog.dart';
 import 'package:tsumige/src/utils/platform/platform_runtime.dart';
+import 'package:tsumige/src/features/settings/presentation/sections/settings_widgets.dart';
 import 'package:tsumige/src/utils/theme/brand.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 
@@ -329,7 +330,12 @@ void main() {
       expect(find.text('Matched'), findsNothing);
       expect(find.text('Check match'), findsNothing);
       expect(find.text('Pick the game file'), findsNothing);
-      expect(find.text(p.join(h.root, 'DEMO', 'DEMO.exe')), findsOneWidget);
+      expect(
+        tester
+            .widget<MiddleEllipsisText>(find.byType(MiddleEllipsisText).first)
+            .text,
+        p.join(h.root, 'DEMO', 'DEMO.exe'),
+      );
       expect(_checked(tester, 0), isTrue);
       expect(_checked(tester, 1), isFalse);
       expect(_checked(tester, 3), isTrue);
@@ -622,6 +628,58 @@ void main() {
     gate.complete();
     await _settle(tester);
     await tester.pump(const Duration(seconds: 10));
+  });
+
+  testWidgets('the footer is one row of six controls at both sizes', (
+    tester,
+  ) async {
+    for (final surface in [const Size(1400, 980), const Size(1000, 640)]) {
+      await _openAndMatch(tester, surface: surface);
+      final keys = [
+        'import-browse',
+        'import-scan',
+        'import-add',
+        'import-cancel',
+      ];
+      final ys = [
+        for (final key in keys) tester.getCenter(find.byKey(Key(key))).dy,
+        tester.getCenter(find.byKey(const Key('import-hide-imported'))).dy,
+        tester
+            .getCenter(
+              find.descendant(
+                of: find.byKey(const Key('import-hide-imported')),
+                matching: find.byType(Checkbox),
+              ),
+            )
+            .dy,
+      ];
+      for (final dy in ys) {
+        expect(dy, closeTo(ys.first, 1), reason: '$surface');
+      }
+      expect(tester.takeException(), isNull, reason: '$surface');
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    }
+  });
+
+  testWidgets('an unmatched cover is an empty box with no icon', (
+    tester,
+  ) async {
+    await _openAndMatch(tester);
+    expect(find.byIcon(Icons.search_rounded), findsNothing);
+  });
+
+  testWidgets('the path column shows the start and the file name', (
+    tester,
+  ) async {
+    await _openAndMatch(tester);
+    expect(find.byType(MiddleEllipsisText), findsWidgets);
+    expect(
+      tester
+          .widget<MiddleEllipsisText>(find.byType(MiddleEllipsisText).first)
+          .text,
+      endsWith('DEMO.exe'),
+    );
   });
 
   testWidgets('the list is empty until a folder is chosen', (tester) async {
