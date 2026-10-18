@@ -9,7 +9,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tsumige/src/widgets/clamped_wrap.dart';
 
 RenderClampedWrap _renderOf(WidgetTester tester) =>
-    tester.renderObject<RenderClampedWrap>(find.byType(ClampedWrap));
+    tester.renderObject<RenderClampedWrap>(find.descendant(
+      of: find.byType(ClampedWrap),
+      matching: find.byElementPredicate((e) =>
+          e is RenderObjectElement && e.renderObject is RenderClampedWrap),
+    ));
 
 Future<void> _pumpWrap(WidgetTester tester, ClampedWrap wrap) async {
   await tester.pumpWidget(
@@ -129,7 +133,36 @@ void main() {
     final render = _renderOf(tester);
     expect(render.visibleLeadingCount, 10);
     expect(render.overflowed, isFalse);
-    expect(overflows, isEmpty);
+    expect(overflows, [false]);
     expect(render.size.height, 24 * 4 + 8 * 3);
+  });
+
+  testWidgets('hidden children are excluded from focus', (tester) async {
+    await _pumpWrap(
+      tester,
+      ClampedWrap(
+        spacing: 6,
+        runSpacing: 8,
+        maxRows: 1,
+        trailing: const SizedBox(
+          key: ValueKey('trailing'),
+          width: 60,
+          height: 24,
+        ),
+        children: [for (var i = 0; i < 10; i++) _box(i)],
+      ),
+    );
+    expect(_renderOf(tester).visibleLeadingCount, 2);
+    final gates = tester
+        .widgetList<ExcludeFocus>(find.descendant(
+          of: find.byType(ClampedWrap),
+          matching: find.byType(ExcludeFocus, skipOffstage: false),
+          skipOffstage: false,
+        ))
+        .toList();
+    expect(gates, hasLength(10));
+    for (var i = 0; i < gates.length; i++) {
+      expect(gates[i].excluding, i >= 2, reason: 'child $i');
+    }
   });
 }

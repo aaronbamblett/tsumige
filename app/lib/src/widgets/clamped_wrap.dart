@@ -19,33 +19,92 @@ import 'package:flutter/widgets.dart';
 /// as needed. The height sizes to the shown rows only. A null [maxRows] lays
 /// out everything, like a normal [Wrap].
 ///
+/// Leading children past the fold are also kept out of keyboard focus: each
+/// one sits inside an [ExcludeFocus] whose flag follows the measured fold.
+/// Shown children and [trailing] stay focusable.
+///
 /// [onOverflowChanged] reports whether any leading child was dropped. It runs
-/// in a post-frame callback, and only when the value changes.
-class ClampedWrap extends MultiChildRenderObjectWidget {
-  ClampedWrap({
+/// in a post-frame callback: after the first layout, after any [maxRows]
+/// change, and whenever the value changes.
+class ClampedWrap extends StatefulWidget {
+  const ClampedWrap({
     super.key,
     this.spacing = 0.0,
     this.runSpacing = 0.0,
     this.maxRows,
     this.crossAxisAlignment = WrapCrossAlignment.start,
     this.onOverflowChanged,
-    List<Widget> children = const <Widget>[],
-    Widget? trailing,
-  })  : _trailing = trailing,
-        super(
-            children: trailing == null
-                ? children
-                : <Widget>[...children, trailing]);
+    this.children = const <Widget>[],
+    this.trailing,
+  });
 
   final double spacing;
   final double runSpacing;
   final int? maxRows;
   final WrapCrossAlignment crossAxisAlignment;
   final ValueChanged<bool>? onOverflowChanged;
-  final Widget? _trailing;
+  final List<Widget> children;
+  final Widget? trailing;
 
-  int get _leadingCount =>
-      children.length - (_trailing == null ? 0 : 1);
+  @override
+  State<ClampedWrap> createState() => _ClampedWrapState();
+}
+
+class _ClampedWrapState extends State<ClampedWrap> {
+  int? _visibleLeading;
+
+  void _onVisibleCountChanged(int count) {
+    if (!mounted || _visibleLeading == count) return;
+    setState(() => _visibleLeading = count);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = _visibleLeading;
+    return _ClampedWrapBody(
+      spacing: widget.spacing,
+      runSpacing: widget.runSpacing,
+      maxRows: widget.maxRows,
+      crossAxisAlignment: widget.crossAxisAlignment,
+      textDirection: Directionality.maybeOf(context) ?? TextDirection.ltr,
+      leadingCount: widget.children.length,
+      onOverflowChanged: widget.onOverflowChanged,
+      onVisibleCountChanged: _onVisibleCountChanged,
+      children: [
+        for (var i = 0; i < widget.children.length; i++)
+          ExcludeFocus(
+            excluding: visible == null || i >= visible,
+            child: widget.children[i],
+          ),
+        if (widget.trailing != null) widget.trailing!,
+      ],
+    );
+  }
+}
+
+/// The [MultiChildRenderObjectWidget] behind [ClampedWrap]. Not part of the
+/// public API; tests reach the [RenderClampedWrap] through it.
+class _ClampedWrapBody extends MultiChildRenderObjectWidget {
+  const _ClampedWrapBody({
+    this.spacing = 0.0,
+    this.runSpacing = 0.0,
+    this.maxRows,
+    this.crossAxisAlignment = WrapCrossAlignment.start,
+    this.textDirection = TextDirection.ltr,
+    this.leadingCount = 0,
+    this.onOverflowChanged,
+    this.onVisibleCountChanged,
+    super.children = const <Widget>[],
+  });
+
+  final double spacing;
+  final double runSpacing;
+  final int? maxRows;
+  final WrapCrossAlignment crossAxisAlignment;
+  final TextDirection textDirection;
+  final int leadingCount;
+  final ValueChanged<bool>? onOverflowChanged;
+  final ValueChanged<int>? onVisibleCountChanged;
 
   @override
   MultiChildRenderObjectElement createElement() => _ClampedWrapElement(this);
@@ -57,9 +116,10 @@ class ClampedWrap extends MultiChildRenderObjectWidget {
       runSpacing: runSpacing,
       maxRows: maxRows,
       crossAxisAlignment: crossAxisAlignment,
-      textDirection: Directionality.maybeOf(context) ?? TextDirection.ltr,
-      leadingCount: _leadingCount,
+      textDirection: textDirection,
+      leadingCount: leadingCount,
       onOverflowChanged: onOverflowChanged,
+      onVisibleCountChanged: onVisibleCountChanged,
     );
   }
 
@@ -70,16 +130,17 @@ class ClampedWrap extends MultiChildRenderObjectWidget {
       ..runSpacing = runSpacing
       ..maxRows = maxRows
       ..crossAxisAlignment = crossAxisAlignment
-      ..textDirection = Directionality.maybeOf(context) ?? TextDirection.ltr
-      ..leadingCount = _leadingCount
-      ..onOverflowChanged = onOverflowChanged;
+      ..textDirection = textDirection
+      ..leadingCount = leadingCount
+      ..onOverflowChanged = onOverflowChanged
+      ..onVisibleCountChanged = onVisibleCountChanged;
   }
 }
 
-/// Element for [ClampedWrap]. Hidden children are offstage: default test
+/// Element for [_ClampedWrapBody]. Hidden children are offstage: default test
 /// finders and the inspector skip them, like [IndexedStack] does.
 class _ClampedWrapElement extends MultiChildRenderObjectElement {
-  _ClampedWrapElement(ClampedWrap super.widget);
+  _ClampedWrapElement(_ClampedWrapBody super.widget);
 
   @override
   void debugVisitOnstageChildren(ElementVisitor visitor) {
@@ -110,6 +171,7 @@ class RenderClampedWrap extends RenderBox
     TextDirection textDirection = TextDirection.ltr,
     int leadingCount = 0,
     this.onOverflowChanged,
+    this.onVisibleCountChanged,
   }) {
     assert(maxRows == null || maxRows > 0);
     _spacing = spacing;
@@ -170,6 +232,7 @@ class RenderClampedWrap extends RenderBox
   }
 
   ValueChanged<bool>? onOverflowChanged;
+  ValueChanged<int>? onVisibleCountChanged;
 
   /// Leading children currently painted and hit-tested.
   int get visibleLeadingCount => _visibleLeading;
@@ -179,6 +242,8 @@ class RenderClampedWrap extends RenderBox
   bool get overflowed => _overflow;
   bool _overflow = false;
   bool _notified = false;
+  int _notifiedVisible = -1;
+  bool _hasNotified = false;
   bool _notifyScheduled = false;
 
   @override
@@ -309,18 +374,26 @@ class RenderClampedWrap extends RenderBox
       }
     }
 
-    size = Size(
-      constraints.hasBoundedWidth ? constraints.maxWidth : widest,
-      y,
+    size = constraints.constrain(
+      Size(
+        constraints.hasBoundedWidth ? constraints.maxWidth : widest,
+        y,
+      ),
     );
 
-    if (_overflow != _notified && !_notifyScheduled) {
+    if (!_notifyScheduled &&
+        (!_hasNotified ||
+            _overflow != _notified ||
+            _visibleLeading != _notifiedVisible)) {
       _notifyScheduled = true;
       SchedulerBinding.instance.addPostFrameCallback((_) {
         _notifyScheduled = false;
-        if (!attached || _notified == _overflow) return;
+        if (!attached) return;
+        _hasNotified = true;
         _notified = _overflow;
+        _notifiedVisible = _visibleLeading;
         onOverflowChanged?.call(_overflow);
+        onVisibleCountChanged?.call(_visibleLeading);
       });
     }
   }

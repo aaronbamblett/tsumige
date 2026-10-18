@@ -514,6 +514,127 @@ void main() {
     expect(paneText(tester, 'Show all 20'), findsNothing);
   });
 
+  testWidgets('folded tag chips stay out of keyboard focus', (tester) async {
+    final games = [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        tags: [
+          for (var i = 0; i < 20; i++) 'Extremely long tag number $i',
+        ],
+      ),
+    ];
+    await pumpLibrary(tester, games);
+    await openPane(tester, 'Alpha');
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Show all 20'), findsOneWidget);
+
+    RenderClampedWrap tagsWrap() => tester.renderObject<RenderClampedWrap>(
+          find.descendant(
+            of: find.byType(GameDetailPane),
+            matching: find.byElementPredicate((e) =>
+                e is RenderObjectElement && e.renderObject is RenderClampedWrap),
+          ),
+        );
+
+    Set<String> hiddenTooltips() => {
+          for (var i = tagsWrap().visibleLeadingCount;
+              i < games.single.tags.length;
+              i++)
+            'Remove ${games.single.tags[i]}',
+        };
+
+    bool focusInside(Set<String> tooltips) {
+      final context = FocusManager.instance.primaryFocus?.context;
+      if (context == null) return false;
+      var found = false;
+      (context as Element).visitAncestorElements((el) {
+        final widget = el.widget;
+        if (widget is Tooltip &&
+            widget.message != null &&
+            tooltips.contains(widget.message)) {
+          found = true;
+        }
+        return true;
+      });
+      return found;
+    }
+
+    var sawChip = false;
+    for (var i = 0; i < 60; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(focusInside(hiddenTooltips()), isFalse,
+          reason: 'tab $i landed inside a hidden chip');
+      if (focusInside(
+          {for (final tag in games.single.tags) 'Remove $tag'})) {
+        sawChip = true;
+      }
+    }
+    expect(sawChip, isTrue);
+
+    bool focusInTagsFold() {
+      final context = FocusManager.instance.primaryFocus?.context;
+      if (context == null) return false;
+      var found = false;
+      (context as Element).visitAncestorElements((el) {
+        if (el.widget is ClampedWrap) found = true;
+        return true;
+      });
+      return found;
+    }
+
+    Future<void> resettle() async {
+      if (find.byKey(const Key('settings-close')).evaluate().isNotEmpty) {
+        await tester.tap(find.byKey(const Key('settings-close')));
+        await tester.pumpAndSettle();
+      }
+      if (find.text('Delete game…').evaluate().isNotEmpty) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+      }
+      if (find.byType(GameDetailPane).evaluate().isEmpty) {
+        await openPane(tester, 'Alpha');
+        await tester.pumpAndSettle();
+      } else if (paneText(tester, 'Tags').evaluate().isEmpty) {
+        await tester.tap(tabLabel('Info'));
+        await tester.pumpAndSettle();
+      } else if (paneText(tester, 'Show fewer').evaluate().isNotEmpty) {
+        await tester.tap(paneText(tester, 'Show fewer'));
+        await tester.pumpAndSettle();
+      }
+    }
+
+    Set<String> hiddenFor(List<String> tags) => {
+          for (var i = tagsWrap().visibleLeadingCount; i < tags.length; i++)
+            'Remove ${tags[i]}',
+        };
+
+    var sawFoldEnter = false;
+    for (var i = 0; i < 60; i++) {
+      await resettle();
+      final before = [...games.single.tags];
+      final hiddenBefore = hiddenFor(before);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(focusInside(hiddenFor(games.single.tags)), isFalse,
+          reason: 'tab $i landed inside a hidden chip');
+      // Enter only inside the fold: the hazard is a focused chip remove,
+      // and blind Enter elsewhere drives unrelated dialogs (add game, …).
+      if (focusInTagsFold()) {
+        sawFoldEnter = true;
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.pump();
+      }
+      final removed = before.toSet().difference(games.single.tags.toSet());
+      expect(removed.difference(before.toSet().difference(hiddenBefore)),
+          isEmpty,
+          reason: 'enter $i removed a hidden tag');
+    }
+    expect(sawFoldEnter, isTrue);
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('two short tags show no fold action', (tester) async {
     await pumpLibrary(tester, [
       core.Game(id: 'g1', title: 'Alpha', tags: ['Cozy', 'Short']),
@@ -556,7 +677,8 @@ void main() {
     final wrap = tester.renderObject<RenderClampedWrap>(
       find.ancestor(
         of: paneText(tester, 'VNDB tag 0'),
-        matching: find.byType(ClampedWrap),
+        matching: find.byElementPredicate((e) =>
+            e is RenderObjectElement && e.renderObject is RenderClampedWrap),
       ),
     );
     expect(wrap.overflowed, isTrue);
