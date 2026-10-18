@@ -179,7 +179,7 @@ void main() {
       isNotNull,
     );
     expect(find.byKey(const Key('launch-mode-unavailable')), findsNothing);
-    expect(find.text('Executable'), findsOneWidget);
+    expect(find.text('Game file'), findsOneWidget);
     expect(find.text('Proton version'), findsNothing);
   });
 
@@ -212,7 +212,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('mode-native')));
     await tester.pumpAndSettle();
-    expect(find.text('Executable'), findsOneWidget);
+    expect(find.text('Game file'), findsOneWidget);
     expect(find.text('Proton version'), findsNothing);
     expect(find.text('Wine build'), findsNothing);
     expect(find.text('Prefix'), findsNothing);
@@ -221,7 +221,7 @@ void main() {
     await tester.tap(find.byKey(const Key('mode-steam')));
     await tester.pumpAndSettle();
     expect(find.text('Steam app id'), findsOneWidget);
-    expect(find.text('Executable'), findsNothing);
+    expect(find.text('Game file'), findsNothing);
     expect(find.text('Arguments'), findsNothing);
 
     await tester.tap(find.byKey(const Key('mode-wine')));
@@ -391,7 +391,7 @@ void main() {
     await tester.tap(find.byKey(const Key('mode-native')));
     await tester.pumpAndSettle();
     expect(repo.games.first.launch.mode, core.LaunchMode.native);
-    expect(find.text('Executable'), findsOneWidget);
+    expect(find.text('Game file'), findsOneWidget);
     expect(find.text('Proton version'), findsNothing);
     expect(find.text('Wine build'), findsNothing);
   });

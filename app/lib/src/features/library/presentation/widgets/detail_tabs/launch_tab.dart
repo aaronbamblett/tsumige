@@ -493,7 +493,7 @@ class _ExecutableField extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        launchFieldLabel(context, 'Executable', false),
+        launchFieldLabel(context, 'Game file', false),
         const SizedBox(height: 6),
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,

@@ -181,6 +181,17 @@ void main() {
     });
   });
 
+  group('cleanFolderName', () {
+    test('strips bracketed tags, versions and punctuation', () {
+      expect(cleanFolderName('Game [1.02]'), 'Game');
+      expect(cleanFolderName('Game_v1.02'), 'Game');
+      expect(cleanFolderName('Game 2.0 Final'), 'Game Final');
+      expect(cleanFolderName('a(t)rium'), 'atrium');
+      expect(cleanFolderName('Rena-sensei to Pool'), 'Rena sensei to Pool');
+      expect(cleanFolderName('CafeStella'), 'CafeStella');
+    });
+  });
+
   group('sequenceRatio', () {
     // Expected values from Python's difflib.SequenceMatcher(None, a, b).ratio().
     const pairs = <(String, String, double)>[

@@ -41,6 +41,7 @@ class Game {
   String notes;
   List<String> tags;
   bool favourite;
+  bool needsReview;
   DateTime addedAt;
   String? vndbId;
   String? released;
@@ -72,6 +73,7 @@ class Game {
     this.notes = '',
     List<String>? tags,
     this.favourite = false,
+    this.needsReview = false,
     DateTime? addedAt,
     this.vndbId,
     this.released,
@@ -110,6 +112,7 @@ class Game {
         notes: readString(m, 'notes'),
         tags: readStringList(m, 'tags'),
         favourite: readBool(m, 'favourite'),
+        needsReview: readBool(m, 'needs_review'),
         addedAt: readDateOrNull(m, 'added_at'),
         vndbId: readStringOrNull(m, 'vndb_id'),
         released: readStringOrNull(m, 'released'),
@@ -145,6 +148,7 @@ class Game {
         'notes': notes,
         'tags': tags,
         'favourite': favourite,
+        'needs_review': needsReview,
         'added_at': addedAt.toUtc().toIso8601String(),
         'vndb_id': vndbId,
         'released': released,

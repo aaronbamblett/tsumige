@@ -544,7 +544,7 @@ void main() {
     ]);
     await openPane(tester, 'Alpha');
     await openTab(tester, 'Launch');
-    expect(find.text('Executable'), findsOneWidget);
+    expect(find.text('Game file'), findsOneWidget);
     final exeField = find.descendant(
       of: find.byKey(const Key('launch-executable')),
       matching: find.byType(TextField),

@@ -91,6 +91,11 @@ final _excludedNames = [
 /// games. Direct subfolders are level 1.
 const _maxGameDepth = 3;
 
+/// The game in [path] as a single folder: its launch candidates and the
+/// junk that was skipped.
+Future<ImportFolder> scanGameFolder(String path, HostPlatform platform) =>
+    _importFolder(path, platform);
+
 /// The game folders under [root]. A folder that directly holds a launchable
 /// is a game and its subfolders are not searched. When [root] itself holds
 /// one, it is the only game. Folders with no launchable within
@@ -488,6 +493,22 @@ FolderMatch matchFolder(String folder, List<VnSearchResult> results) {
   }
   if (top.score >= 0.65) return FolderMatch(ImportMatchState.check, top.vn);
   return const FolderMatch(ImportMatchState.none, null);
+}
+
+/// The folder name as a VNDB search: bracketed tags, a version number and
+/// punctuation removed, and hyphens and underscores read as spaces.
+String cleanFolderName(String folder) {
+  final unbracketed = folder.replaceAll(RegExp(r'\[[^\]]*\]'), ' ');
+  final spaced = unbracketed.replaceAll(RegExp(r'[_-]'), ' ');
+  final unversioned = spaced.replaceAll(
+    RegExp(r'\b(ver\.?\s*)?v?\d+(\.\d+)+[a-z]?\b', caseSensitive: false),
+    ' ',
+  );
+  final unpunctuated = unversioned.replaceAll(
+    RegExp(r'[^\p{L}\p{N}\s]', unicode: true),
+    '',
+  );
+  return unpunctuated.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).join(' ');
 }
 
 /// The folder name with any subtitle or trailing words dropped, for a retry

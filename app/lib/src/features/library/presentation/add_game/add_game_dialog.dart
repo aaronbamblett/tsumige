@@ -9,6 +9,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:path/path.dart' as p;
 
 import '../../../../core/launch/launch_modes.dart';
 import '../../../../core/model.dart';
@@ -19,7 +20,9 @@ import '../../../../utils/toast.dart';
 import '../../../settings/presentation/sections/settings_widgets.dart';
 import '../../data/library_repository.dart';
 import '../../domain/add_game.dart';
+import '../../domain/folder_import.dart';
 import '../../domain/game_editor.dart';
+import '../../domain/launch_detection.dart';
 import '../../domain/runner_detection.dart';
 import '../../domain/selection.dart';
 import '../widgets/dialog_shell.dart';
@@ -37,6 +40,8 @@ Future<void> showAddGameDialog(BuildContext context) {
   );
 }
 
+enum _AddStep { start, match, setup }
+
 class AddGameDialog extends ConsumerStatefulWidget {
   const AddGameDialog({super.key});
 
@@ -45,7 +50,14 @@ class AddGameDialog extends ConsumerStatefulWidget {
 }
 
 class _AddGameDialogState extends ConsumerState<AddGameDialog> {
-  int _step = 0;
+  _AddStep _step = _AddStep.start;
+  _AddStep _setupBack = _AddStep.start;
+  bool _matchReturnsToSetup = false;
+  String? _folder;
+  String _folderName = '';
+  List<ExeFile> _candidates = const [];
+  List<String> _skipped = const [];
+  String? _bestId;
   bool _manual = false;
   late final TextEditingController _query;
   late final TextEditingController _title;
@@ -120,7 +132,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     );
   }
 
-  Future<void> _runSearch(String query) async {
+  Future<void> _runSearch(String query, {bool folderSearch = false}) async {
     if (query.isEmpty) return;
     final token = ++_searchToken;
     final client = ref.read(vndbSearchClientProvider);
@@ -130,7 +142,10 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     });
     List<VnSearchResult> results;
     try {
-      results = rankSearchResults(await client.search(query), query);
+      final found = folderSearch
+          ? await lookupFolder(query, client.search)
+          : await client.search(query);
+      results = rankSearchResults(found, query);
     } catch (e) {
       if (!mounted || token != _searchToken) return;
       setState(() {
@@ -140,35 +155,165 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
       return;
     }
     if (!mounted || token != _searchToken) return;
+    final best = folderSearch ? matchFolder(query, results) : null;
+    final owned = {
+      for (final game in ref.read(libraryProvider).value?.library.games ?? const <Game>[])
+        if (game.vndbId != null) game.vndbId!,
+    };
+    final bestVn = best?.state == ImportMatchState.matched &&
+            !owned.contains(best!.vn?.id)
+        ? best.vn
+        : null;
     setState(() {
       _loading = false;
       _searched = true;
       _results = results;
+      _bestId = bestVn?.id;
+      if (bestVn != null) _picked = bestVn;
     });
   }
 
-  void _pick(VnSearchResult result) {
-    _title.text = result.title;
-    _description.text = result.description;
+  void _pick(VnSearchResult result) => setState(() => _picked = result);
+
+  Future<String?> _pickGameFile() async {
+    final picked = await ref.read(pathPickerProvider)(mode: PathPickMode.file);
+    if (picked == null || picked.isEmpty || !mounted) return null;
+    if (isPortalPath(picked)) {
+      Toast(context).show(portalPathMessage);
+      return null;
+    }
+    return picked;
+  }
+
+  Future<void> _chooseFolder() async {
+    final picked = await ref.read(pathPickerProvider)(
+      mode: PathPickMode.folder,
+    );
+    if (picked == null || picked.isEmpty || !mounted) return;
+    if (isPortalPath(picked)) {
+      Toast(context).show(portalPathMessage);
+      return;
+    }
+    await _enterMatch(picked);
+  }
+
+  Future<void> _chooseGameFile() async {
+    final picked = await _pickGameFile();
+    if (picked == null) return;
+    await _enterMatch(p.dirname(picked), file: picked);
+  }
+
+  Future<void> _enterMatch(String folder, {String? file}) async {
+    final found = await scanGameFolder(folder, ref.read(hostPlatformProvider));
+    if (!mounted) return;
+    final name = p.basename(folder);
+    final query = cleanFolderName(name);
+    _exe.text = file ?? chooseExe(found, const [])?.path ?? '';
     setState(() {
-      _picked = result;
-      _tagList = parseTagsField(result.tags.join(', '));
+      _folder = folder;
+      _folderName = name;
+      _candidates = found.exes;
+      _skipped = found.skipped;
+      _query.text = query;
+      _results = const [];
+      _searched = false;
+      _searchError = null;
+      _picked = null;
+      _bestId = null;
+      _manual = false;
+      _matchReturnsToSetup = false;
+      _formError = null;
+      _step = _AddStep.match;
+    });
+    await _runSearch(query, folderSearch: true);
+  }
+
+  Future<void> _next() async {
+    final picked = _picked;
+    if (picked == null) return;
+    _title.text = picked.title;
+    _description.text = picked.description;
+    setState(() {
+      _tagList = parseTagsField(picked.tags.join(', '));
       _manual = false;
       _formError = null;
-      _step = 1;
+      if (!_matchReturnsToSetup) _setupBack = _AddStep.match;
+      _step = _AddStep.setup;
     });
+    if (!_matchReturnsToSetup) await _detectMode();
   }
 
-  void _startManual() {
-    _title.text = '';
+  void _addWithoutVndb() {
+    if (_matchReturnsToSetup) {
+      setState(() => _step = _AddStep.setup);
+      return;
+    }
+    _title.text = _folderName;
     _description.text = '';
     setState(() {
       _tagList = [];
       _picked = null;
       _manual = true;
       _formError = null;
-      _step = 1;
+      _setupBack = _AddStep.match;
+      _step = _AddStep.setup;
     });
+    _detectMode();
+  }
+
+  void _matchBack() {
+    setState(() {
+      _step = _matchReturnsToSetup ? _AddStep.setup : _AddStep.start;
+    });
+  }
+
+  /// Sets the mode and Steam app id from the game's files, which the user
+  /// can then change in the setup step.
+  Future<void> _detectMode() async {
+    final path = _exe.text.trim().isNotEmpty ? _exe.text.trim() : _folder;
+    if (path == null) return;
+    final detected = await detectLaunchMode(
+      path,
+      ref.read(hostPlatformProvider),
+    );
+    if (!mounted) return;
+    setState(() {
+      _mode = detected.mode;
+      if (detected.steamAppId != null) {
+        _steamAppId.text = '${detected.steamAppId}';
+      }
+    });
+  }
+
+  void _startSteam() {
+    _title.text = '';
+    _description.text = '';
+    _exe.text = '';
+    _steamAppId.text = '';
+    setState(() {
+      _tagList = [];
+      _picked = null;
+      _manual = true;
+      _mode = LaunchMode.steam;
+      _formError = null;
+      _setupBack = _AddStep.start;
+      _step = _AddStep.setup;
+    });
+  }
+
+  void _findOnVndb() {
+    final title = _title.text.trim();
+    _query.text = title;
+    setState(() {
+      _matchReturnsToSetup = true;
+      _picked = null;
+      _bestId = null;
+      _results = const [];
+      _searched = false;
+      _searchError = null;
+      _step = _AddStep.match;
+    });
+    _runSearch(title);
   }
 
   void _addTag(String raw) {
@@ -191,12 +336,8 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
   }
 
   Future<void> _chooseExe() async {
-    final picked = await ref.read(pathPickerProvider)(mode: PathPickMode.file);
-    if (picked == null || picked.isEmpty || !mounted) return;
-    if (isPortalPath(picked)) {
-      Toast(context).show(portalPathMessage);
-      return;
-    }
+    final picked = await _pickGameFile();
+    if (picked == null) return;
     _exe.text = picked;
   }
 
@@ -215,7 +356,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     }
     final exe = _exe.text.trim();
     if (_mode != LaunchMode.steam && exe.isEmpty) {
-      setState(() => _formError = 'Executable is required');
+      setState(() => _formError = 'Pick the game file');
       return;
     }
     if (exe.isNotEmpty && isPortalPath(exe)) {
@@ -282,34 +423,355 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
   }
 
   Widget _shell(BuildContext context) {
-    final searching = _step == 0;
     return DialogShell(
       frameKey: const Key('add-game-frame'),
       autofocus: false,
       size: dialogShellSize(context),
       eyebrow: 'Add game',
-      title: searching ? 'Find on VNDB' : 'Set it up',
+      title: switch (_step) {
+        _AddStep.start => 'Add a game',
+        _AddStep.match => 'Match on VNDB',
+        _AddStep.setup => 'Set it up',
+      },
       onClose: _close,
       closeKey: const Key('add-game-close'),
-      body: searching ? _searchStep(context) : _setupStep(context),
-      footer: searching ? _searchFooter() : _setupFooter(),
+      body: switch (_step) {
+        _AddStep.start => _startStep(context),
+        _AddStep.match => _matchStep(context),
+        _AddStep.setup => _setupStep(context),
+      },
+      footer: switch (_step) {
+        _AddStep.start => _startFooter(),
+        _AddStep.match => _matchFooter(),
+        _AddStep.setup => _setupFooter(),
+      },
     );
   }
 
-  Widget _searchStep(BuildContext context) {
+  Widget _startStep(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            key: const Key('add-game-drop'),
+            height: 220,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: scheme.outlineVariant),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.folder_outlined,
+                  size: 44,
+                  color: scheme.onSurfaceVariant,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Drop a game folder or game file here',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    BrandGlassButton(
+                      key: const Key('add-game-choose-folder'),
+                      height: 40,
+                      expand: false,
+                      onPressed: _chooseFolder,
+                      icon: const Icon(Icons.folder_outlined),
+                      label: const Text('Choose folder…'),
+                    ),
+                    const SizedBox(width: 10),
+                    BrandGlassButton(
+                      key: const Key('add-game-choose-file'),
+                      height: 40,
+                      expand: false,
+                      onPressed: _chooseGameFile,
+                      label: const Text('Choose game file…'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _startCard(
+                  context,
+                  key: const Key('add-game-steam'),
+                  icon: Icons.sports_esports_outlined,
+                  title: 'Add a Steam game',
+                  subtitle: 'By Steam app ID, no folder needed',
+                  onTap: _startSteam,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _startCard(
+                  context,
+                  key: const Key('add-game-import'),
+                  icon: Icons.folder_copy_outlined,
+                  title: 'Import a folder',
+                  subtitle: 'Add every game in a folder',
+                  onTap: _importFolder,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _startCard(
+    BuildContext context, {
+    required Key key,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return InkWell(
+      key: key,
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: scheme.outlineVariant),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 22, color: scheme.onSurfaceVariant),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _startFooter() => Padding(
+    padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+    child: Row(
+      children: [
+        const Spacer(),
+        BrandGlassButton(
+          key: const Key('add-game-cancel'),
+          height: 40,
+          expand: false,
+          onPressed: _close,
+          label: const Text('Cancel'),
+        ),
+      ],
+    ),
+  );
+
+  Widget _matchStep(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final inLibrary = _libraryVndbIds();
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-          child: _searchBox(context),
+        Container(
+          width: 300,
+          decoration: BoxDecoration(
+            border: Border(right: BorderSide(color: scheme.outlineVariant)),
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+            child: _matchFiles(context),
+          ),
         ),
-        if (_loading) const LinearProgressIndicator(),
-        Expanded(child: _resultsBody(context, inLibrary)),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _searchBox(context),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Search by title, or paste a VNDB link or ID (v12345).',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontSize: 13,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_loading) const LinearProgressIndicator(),
+              Expanded(child: _resultsBody(context, inLibrary)),
+            ],
+          ),
+        ),
+        if (_picked != null)
+          Container(
+            width: 260,
+            decoration: BoxDecoration(
+              border: Border(left: BorderSide(color: scheme.outlineVariant)),
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+              child: VnDetailPanel(result: _picked!),
+            ),
+          ),
       ],
     );
   }
+
+  Widget _matchFiles(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      fontSize: 13,
+      color: scheme.onSurfaceVariant,
+    );
+    final folder = _folder ?? '';
+    final exe = _exe.text;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        launchFieldLabel(context, 'Game folder', false),
+        const SizedBox(height: 6),
+        ToolbarBox(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.folder_outlined,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    folder,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(child: launchFieldLabel(context, 'Game file', false)),
+            if (_candidates.length > 1)
+              Text('${_candidates.length} found', style: muted),
+          ],
+        ),
+        const SizedBox(height: 6),
+        SettingsDropdown<String>(
+          key: const Key('add-game-exe-dropdown'),
+          value: exe.isEmpty ? null : exe,
+          hint: const Text('Pick the game file'),
+          items: [
+            for (final candidate in _candidates)
+              DropdownMenuItem(
+                value: candidate.path,
+                child: Text(candidate.relative, overflow: TextOverflow.ellipsis),
+              ),
+            if (exe.isNotEmpty && !_candidates.any((c) => c.path == exe))
+              DropdownMenuItem(
+                value: exe,
+                child: Text(
+                  p.relative(exe, from: folder),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+          onChanged: (value) => setState(() => _exe.text = value ?? ''),
+        ),
+        if (_skipped.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text('Skipped: ${_skipped.join(', ')}', style: muted),
+        ],
+      ],
+    );
+  }
+
+  Widget _matchFooter() => Padding(
+    padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+    child: Row(
+      children: [
+        BrandGlassButton(
+          key: const Key('add-game-back'),
+          height: 40,
+          expand: false,
+          onPressed: _matchBack,
+          label: const Text('Back'),
+        ),
+        const SizedBox(width: 10),
+        BrandGlassButton(
+          key: const Key('add-game-manual'),
+          height: 40,
+          expand: false,
+          onPressed: _addWithoutVndb,
+          label: const Text('Add without VNDB'),
+        ),
+        const Spacer(),
+        BrandGlassButton(
+          key: const Key('add-game-cancel'),
+          height: 40,
+          expand: false,
+          onPressed: _close,
+          label: const Text('Cancel'),
+        ),
+        const SizedBox(width: 10),
+        BrandButton(
+          key: const Key('add-game-next'),
+          height: 40,
+          expand: false,
+          onPressed: _picked == null ? null : _next,
+          label: const Text('Next'),
+        ),
+      ],
+    ),
+  );
 
   Widget _searchBox(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -406,43 +868,13 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
         return VnResultRow(
           result: result,
           owned: owned,
+          selected: _picked?.id == result.id,
+          badge: result.id == _bestId ? 'Best match' : null,
           onPick: owned ? null : () => _pick(result),
         );
       },
     );
   }
-
-  Widget _searchFooter() => Padding(
-    padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-    child: Row(
-      children: [
-        BrandGlassButton(
-          key: const Key('add-game-manual'),
-          height: 40,
-          expand: false,
-          onPressed: _startManual,
-          label: const Text('Add without VNDB'),
-        ),
-        const SizedBox(width: 10),
-        BrandGlassButton(
-          key: const Key('add-game-import'),
-          height: 40,
-          expand: false,
-          onPressed: _importFolder,
-          icon: const Icon(Icons.folder_outlined),
-          label: const Text('Import a folder…'),
-        ),
-        const Spacer(),
-        BrandGlassButton(
-          key: const Key('add-game-cancel'),
-          height: 40,
-          expand: false,
-          onPressed: _close,
-          label: const Text('Cancel'),
-        ),
-      ],
-    ),
-  );
 
   Widget _setupFooter() => Padding(
     padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
@@ -452,7 +884,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
           key: const Key('add-game-back'),
           height: 40,
           expand: false,
-          onPressed: _saving ? null : () => setState(() => _step = 0),
+          onPressed: _saving ? null : () => setState(() => _step = _setupBack),
           label: const Text('Back'),
         ),
         const Spacer(),
@@ -545,27 +977,51 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   controller: _title,
                 ),
                 const SizedBox(height: 14),
-                launchFieldLabel(context, 'Executable', false),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SettingsTextField(
-                        key: const Key('add-game-exe'),
-                        controller: _exe,
-                        hint: "Pick the game's .exe",
+                if (_mode == LaunchMode.steam) ...[
+                  launchFieldLabel(context, 'Steam app ID', false),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SettingsTextBox(
+                          key: const Key('add-game-steam-app-id'),
+                          controller: _steamAppId,
+                          keyboardType: TextInputType.number,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    BrandGlassButton(
-                      key: const Key('add-game-exe-choose'),
-                      height: 40,
-                      expand: false,
-                      onPressed: _chooseExe,
-                      label: const Text('Choose…'),
-                    ),
-                  ],
-                ),
+                      const SizedBox(width: 8),
+                      BrandGlassButton(
+                        key: const Key('add-game-find-vndb'),
+                        height: 40,
+                        expand: false,
+                        onPressed: _findOnVndb,
+                        label: const Text('Find on VNDB'),
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  launchFieldLabel(context, 'Game file', false),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SettingsTextField(
+                          key: const Key('add-game-exe'),
+                          controller: _exe,
+                          hint: 'Pick the game file',
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      BrandGlassButton(
+                        key: const Key('add-game-exe-choose'),
+                        height: 40,
+                        expand: false,
+                        onPressed: _chooseExe,
+                        label: const Text('Choose…'),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 14),
                 launchFieldLabel(context, 'Mode', false),
                 const SizedBox(height: 6),
@@ -574,16 +1030,6 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   mode: _mode,
                   onChanged: (mode) => setState(() => _mode = mode),
                 ),
-                if (_mode == LaunchMode.steam) ...[
-                  const SizedBox(height: 14),
-                  launchFieldLabel(context, 'Steam App ID', false),
-                  const SizedBox(height: 6),
-                  SettingsTextBox(
-                    key: const Key('add-game-steam-app-id'),
-                    controller: _steamAppId,
-                    keyboardType: TextInputType.number,
-                  ),
-                ],
                 const SizedBox(height: 14),
                 launchFieldLabel(context, 'Tags', false),
                 const SizedBox(height: 6),

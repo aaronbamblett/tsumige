@@ -9,37 +9,36 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:path/path.dart' as p;
 
-import '../../../../core/launch/launch_modes.dart';
 import '../../../../core/model.dart';
 import '../../../../core/vndb.dart';
 import '../../../../utils/platform/platform_runtime.dart';
 import '../../../../utils/theme/brand.dart';
 import '../../../../utils/toast.dart';
-import '../../../settings/presentation/sections/settings_widgets.dart';
 import '../../data/library_repository.dart';
 import '../../domain/add_game.dart';
 import '../../domain/folder_import.dart';
 import '../../domain/game_editor.dart';
+import '../../domain/launch_detection.dart';
 import '../../domain/runner_detection.dart';
 import '../widgets/dialog_shell.dart';
 import '../widgets/library_toolbar.dart';
 import 'vn_result_widgets.dart';
 
-/// How the import dialog ended. [back] returns to the Add dialog's search
+/// How the import dialog ended. [back] returns to the Add dialog's start
 /// step; [cancel] and [added] close the Add dialog too.
 enum ImportFolderResult { back, cancel, added }
 
-Future<ImportFolderResult?> showImportFolderDialog(BuildContext context) {
+Future<ImportFolderResult?> showImportFolderDialog(
+  BuildContext context, {
+  List<String> roots = const [],
+}) {
   return showDialog<ImportFolderResult>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.5),
-    builder: (context) => const ImportFolderDialog(),
+    builder: (context) => ImportFolderDialog(roots: roots),
   );
 }
-
-const _chooseExeValue = '\u0000choose';
 
 String _games(int count) => count == 1 ? '1 game' : '$count games';
 
@@ -54,24 +53,24 @@ class _ImportRow {
   ImportMatchState? state;
   VnSearchResult? vn;
   String? error;
-  bool plain = false;
   String? exePath;
-  bool exeFromUser = false;
   bool ticked = false;
   bool tickTouched = false;
 }
 
 class ImportFolderDialog extends ConsumerStatefulWidget {
-  const ImportFolderDialog({super.key});
+  const ImportFolderDialog({super.key, this.roots = const []});
+
+  /// Folders to scan straight away instead of asking for one.
+  final List<String> roots;
 
   @override
   ConsumerState<ImportFolderDialog> createState() => _ImportFolderDialogState();
 }
 
 class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
-  String? _root;
-  String _folderTag = '';
-  bool _tagOn = true;
+  final List<String> _roots = [];
+  bool _hideImported = true;
   bool _scanning = false;
   List<_ImportRow> _rows = const [];
   int _scanToken = 0;
@@ -80,6 +79,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   int _total = 0;
 
   int? _pickIndex;
+  VnSearchResult? _pickSelected;
   late final TextEditingController _pickQuery;
   Timer? _pickDebounce;
   int _pickToken = 0;
@@ -92,7 +92,12 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     super.initState();
     _pickQuery = TextEditingController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _root == null) _chooseFolder();
+      if (!mounted || _roots.isNotEmpty) return;
+      if (widget.roots.isEmpty) {
+        _browse();
+      } else {
+        _scanRoots(widget.roots, append: false);
+      }
     });
   }
 
@@ -147,7 +152,6 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   }
 
   void _applyExe(_ImportRow row) {
-    if (row.exeFromUser) return;
     final vn = row.vn;
     row.exePath = chooseExe(
       row.folder,
@@ -155,33 +159,37 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     )?.path;
   }
 
-  Future<void> _chooseFolder() async {
+  Future<void> _browse({bool append = false}) async {
     final picked = await ref.read(pathPickerProvider)(
       mode: PathPickMode.folder,
     );
     if (!mounted) return;
     if (picked == null || picked.isEmpty) {
-      if (_root == null) _pop(ImportFolderResult.back);
+      if (_roots.isEmpty) _pop(ImportFolderResult.back);
       return;
     }
     if (isPortalPath(picked)) {
       Toast(context).show(portalPathMessage);
       return;
     }
-    await _scan(picked);
+    await _scanRoots([picked], append: append);
   }
 
-  Future<void> _scan(String root) async {
+  Future<void> _scanRoots(List<String> roots, {required bool append}) async {
     final token = ++_scanToken;
+    final platform = ref.read(hostPlatformProvider);
     setState(() {
-      _root = root;
-      _folderTag = p.basename(root);
-      _rows = const [];
       _scanning = true;
+      if (!append) {
+        _roots.clear();
+        _rows = const [];
+      }
     });
-    final List<ImportFolder> folders;
+    final found = <ImportFolder>[];
     try {
-      folders = await scanImportFolder(root, ref.read(hostPlatformProvider));
+      for (final root in roots) {
+        found.addAll(await scanImportFolder(root, platform));
+      }
     } on FileSystemException catch (e) {
       if (!mounted || token != _scanToken) return;
       setState(() => _scanning = false);
@@ -189,28 +197,35 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       return;
     }
     if (!mounted || token != _scanToken) return;
+    final known = {for (final row in _rows) row.folder.path};
+    final fresh = <_ImportRow>[
+      for (final folder in found)
+        if (known.add(folder.path)) _ImportRow(folder),
+    ];
     setState(() {
-      _rows = [for (final folder in folders) _ImportRow(folder)];
-      for (final row in _rows) {
+      _roots.addAll(roots);
+      _rows = [..._rows, ...fresh];
+      for (final row in fresh) {
         _applyExe(row);
       }
       _scanning = false;
     });
-    for (var i = 0; i < _rows.length; i++) {
+    for (var i = 0; i < fresh.length; i++) {
       if (!mounted || token != _scanToken) return;
-      await _match(_rows[i], token);
-      if (i + 1 < _rows.length) {
+      await _match(fresh[i], token);
+      if (i + 1 < fresh.length) {
         await Future<void>.delayed(const Duration(seconds: 1));
       }
     }
   }
 
   Future<void> _match(_ImportRow row, int token) async {
+    final query = cleanFolderName(row.folder.name);
     var results = const <VnSearchResult>[];
     String? error;
     try {
       results = await lookupFolder(
-        row.folder.name,
+        query,
         ref.read(vndbSearchClientProvider).search,
       );
     } catch (e) {
@@ -218,7 +233,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     }
     if (!mounted || token != _scanToken) return;
     setState(() {
-      final match = matchFolder(row.folder.name, results);
+      final match = matchFolder(query, results);
       row.state = match.state;
       row.vn = match.vn;
       row.error = error;
@@ -230,31 +245,17 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     });
   }
 
-  Future<void> _chooseExe(_ImportRow row) async {
-    final picked = await ref.read(pathPickerProvider)(
-      initialDirectory: row.folder.path,
-      mode: PathPickMode.file,
-    );
-    if (picked == null || picked.isEmpty || !mounted) return;
-    if (isPortalPath(picked)) {
-      Toast(context).show(portalPathMessage);
-      return;
-    }
-    setState(() {
-      row.exePath = picked;
-      row.exeFromUser = true;
-    });
-  }
-
   void _openPick(int index) {
-    final name = _rows[index].folder.name;
-    _pickQuery.text = name;
+    final row = _rows[index];
+    final query = cleanFolderName(row.folder.name);
+    _pickQuery.text = query;
     setState(() {
       _pickIndex = index;
+      _pickSelected = row.vn;
       _pickResults = const [];
       _pickError = null;
     });
-    _runPickSearch(name);
+    _runPickSearch(query);
   }
 
   void _onPickQueryChanged(String value) {
@@ -305,32 +306,27 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   void _leavePick() {
     _pickDebounce?.cancel();
     _pickToken++;
-    setState(() => _pickIndex = null);
+    setState(() {
+      _pickIndex = null;
+      _pickSelected = null;
+    });
   }
 
-  void _pickResult(VnSearchResult vn) {
-    final row = _rows[_pickIndex!];
+  void _pickSelect(VnSearchResult vn) => setState(() => _pickSelected = vn);
+
+  void _pickApply() {
+    final vn = _pickSelected;
+    final index = _pickIndex;
+    if (vn == null || index == null) return;
+    final row = _rows[index];
     setState(() {
       row.vn = vn;
       row.state = ImportMatchState.matched;
       row.error = null;
-      row.plain = false;
       _applyExe(row);
       row.ticked = row.exePath != null;
       _pickIndex = null;
-    });
-  }
-
-  void _useFolderName() {
-    final row = _rows[_pickIndex!];
-    setState(() {
-      row.vn = null;
-      row.state = ImportMatchState.none;
-      row.error = null;
-      row.plain = true;
-      _applyExe(row);
-      row.ticked = row.exePath != null;
-      _pickIndex = null;
+      _pickSelected = null;
     });
   }
 
@@ -349,8 +345,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     final vndb = ref.read(vndbSearchClientProvider);
     final httpClient = ref.read(addGameHttpClientProvider);
     final dataDir = ref.read(dataDirProvider);
-    final tags = _tagOn ? [_folderTag] : const <String>[];
-    final mode = defaultLaunchMode(ref.read(hostPlatformProvider));
+    final platform = ref.read(hostPlatformProvider);
     setState(() {
       _saving = true;
       _done = 0;
@@ -360,27 +355,30 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     var coverFailures = 0;
     for (final row in rows) {
       final exe = row.exePath!;
+      final detected = await detectLaunchMode(exe, platform);
       final vn = row.vn;
+      final Game game;
       if (vn == null) {
-        built.add(
-          plainGame(title: row.folder.name, tags: tags, exe: exe, mode: mode),
-        );
+        game = plainGame(title: row.folder.name, exe: exe, mode: detected.mode);
+        game.launch.steamAppId = detected.steamAppId;
       } else {
         final result = await buildVnGame(
           result: vn,
           title: vn.title,
           description: vn.description,
-          tags: tags,
+          tags: const [],
           exe: exe,
-          mode: mode,
-          steamAppId: null,
+          mode: detected.mode,
+          steamAppId: detected.steamAppId,
           vndb: vndb,
           httpClient: httpClient,
           dataDir: dataDir,
         );
-        built.add(result.game);
+        game = result.game;
         if (result.coverFailed) coverFailures++;
       }
+      game.needsReview = row.state != ImportMatchState.matched;
+      built.add(game);
       if (mounted) setState(() => _done++);
     }
     if (!mounted) return;
@@ -409,11 +407,11 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       return DialogShell(
         autofocus: false,
         size: dialogShellSize(context),
-        eyebrow: 'Import a folder · ${_rows[pick].folder.name}',
-        title: 'Pick the VNDB entry',
+        eyebrow: _rows[pick].folder.name,
+        title: 'Select item',
         onClose: _close,
         closeKey: const Key('import-close'),
-        body: _pickBody(context, games, _rows[pick]),
+        body: _pickBody(context, games),
         footer: _pickFooter(),
       );
     }
@@ -421,13 +419,17 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       autofocus: false,
       size: dialogShellSize(context),
       eyebrow: 'Add games',
-      title: 'Import a folder',
+      title: 'Select games to import',
       onClose: _close,
       closeKey: const Key('import-close'),
       body: _listBody(context, games, plan),
       footer: _listFooter(games, plan),
     );
   }
+
+  bool _hidden(int index, List<Game> games, _Plan plan) =>
+      _hideImported &&
+      (plan.duplicate[index] || _inLibrary(_rows[index], games));
 
   Widget _listBody(BuildContext context, List<Game> games, _Plan plan) {
     final theme = Theme.of(context);
@@ -436,113 +438,86 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       fontSize: 13,
       color: scheme.onSurfaceVariant,
     );
-    final selected = plan.selected.where((added) => added).length;
-    final String emptyText;
-    if (_root == null) {
-      emptyText = 'Choose a folder to import';
-    } else {
-      emptyText = 'No subfolders in this folder';
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-          child: Row(
+    final visible = [
+      for (var i = 0; i < _rows.length; i++)
+        if (!_hidden(i, games, plan)) i,
+    ];
+    final eligible = [
+      for (final i in visible)
+        if (_eligible(_rows[i], games) && !plan.duplicate[i]) i,
+    ];
+    final allChecked =
+        eligible.isNotEmpty && eligible.every((i) => plan.selected[i]);
+    final headerStyle = muted?.copyWith(fontWeight: FontWeight.w600);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: scheme.outlineVariant),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: ToolbarBox(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.folder_outlined,
-                          size: 18,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            _root ?? '',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        ),
-                      ],
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 40,
+                      child: Checkbox(
+                        key: const Key('import-check-all'),
+                        value: allChecked,
+                        onChanged: eligible.isEmpty || _saving
+                            ? null
+                            : (value) =>
+                                  _setAllTicked(eligible, value ?? false),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 48),
+                    Expanded(flex: 5, child: Text('Name', style: headerStyle)),
+                    const SizedBox(width: 12),
+                    Expanded(flex: 6, child: Text('Path', style: headerStyle)),
+                  ],
                 ),
               ),
-              const SizedBox(width: 10),
-              BrandGlassButton(
-                key: const Key('import-choose'),
-                height: 40,
-                expand: false,
-                onPressed: _saving ? null : _chooseFolder,
-                label: const Text('Choose…'),
+              if (_scanning) const LinearProgressIndicator(),
+              Expanded(
+                child: visible.isEmpty
+                    ? Center(
+                        child: Text(
+                          _roots.isEmpty
+                              ? 'Choose a folder to import'
+                              : 'No games in this folder',
+                          style: muted,
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: visible.length,
+                        itemBuilder: (context, position) =>
+                            _rowWidget(context, visible[position], games, plan),
+                      ),
               ),
             ],
           ),
         ),
-        if (_root != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
-            child: Row(
-              children: [
-                Text(
-                  '${_rows.length} folders · $selected selected',
-                  style: muted,
-                ),
-                const Spacer(),
-                Text('Tag each game', style: muted),
-                const SizedBox(width: 8),
-                _tagChip(context),
-              ],
-            ),
-          ),
-        if (_scanning) const LinearProgressIndicator(),
-        Expanded(
-          child: _rows.isEmpty
-              ? Center(child: Text(emptyText, style: muted))
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-                  itemCount: _rows.length,
-                  itemBuilder: (context, index) =>
-                      _rowWidget(context, index, games, plan),
-                ),
-        ),
-      ],
+      ),
     );
   }
 
-  Widget _tagChip(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return InkWell(
-      key: const Key('import-tag-chip'),
-      borderRadius: BorderRadius.circular(7),
-      onTap: () => setState(() => _tagOn = !_tagOn),
-      child: Container(
-        height: 28,
-        padding: const EdgeInsets.symmetric(horizontal: 11),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: _tagOn ? scheme.primaryContainer : null,
-          borderRadius: BorderRadius.circular(7),
-          border: Border.all(
-            color: _tagOn ? scheme.primary : scheme.outlineVariant,
-          ),
-        ),
-        child: Text(
-          _folderTag,
-          style: TextStyle(
-            fontSize: 12.5,
-            color: _tagOn ? scheme.primary : scheme.onSurfaceVariant,
-          ),
-        ),
-      ),
-    );
+  void _setAllTicked(List<int> indices, bool ticked) {
+    setState(() {
+      for (final i in indices) {
+        _rows[i]
+          ..ticked = ticked
+          ..tickTouched = true;
+      }
+    });
   }
 
   Widget _rowWidget(
@@ -555,207 +530,91 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final inLibrary = _inLibrary(row, games);
-    final pending = row.state == null;
-    final vn = row.vn;
-    final unmatched = vn == null && !row.plain && !pending;
-    final title = vn?.title ?? (unmatched ? 'No VNDB match' : row.folder.name);
-
-    final (String label, Color background, Color foreground) = inLibrary
-        ? (
-            'In library',
-            scheme.onSurface.withValues(alpha: 0.06),
-            scheme.onSurfaceVariant,
-          )
-        : plan.duplicate[index]
-        ? (
-            'Duplicate',
-            scheme.onSurface.withValues(alpha: 0.04),
-            scheme.outline,
-          )
-        : pending
-        ? (
-            'Matching…',
-            scheme.onSurface.withValues(alpha: 0.04),
-            scheme.outline,
-          )
-        : row.plain
-        ? ('No VNDB', scheme.onSurface.withValues(alpha: 0.04), scheme.outline)
-        : switch (row.state!) {
-            ImportMatchState.matched => (
-              'Matched',
-              scheme.onSurface.withValues(alpha: 0.06),
-              scheme.onSurfaceVariant,
-            ),
-            ImportMatchState.check => (
-              'Check match',
-              scheme.primaryContainer,
-              scheme.primary,
-            ),
-            ImportMatchState.none => (
-              'No match',
-              scheme.onSurface.withValues(alpha: 0.04),
-              scheme.outline,
-            ),
-          };
-    Widget pill = Container(
-      height: 22,
-      padding: const EdgeInsets.symmetric(horizontal: 9),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(11),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11.5,
-          fontWeight: FontWeight.w600,
-          color: foreground,
-        ),
+    final vn = row.state == ImportMatchState.matched ? row.vn : null;
+    final canPick = !inLibrary && !_saving;
+    final unmatched = vn == null;
+    Widget nameText = Text(
+      vn?.title ?? row.folder.name,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        fontSize: 14.5,
+        fontWeight: unmatched ? FontWeight.w500 : FontWeight.w600,
+        color: unmatched ? scheme.onSurfaceVariant : null,
       ),
     );
     if (row.error != null) {
-      pill = Tooltip(message: row.error!, child: pill);
+      nameText = Tooltip(message: row.error!, child: nameText);
     }
-
     return Opacity(
-      opacity: inLibrary ? 0.55 : 1,
+      opacity: inLibrary || plan.duplicate[index] ? 0.55 : 1,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         child: Row(
           children: [
-            Checkbox(
-              key: Key('import-check-$index'),
-              value: plan.selected[index],
-              onChanged:
-                  _eligible(row, games) && !plan.duplicate[index] && !_saving
-                  ? (value) => setState(() {
-                      row.ticked = value ?? false;
-                      row.tickTouched = true;
-                    })
-                  : null,
+            SizedBox(
+              width: 40,
+              child: Checkbox(
+                key: Key('import-check-$index'),
+                value: plan.selected[index],
+                onChanged:
+                    _eligible(row, games) && !plan.duplicate[index] && !_saving
+                    ? (value) => setState(() {
+                        row.ticked = value ?? false;
+                        row.tickTouched = true;
+                      })
+                    : null,
+              ),
             ),
-            const SizedBox(width: 6),
             if (vn != null)
               VnCoverThumb(
                 imageUrl: vn.imageUrl,
                 sexual: vn.imageSexual,
-                width: 42,
-                height: 56,
-                radius: 6,
+                width: 36,
+                height: 48,
+                radius: 4,
               )
             else
               Container(
-                width: 42,
-                height: 56,
+                width: 36,
+                height: 48,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: scheme.surfaceContainer,
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(4),
                   border: Border.all(color: scheme.outlineVariant),
                 ),
                 child: Icon(
                   Icons.search_rounded,
-                  size: 20,
+                  size: 16,
                   color: scheme.outline,
                 ),
               ),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: unmatched ? FontWeight.w500 : FontWeight.w600,
-                      color: unmatched ? scheme.outline : null,
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.folder_outlined,
-                        size: 13,
-                        color: scheme.outline,
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          row.folder.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 12, color: scheme.outline),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+              flex: 5,
+              child: InkWell(
+                key: Key('import-name-$index'),
+                borderRadius: BorderRadius.circular(6),
+                onTap: canPick ? () => _openPick(index) : null,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: nameText,
+                ),
               ),
             ),
-            const SizedBox(width: 10),
-            pill,
-            const SizedBox(width: 10),
-            SizedBox(
-              width: 96,
-              child: pending || inLibrary
-                  ? null
-                  : Align(
-                      alignment: Alignment.centerRight,
-                      child: BrandGlassButton(
-                        key: Key('import-change-$index'),
-                        height: 32,
-                        expand: false,
-                        onPressed: _saving ? null : () => _openPick(index),
-                        label: Text(vn == null ? 'Find' : 'Change'),
-                      ),
-                    ),
-            ),
             const SizedBox(width: 12),
-            SizedBox(
-              width: 220,
-              child: SettingsDropdown<String>(
-                key: Key('import-exe-$index'),
-                value: row.exePath,
-                hint: const Text("Pick the game file"),
-                items: [
-                  for (final exe in row.folder.exes)
-                    DropdownMenuItem(
-                      value: exe.path,
-                      child: Text(
-                        exe.relative,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  if (row.exePath != null &&
-                      !row.folder.exes.any((e) => e.path == row.exePath))
-                    DropdownMenuItem(
-                      value: row.exePath,
-                      child: Text(
-                        p.relative(row.exePath!, from: row.folder.path),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  const DropdownMenuItem(
-                    value: _chooseExeValue,
-                    child: Text('Choose…'),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (_saving) return;
-                  if (value == _chooseExeValue) {
-                    _chooseExe(row);
-                    return;
-                  }
-                  setState(() {
-                    row.exePath = value;
-                    row.exeFromUser = true;
-                  });
-                },
+            Expanded(
+              flex: 6,
+              child: Text(
+                row.exePath ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  color: scheme.outline,
+                ),
               ),
             ),
           ],
@@ -766,41 +625,93 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
 
   Widget _listFooter(List<Game> games, _Plan plan) {
     final count = plan.selected.where((added) => added).length;
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
       child: Row(
         children: [
-          BrandGlassButton(
-            key: const Key('import-back'),
-            height: 40,
-            expand: false,
-            onPressed: _saving ? null : () => _pop(ImportFolderResult.back),
-            label: const Text('Back'),
-          ),
-          const Spacer(),
-          BrandGlassButton(
-            key: const Key('import-cancel'),
-            height: 40,
-            expand: false,
-            onPressed: _saving ? null : _close,
-            label: const Text('Cancel'),
+          Expanded(
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                BrandGlassButton(
+                  key: const Key('import-browse'),
+                  height: 40,
+                  expand: false,
+                  onPressed: _saving ? null : () => _browse(),
+                  label: const Text('Browse…'),
+                ),
+                BrandGlassButton(
+                  key: const Key('import-scan'),
+                  height: 40,
+                  expand: false,
+                  onPressed: _saving ? null : () => _browse(append: true),
+                  label: const Text('Scan Folder…'),
+                ),
+                InkWell(
+                  key: const Key('import-hide-imported'),
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: _saving
+                      ? null
+                      : () => setState(() => _hideImported = !_hideImported),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IgnorePointer(
+                          child: Checkbox(
+                            value: _hideImported,
+                            onChanged: (_) {},
+                          ),
+                        ),
+                        Text(
+                          'Hide imported',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(width: 10),
-          BrandButton(
-            key: const Key('import-add'),
-            height: 40,
-            expand: false,
-            onPressed: _saving || count == 0 ? null : _add,
-            label: Text(
-              _saving ? 'Adding $_done of $_total…' : 'Add ${_games(count)}',
-            ),
+          Wrap(
+            spacing: 10,
+            children: [
+              BrandButton(
+                key: const Key('import-add'),
+                height: 40,
+                expand: false,
+                onPressed: _saving || count == 0 ? null : _add,
+                label: Text(
+                  _saving ? 'Adding $_done of $_total…' : 'Add Games',
+                ),
+              ),
+              BrandGlassButton(
+                key: const Key('import-cancel'),
+                height: 40,
+                expand: false,
+                onPressed: _saving ? null : _close,
+                label: const Text('Cancel'),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _pickBody(BuildContext context, List<Game> games, _ImportRow row) {
+  Widget _pickBody(BuildContext context, List<Game> games) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final muted = theme.textTheme.bodySmall?.copyWith(
@@ -811,7 +722,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       for (final game in games)
         if (game.vndbId != null) game.vndbId!,
     };
-    final current = row.vn?.id;
+    final selected = _pickSelected;
     final String? emptyText;
     if (_pickError != null) {
       emptyText = _pickError;
@@ -820,81 +731,110 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     } else {
       emptyText = null;
     }
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              ToolbarBox(
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 14, right: 6),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.search_rounded,
-                        size: 20,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          key: const Key('import-pick-search'),
-                          controller: _pickQuery,
-                          autofocus: true,
-                          textInputAction: TextInputAction.search,
-                          style: const TextStyle(fontSize: 14),
-                          onChanged: _onPickQueryChanged,
-                          onSubmitted: (value) {
-                            _pickDebounce?.cancel();
-                            _runPickSearch(value.trim());
-                          },
-                          decoration: InputDecoration.collapsed(
-                            hintText: 'Search VNDB',
-                            hintStyle: TextStyle(
-                              color: scheme.outline,
-                              fontSize: 14,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ToolbarBox(
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 14, right: 6),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.search_rounded,
+                              size: 20,
+                              color: scheme.onSurfaceVariant,
                             ),
-                          ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: TextField(
+                                key: const Key('import-pick-search'),
+                                controller: _pickQuery,
+                                autofocus: true,
+                                textInputAction: TextInputAction.search,
+                                style: const TextStyle(fontSize: 14),
+                                onChanged: _onPickQueryChanged,
+                                onSubmitted: (value) {
+                                  _pickDebounce?.cancel();
+                                  _runPickSearch(value.trim());
+                                },
+                                decoration: InputDecoration.collapsed(
+                                  hintText: 'Search VNDB',
+                                  hintStyle: TextStyle(
+                                    color: scheme.outline,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Search by title, or paste a VNDB link or ID (v12345).',
+                      style: muted,
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                'Search by title, or paste a VNDB id or link (v12345).',
-                style: muted,
+              if (_pickLoading) const LinearProgressIndicator(),
+              Expanded(
+                child: emptyText != null
+                    ? Center(
+                        child: Text(
+                          emptyText,
+                          style: muted,
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 12, 12),
+                        itemCount: _pickResults.length,
+                        itemBuilder: (context, index) {
+                          final result = _pickResults[index];
+                          final isOwned = owned.contains(result.id);
+                          return GestureDetector(
+                            onDoubleTap: isOwned
+                                ? null
+                                : () {
+                                    _pickSelect(result);
+                                    _pickApply();
+                                  },
+                            child: VnResultRow(
+                              result: result,
+                              owned: isOwned,
+                              selected: selected?.id == result.id,
+                              onPick: isOwned
+                                  ? null
+                                  : () => _pickSelect(result),
+                            ),
+                          );
+                        },
+                      ),
               ),
             ],
           ),
         ),
-        if (_pickLoading) const LinearProgressIndicator(),
-        Expanded(
-          child: emptyText != null
-              ? Center(
-                  child: Text(
-                    emptyText,
-                    style: muted,
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 12, 12),
-                  itemCount: _pickResults.length,
-                  itemBuilder: (context, index) {
-                    final result = _pickResults[index];
-                    final isOwned = owned.contains(result.id);
-                    return VnResultRow(
-                      result: result,
-                      owned: isOwned,
-                      current: result.id == current,
-                      onPick: isOwned ? null : () => _pickResult(result),
-                    );
-                  },
+        Container(
+          width: 260,
+          decoration: BoxDecoration(
+            border: Border(left: BorderSide(color: scheme.outlineVariant)),
+          ),
+          child: selected == null
+              ? const SizedBox.shrink()
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                  child: VnDetailPanel(result: selected),
                 ),
         ),
       ],
@@ -905,28 +845,21 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
     child: Row(
       children: [
+        const Spacer(),
         BrandGlassButton(
-          key: const Key('import-pick-back'),
+          key: const Key('import-pick-cancel'),
           height: 40,
           expand: false,
           onPressed: _leavePick,
-          label: const Text('Back'),
+          label: const Text('Cancel'),
         ),
         const SizedBox(width: 10),
-        BrandGlassButton(
-          key: const Key('import-pick-plain'),
+        BrandButton(
+          key: const Key('import-pick-select'),
           height: 40,
           expand: false,
-          onPressed: _useFolderName,
-          label: const Text('Use folder name, no VNDB'),
-        ),
-        const Spacer(),
-        BrandGlassButton(
-          key: const Key('import-cancel'),
-          height: 40,
-          expand: false,
-          onPressed: _close,
-          label: const Text('Cancel'),
+          onPressed: _pickSelected == null ? null : _pickApply,
+          label: const Text('Select'),
         ),
       ],
     ),

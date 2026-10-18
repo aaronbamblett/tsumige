@@ -272,13 +272,13 @@ Future<_Harness> _openAndMatch(
     platform: platform,
   );
   for (var i = 0; i < 200; i++) {
-    final done =
-        find.textContaining('$folders folders · ').evaluate().isNotEmpty &&
-        find.text('Matching…').evaluate().isEmpty;
-    if (done) break;
+    if (find.byKey(const Key('import-check-0')).evaluate().isNotEmpty) break;
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 20)),
     );
+    await tester.pump();
+  }
+  for (var i = 0; i <= folders; i++) {
     await tester.pump(const Duration(seconds: 1));
   }
   await tester.pump();
@@ -314,34 +314,40 @@ bool _checked(WidgetTester tester, int index) =>
     tester.widget<Checkbox>(find.byKey(Key('import-check-$index'))).value!;
 
 void main() {
-  testWidgets('rows show their match state, pre-ticks and counts', (
+  testWidgets(
+    'rows show confident matches with their VNDB title and the rest with the folder name',
+    (tester) async {
+      final h = await _openAndMatch(tester);
+      expect(find.text('Select games to import'), findsOneWidget);
+      expect(find.text('Add games'), findsOneWidget);
+      expect(find.text('DEMO'), findsOneWidget);
+      expect(find.text('Rena-sensei to Pool Ryokou'), findsOneWidget);
+      expect(find.text('Solo Quest'), findsOneWidget);
+      expect(find.text('Solo Quest Remake'), findsNothing);
+      expect(find.text('Nothing Here'), findsOneWidget);
+      expect(find.text('Owned Game'), findsNothing);
+      expect(find.text('Matched'), findsNothing);
+      expect(find.text('Check match'), findsNothing);
+      expect(find.text('Pick the game file'), findsNothing);
+      expect(find.text(p.join(h.root, 'DEMO', 'DEMO.exe')), findsOneWidget);
+      expect(_checked(tester, 0), isTrue);
+      expect(_checked(tester, 1), isFalse);
+      expect(_checked(tester, 3), isTrue);
+      expect(_checked(tester, 4), isFalse);
+    },
+  );
+
+  testWidgets('the hide imported checkbox shows library rows disabled', (
     tester,
   ) async {
     await _openAndMatch(
       tester,
       games: [core.Game(id: 'g1', title: 'Owned', vndbId: 'v99')],
     );
-    expect(find.text('Import a folder'), findsOneWidget);
-    expect(find.text('Add games'), findsOneWidget);
-    expect(find.text('5 folders · 2 selected'), findsOneWidget);
-    expect(find.text('Matched'), findsNWidgets(2));
-    expect(find.text('Check match'), findsOneWidget);
-    expect(find.text('No match'), findsOneWidget);
-    expect(find.text('In library'), findsOneWidget);
-    expect(find.text('No VNDB match'), findsOneWidget);
-    expect(find.text('Find'), findsOneWidget);
-    expect(find.text('Solo Quest Remake'), findsOneWidget);
-    expect(_checked(tester, 0), isTrue);
-    expect(_checked(tester, 1), isFalse);
-    expect(_checked(tester, 3), isTrue);
-    expect(_checked(tester, 4), isFalse);
-  });
-
-  testWidgets('In library rows are disabled and never added', (tester) async {
-    final h = await _openAndMatch(
-      tester,
-      games: [core.Game(id: 'g1', title: 'Owned', vndbId: 'v99')],
-    );
+    expect(find.byKey(const Key('import-check-2')), findsNothing);
+    await tester.tap(find.byKey(const Key('import-hide-imported')));
+    await tester.pump();
+    expect(find.text('Owned Game'), findsOneWidget);
     expect(
       tester
           .widget<Checkbox>(find.byKey(const Key('import-check-2')))
@@ -350,90 +356,112 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('import-check-2')));
     await tester.pump();
-    expect(find.text('5 folders · 2 selected'), findsOneWidget);
+    expect(find.text('Add Games'), findsOneWidget);
+  });
+
+  testWidgets('the header checkbox ticks every eligible row', (tester) async {
+    final h = await _openAndMatch(tester);
+    await tester.tap(find.byKey(const Key('import-check-all')));
+    await tester.pump();
+    expect(_checked(tester, 0), isTrue);
+    expect(_checked(tester, 1), isTrue);
+    expect(_checked(tester, 3), isTrue);
+    expect(_checked(tester, 4), isTrue);
+    await tester.tap(find.byKey(const Key('import-check-all')));
+    await tester.pump();
+    expect(_checked(tester, 0), isFalse);
     expect(h.repo.saves, 0);
   });
 
-  testWidgets('Change picks a result and the list shows it ticked', (
+  testWidgets('clicking a name opens the picker with the cleaned name', (
     tester,
   ) async {
     await _openAndMatch(tester);
-    await tester.tap(find.byKey(const Key('import-change-4')));
+    await tester.tap(find.byKey(const Key('import-name-4')));
     await tester.pump();
-    expect(find.text('Pick the VNDB entry'), findsOneWidget);
-    expect(find.text('Import a folder · Solo Quest'), findsOneWidget);
+    expect(find.text('Select item'), findsOneWidget);
+    expect(find.text('Solo Quest'), findsWidgets);
     expect(
-      find.text('Search by title, or paste a VNDB id or link (v12345).'),
+      find.text('Search by title, or paste a VNDB link or ID (v12345).'),
       findsOneWidget,
     );
-    expect(find.text('Current match'), findsOneWidget);
+    expect(find.text('Selected'), findsOneWidget);
+    expect(
+      tester
+          .widget<BrandButton>(find.byKey(const Key('import-pick-select')))
+          .onPressed,
+      isNotNull,
+    );
     await tester.tap(find.text('Solo Quest Remaster'));
     await _settle(tester);
-    expect(find.text('Pick the VNDB entry'), findsNothing);
+    expect(find.text('Selected'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('import-pick-select')));
+    await _settle(tester);
+    expect(find.text('Select item'), findsNothing);
     expect(find.text('Solo Quest Remaster'), findsOneWidget);
-    expect(find.text('5 folders · 3 selected'), findsOneWidget);
     expect(_checked(tester, 4), isTrue);
   });
 
-  testWidgets('Use folder name, no VNDB keeps the exe and ticks the row', (
+  testWidgets('double-clicking a result selects and applies it', (
     tester,
   ) async {
     await _openAndMatch(tester);
-    await tester.tap(find.byKey(const Key('import-change-4')));
+    await tester.tap(find.byKey(const Key('import-name-4')));
     await tester.pump();
-    await tester.tap(find.byKey(const Key('import-pick-plain')));
+    await tester.tap(find.text('Solo Quest Remaster'));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.text('Solo Quest Remaster'));
     await _settle(tester);
-    expect(find.text('Pick the VNDB entry'), findsNothing);
-    expect(find.text('No VNDB'), findsOneWidget);
-    expect(_checked(tester, 4), isTrue);
+    expect(find.text('Select item'), findsNothing);
+    expect(find.text('Solo Quest Remaster'), findsOneWidget);
   });
 
-  testWidgets('the exe dropdown changes the exe', (tester) async {
+  testWidgets('Cancel in the picker returns to the list unchanged', (
+    tester,
+  ) async {
     await _openAndMatch(tester);
-    await tester.tap(find.byKey(const Key('import-exe-4')));
+    await tester.tap(find.byKey(const Key('import-name-4')));
     await tester.pump();
-    await tester.tap(find.text('bin/Extra.exe').last);
+    await tester.tap(find.byKey(const Key('import-pick-cancel')));
     await _settle(tester);
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('import-exe-4')),
-        matching: find.text('bin/Extra.exe'),
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('Select games to import'), findsOneWidget);
+    expect(find.text('Solo Quest'), findsOneWidget);
+    expect(_checked(tester, 4), isFalse);
   });
 
-  testWidgets('the tag chip toggles the folder tag off for the batch', (
-    tester,
-  ) async {
-    final h = await _openAndMatch(tester);
-    expect(find.text('Visual novels'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('import-tag-chip')));
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('import-add')));
-    await _waitForSave(tester, h.repo);
-    expect(_added(h), hasLength(2));
-    expect([for (final g in _added(h)) g.tags], [[], []]);
-    await _drainToast(tester);
-  });
-
-  testWidgets('on macOS the folder import saves games in native mode', (
-    tester,
-  ) async {
+  testWidgets('In library rows are disabled and never added', (tester) async {
     final h = await _openAndMatch(
       tester,
-      platform: const HostPlatform(HostOs.macos),
+      games: [core.Game(id: 'g1', title: 'Owned', vndbId: 'v99')],
     );
-    await tester.tap(find.byKey(const Key('import-add')));
-    await _waitForSave(tester, h.repo);
-    expect(_added(h), isNotEmpty);
-    expect([
-      for (final g in _added(h)) g.launch.mode,
-    ], everyElement(core.LaunchMode.native));
-    await _drainToast(tester);
+    await tester.tap(find.byKey(const Key('import-hide-imported')));
+    await tester.pump();
+    expect(
+      tester
+          .widget<Checkbox>(find.byKey(const Key('import-check-2')))
+          .onChanged,
+      isNull,
+    );
+    expect(h.repo.saves, 0);
   });
 
-  testWidgets('Add saves the ticked rows once with the right fields', (
+  testWidgets('a duplicate in the batch is hidden, and disabled when shown', (
+    tester,
+  ) async {
+    await _openAndMatch(tester, duplicate: true, folders: 6);
+    expect(find.byKey(const Key('import-check-1')), findsNothing);
+    await tester.tap(find.byKey(const Key('import-hide-imported')));
+    await tester.pump();
+    expect(find.byKey(const Key('import-check-1')), findsOneWidget);
+    expect(
+      tester
+          .widget<Checkbox>(find.byKey(const Key('import-check-1')))
+          .onChanged,
+      isNull,
+    );
+  });
+
+  testWidgets('the add button saves the ticked rows with their fields', (
     tester,
   ) async {
     final h = await _openAndMatch(tester);
@@ -446,9 +474,10 @@ void main() {
     ]);
     final demo = _added(h)[0];
     expect(demo.vndbId, 'v900017');
-    expect(demo.tags, ['Visual novels']);
+    expect(demo.tags, isEmpty);
     expect(demo.launch.mode, core.LaunchMode.proton);
     expect(demo.launch.executable, p.join(h.root, 'DEMO', 'DEMO.exe'));
+    expect(demo.needsReview, isFalse);
     expect(demo.cover, isNotNull);
     expect(
       _added(h)[1].launch.executable,
@@ -456,6 +485,20 @@ void main() {
     );
     expect(find.text('Added 2 games'), findsOneWidget);
     expect(h.result, ImportFolderResult.added);
+    await _drainToast(tester);
+  });
+
+  testWidgets('an unsure row that is ticked is added as needing a look', (
+    tester,
+  ) async {
+    final h = await _openAndMatch(tester);
+    await tester.tap(find.byKey(const Key('import-check-4')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('import-add')));
+    await _waitForSave(tester, h.repo);
+    final solo = _added(h).firstWhere((g) => g.vndbId == 'v7');
+    expect(solo.title, 'Solo Quest Remake');
+    expect(solo.needsReview, isTrue);
     await _drainToast(tester);
   });
 
@@ -473,6 +516,22 @@ void main() {
     await _waitForSave(tester, h.repo);
     expect(_added(h), hasLength(2));
     expect(find.text('Added 2 games (1 covers failed)'), findsOneWidget);
+    await _drainToast(tester);
+  });
+
+  testWidgets('on macOS the folder import saves games in native mode', (
+    tester,
+  ) async {
+    final h = await _openAndMatch(
+      tester,
+      platform: const HostPlatform(HostOs.macos),
+    );
+    await tester.tap(find.byKey(const Key('import-add')));
+    await _waitForSave(tester, h.repo);
+    expect(_added(h), isNotEmpty);
+    expect([
+      for (final g in _added(h)) g.launch.mode,
+    ], everyElement(core.LaunchMode.native));
     await _drainToast(tester);
   });
 
@@ -495,26 +554,11 @@ void main() {
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
-    expect(find.text('Import a folder'), findsOneWidget);
+    expect(find.text('Select games to import'), findsOneWidget);
     h.repo.saveGate!.complete();
     await _waitForSave(tester, h.repo);
     expect(_added(h), hasLength(2));
     await _drainToast(tester);
-  });
-
-  testWidgets('the Add dialog offers Import a folder and Back returns to it', (
-    tester,
-  ) async {
-    final entry = await _openAddDialog(tester, picked: true);
-    await tester.tap(find.byKey(const Key('add-game-import')));
-    await tester.pump();
-    await tester.pump();
-    expect(find.text('Import a folder'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('import-back')));
-    await _settle(tester);
-    expect(find.text('Find on VNDB'), findsOneWidget);
-    expect(find.text('Import a folder'), findsNothing);
-    expect(entry.result, isNull);
   });
 
   testWidgets('Cancel in the import dialog closes the Add dialog too', (
@@ -526,8 +570,8 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('import-cancel')));
     await _settle(tester);
-    expect(find.text('Import a folder'), findsNothing);
-    expect(find.text('Find on VNDB'), findsNothing);
+    expect(find.text('Select games to import'), findsNothing);
+    expect(find.text('Choose folder…'), findsNothing);
   });
 
   testWidgets('a cancelled folder pick leaves the Add dialog in place', (
@@ -536,8 +580,8 @@ void main() {
     await _openAddDialog(tester, picked: false);
     await tester.tap(find.byKey(const Key('add-game-import')));
     await _settle(tester);
-    expect(find.text('Find on VNDB'), findsOneWidget);
-    expect(find.text('Import a folder'), findsNothing);
+    expect(find.text('Choose folder…'), findsOneWidget);
+    expect(find.text('Select games to import'), findsNothing);
   });
 
   testWidgets('a row still matching cannot be ticked and Add is disabled', (
@@ -545,146 +589,47 @@ void main() {
   ) async {
     final gate = Completer<void>();
     await _open(tester, gate: gate, gateQuery: 'DEMO');
-    for (var i = 0; i < 200 && find.text('Matching…').evaluate().isEmpty; i++) {
+    for (
+      var i = 0;
+      i < 200 && find.byKey(const Key('import-check-0')).evaluate().isEmpty;
+      i++
+    ) {
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 20)),
       );
       await tester.pump();
     }
-    expect(find.text('Matching…'), findsWidgets);
     expect(
       tester
           .widget<Checkbox>(find.byKey(const Key('import-check-0')))
           .onChanged,
       isNull,
     );
-    await tester.tap(find.byKey(const Key('import-check-0')));
     await tester.pump();
-    expect(find.text('Add 0 games'), findsOneWidget);
     expect(
       tester.widget<BrandButton>(find.byKey(const Key('import-add'))).onPressed,
       isNull,
     );
     gate.complete();
-    for (
-      var i = 0;
-      i < 200 &&
-          !(find
-                  .textContaining('5 folders · 2 selected')
-                  .evaluate()
-                  .isNotEmpty &&
-              find.text('Matching…').evaluate().isEmpty);
-      i++
-    ) {
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 20)),
-      );
-      await tester.pump(const Duration(seconds: 1));
-    }
-    await tester.pump();
-    expect(_checked(tester, 0), isTrue);
-    expect(find.text('5 folders · 2 selected'), findsOneWidget);
-  });
-
-  testWidgets(
-    'a second row for the same VNDB entry is a duplicate, not added',
-    (tester) async {
-      final h = await _openAndMatch(tester, duplicate: true, folders: 6);
-      expect(find.text('6 folders · 2 selected'), findsOneWidget);
-      expect(find.text('Duplicate'), findsOneWidget);
-      expect(_checked(tester, 1), isFalse);
-      expect(
-        tester
-            .widget<Checkbox>(find.byKey(const Key('import-check-1')))
-            .onChanged,
-        isNull,
-      );
-      expect(find.text('Add 2 games'), findsOneWidget);
-      await tester.tap(find.byKey(const Key('import-add')));
-      await _waitForSave(tester, h.repo);
-      expect(_added(h).map((g) => g.title), [
-        'DEMO',
-        'Rena-sensei to Pool Ryokou',
-      ]);
-      await _drainToast(tester);
-    },
-  );
-
-  testWidgets(
-    'a click outside the import dialog while saving keeps the batch',
-    (tester) async {
-      final h = await _openAndMatch(tester);
-      h.repo.saveGate = Completer<void>();
-      await tester.tap(find.byKey(const Key('import-add')));
-      for (
-        var i = 0;
-        i < 200 && find.text('Adding 2 of 2…').evaluate().isEmpty;
-        i++
-      ) {
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)),
-        );
-        await tester.pump();
-      }
-      await tester.tapAt(const Offset(5, 5));
-      await _settle(tester);
-      expect(find.text('Import a folder'), findsOneWidget);
-      h.repo.saveGate!.complete();
-      await _waitForSave(tester, h.repo);
-      expect(_added(h), hasLength(2));
-      await _drainToast(tester);
-    },
-  );
-
-  testWidgets('a click outside the Add dialog while saving keeps the game', (
-    tester,
-  ) async {
-    final h = await _openAddDialog(tester, picked: true);
-    h.repo.saveGate = Completer<void>();
-    await tester.tap(find.byKey(const Key('add-game-manual')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const Key('add-game-title')),
-      'Manual game',
-    );
-    await tester.enterText(
-      find.byKey(const Key('add-game-exe')),
-      '/games/manual/run.exe',
-    );
-    await tester.tap(find.byKey(const Key('add-game-add')));
-    await tester.pump();
-    await tester.tapAt(const Offset(5, 5));
     await _settle(tester);
-    expect(find.text('Set it up'), findsOneWidget);
-    h.repo.saveGate!.complete();
-    await _waitForSave(tester, h.repo);
-    expect(h.repo.games.single.title, 'Manual game');
-    await _drainToast(tester);
+    await tester.pump(const Duration(seconds: 10));
   });
 
-  testWidgets('the tag chip is hidden until a folder is chosen', (
-    tester,
-  ) async {
-    final picker = Completer<String?>();
-    await _open(tester, picker: picker);
+  testWidgets('the list is empty until a folder is chosen', (tester) async {
+    await _open(tester, picker: Completer<String?>());
     expect(find.text('Choose a folder to import'), findsOneWidget);
-    expect(find.byKey(const Key('import-tag-chip')), findsNothing);
-    expect(find.textContaining('Tag each game'), findsNothing);
-    picker.complete(null);
-    await _settle(tester);
-    expect(find.text('Import a folder'), findsNothing);
+    expect(find.byKey(const Key('import-check-all')), findsOneWidget);
   });
 
-  for (final size in const [Size(1400, 980), Size(1000, 640)]) {
-    testWidgets(
-      'nothing overflows at ${size.width.toInt()} by ${size.height.toInt()}',
-      (tester) async {
-        await _openAndMatch(tester, surface: size);
-        expect(find.text('5 folders · 2 selected'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-      },
-    );
-  }
+  testWidgets('nothing overflows at 1000 by 640 and 1400 by 980', (
+    tester,
+  ) async {
+    await _openAndMatch(tester, surface: const Size(1000, 640));
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byKey(const Key('import-name-4')));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<_Harness> _openAddDialog(
@@ -738,6 +683,6 @@ Future<_Harness> _openAddDialog(
   await tester.pump();
   await tester.tap(find.text('open'));
   await tester.pumpAndSettle();
-  expect(find.text('Find on VNDB'), findsOneWidget);
+  expect(find.text('Choose folder…'), findsOneWidget);
   return harness;
 }

@@ -9,6 +9,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 
 import '../../../../core/vndb.dart';
+import '../../domain/vndb_markup.dart';
 
 class VnResultRow extends StatelessWidget {
   const VnResultRow({
@@ -17,12 +18,21 @@ class VnResultRow extends StatelessWidget {
     required this.owned,
     this.onPick,
     this.current = false,
+    this.selected = false,
+    this.badge,
   });
 
   final VnSearchResult result;
   final bool owned;
   final VoidCallback? onPick;
   final bool current;
+
+  /// A label shown in place of "Current match", for a row that isn't the
+  /// current pick.
+  final String? badge;
+
+  /// Draws the selection ring without the current-match label.
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -97,7 +107,7 @@ class VnResultRow extends StatelessWidget {
                 ),
               ),
             ),
-            if (owned || current) ...[
+            if (owned || current || badge != null) ...[
               const SizedBox(width: 10),
               Container(
                 height: 24,
@@ -110,7 +120,7 @@ class VnResultRow extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  owned ? 'In library' : 'Current match',
+                  owned ? 'In library' : (badge ?? 'Current match'),
                   style: TextStyle(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w600,
@@ -123,13 +133,102 @@ class VnResultRow extends StatelessWidget {
         ),
       ),
     );
-    if (!current) return row;
+    if (!current && !selected) return row;
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: scheme.primary, width: 2),
       ),
       child: row,
+    );
+  }
+}
+
+/// The selected VNDB result: a large cover and its main facts.
+class VnDetailPanel extends StatelessWidget {
+  const VnDetailPanel({super.key, required this.result});
+
+  final VnSearchResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
+    final alt = result.alttitle;
+    final year = vnYear(result.released);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Selected',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 10),
+        VnCoverThumb(
+          imageUrl: result.imageUrl,
+          sexual: result.imageSexual,
+          width: 180,
+          height: 240,
+          radius: 10,
+        ),
+        const SizedBox(height: 12),
+        Text(
+          result.title,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        if (alt != null && alt.isNotEmpty) Text(alt, style: muted),
+        const SizedBox(height: 10),
+        if (result.developers.isNotEmpty)
+          _Fact(
+            label: 'Developer',
+            value: result.developers.join(', '),
+          ),
+        if (year.isNotEmpty) _Fact(label: 'Released', value: year),
+        if (result.description.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(
+            vndbPlainText(result.description),
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: muted,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _Fact extends StatelessWidget {
+  const _Fact({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          Text(value, style: const TextStyle(fontSize: 13)),
+        ],
+      ),
     );
   }
 }
