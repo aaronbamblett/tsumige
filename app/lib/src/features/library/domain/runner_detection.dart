@@ -9,23 +9,30 @@ import 'dart:io';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/launch/detect.dart';
+import '../../../utils/platform/platform_runtime.dart';
 
 part 'runner_detection.g.dart';
 
 /// Detected Wine runners. Rescan with `ref.invalidate(wineRunnersProvider)`.
 @Riverpod(keepAlive: true)
-Future<List<WineRunner>> wineRunners(Ref ref) async =>
-    detectWineRunners(Platform.environment);
+Future<List<WineRunner>> wineRunners(Ref ref) async => detectWineRunners(
+      Platform.environment,
+      platform: ref.watch(hostPlatformProvider),
+    );
 
 /// Detected Proton runners. Rescan with `ref.invalidate(protonRunnersProvider)`.
 @Riverpod(keepAlive: true)
-Future<List<ProtonRunner>> protonRunners(Ref ref) async =>
-    detectProtonRunners(Platform.environment);
+Future<List<ProtonRunner>> protonRunners(Ref ref) async => detectProtonRunners(
+      Platform.environment,
+      platform: ref.watch(hostPlatformProvider),
+    );
 
 /// Detected Steam prefixes. Rescan with `ref.invalidate(steamPrefixesProvider)`.
 @Riverpod(keepAlive: true)
-Future<List<SteamPrefix>> steamPrefixes(Ref ref) async =>
-    detectSteamPrefixes(Platform.environment);
+Future<List<SteamPrefix>> steamPrefixes(Ref ref) async => detectSteamPrefixes(
+      Platform.environment,
+      platform: ref.watch(hostPlatformProvider),
+    );
 
 /// Game language choices shared by the launch tab and the settings defaults:
 /// stored value, option label, and a widget-key suffix.

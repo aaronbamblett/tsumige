@@ -8,6 +8,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:tsumige/src/core/host_platform.dart';
 import 'package:tsumige/src/core/launch/detect.dart';
 
 const _fakeHome = '/home/testuser';
@@ -204,5 +205,53 @@ void main() {
     final prefixes = detectSteamPrefixes(_env(), fsRoot: _root.path);
 
     expect(prefixes.map((e) => e.appId), ['1', '2', '3']);
+  });
+
+  group('off Linux', () {
+    void makeEverything() {
+      _makeFile('$_fakeHome/.local/share/lutris/runners/wine/wine-9/bin/wine');
+      _makeFile('$_fakeHome/.local/share/Steam/compatibilitytools.d/GE-1/proton');
+      _makeDir('$_fakeHome/.local/share/Steam/steamapps/compatdata/42/pfx');
+    }
+
+    for (final os in [HostOs.macos, HostOs.windows]) {
+      test('${os.name} scans nothing and returns empty lists', () {
+        makeEverything();
+        final env = {..._env(), 'FLATPAK_ID': 'x'};
+        final platform = HostPlatform(os);
+
+        expect(
+          detectWineRunners(env, fsRoot: _root.path, platform: platform),
+          isEmpty,
+        );
+        expect(
+          detectProtonRunners(env, fsRoot: _root.path, platform: platform),
+          isEmpty,
+        );
+        expect(
+          detectSteamPrefixes(env, fsRoot: _root.path, platform: platform),
+          isEmpty,
+        );
+      });
+    }
+
+    test('linux still finds the same runners and prefixes', () {
+      makeEverything();
+      const platform = HostPlatform(HostOs.linux);
+      final env = _env();
+
+      expect(
+        detectWineRunners(env, fsRoot: _root.path, platform: platform),
+        isNotEmpty,
+      );
+      expect(
+        detectProtonRunners(env, fsRoot: _root.path, platform: platform),
+        isNotEmpty,
+      );
+      expect(
+        detectSteamPrefixes(env, fsRoot: _root.path, platform: platform),
+        isNotEmpty,
+      );
+    });
   });
 }

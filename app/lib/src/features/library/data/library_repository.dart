@@ -12,13 +12,17 @@ import 'package:tsumige/src/core/model.dart' as core;
 import 'package:tsumige/src/core/paths.dart' as core;
 import 'package:tsumige/src/core/store.dart' as core;
 import 'package:tsumige/src/core/vndb.dart' as core;
+import 'package:tsumige/src/utils/platform/platform_runtime.dart';
 
 part 'library_repository.g.dart';
 
 /// The app's data folder. Resolves from the environment and is overridable in
 /// tests — tests must never touch the real data folder.
 @Riverpod(keepAlive: true)
-core.DataDir dataDir(Ref ref) => core.DataDir.resolve(Platform.environment);
+core.DataDir dataDir(Ref ref) => core.DataDir.resolve(
+      Platform.environment,
+      platform: ref.watch(hostPlatformProvider),
+    );
 
 /// The single seam through which the app reaches the library file. Tests
 /// override it with a fake.

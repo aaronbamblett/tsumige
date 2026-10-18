@@ -8,9 +8,11 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../host_platform.dart';
 import '../model.dart';
 import 'args.dart';
 import 'env.dart';
+import 'launch_modes.dart';
 
 class LaunchConfigError implements Exception {
   final String message;
@@ -109,10 +111,14 @@ LaunchCommand buildLaunchCommand(
   String? overrideExe,
   required Map<String, String> hostEnv,
   String? umuRunPath,
+  HostPlatform? platform,
 }) {
+  final host = platform ?? HostPlatform.fromEnvironment(hostEnv);
   final mode = game.launch.mode ?? defaults.mode;
+  final unavailable = launchModeUnavailableMessage(mode, host);
+  if (unavailable != null) throw LaunchConfigError(unavailable);
   final extraEnv = parseEnv(game.launch.environment ?? '');
-  final inFlatpak = hostEnv.containsKey('FLATPAK_ID');
+  final inFlatpak = host.inFlatpak;
   LaunchCommand command;
   if (mode == LaunchMode.steam) {
     if (overrideExe != null) {
@@ -221,6 +227,7 @@ String? findOnPath(
   String name,
   Map<String, String> hostEnv, {
   bool Function(String path)? isExecutable,
+  HostPlatform? platform,
 }) {
   final check = isExecutable ?? ((path) => File(path).existsSync());
   final pathVar = hostEnv['PATH'];

@@ -7,6 +7,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import '../host_platform.dart';
 import '../model.dart';
 import '../paths.dart';
 import 'launch_command.dart';
@@ -43,10 +44,13 @@ class _IoStartedProcess implements StartedProcess {
 }
 
 class IoProcessStarter implements ProcessStarter {
-  IoProcessStarter({Map<String, String>? hostEnv})
-      : hostEnv = hostEnv ?? Platform.environment;
+  IoProcessStarter({Map<String, String>? hostEnv, HostPlatform? platform})
+      : hostEnv = hostEnv ?? Platform.environment,
+        platform = platform ??
+            HostPlatform.fromEnvironment(hostEnv ?? Platform.environment);
 
   final Map<String, String> hostEnv;
+  final HostPlatform platform;
 
   @override
   Future<StartedProcess> start(LaunchCommand command, File log) async {
@@ -133,6 +137,7 @@ class GameRunner {
     required this.starter,
     required this.processTable,
     Map<String, String>? hostEnv,
+    HostPlatform? platform,
     DateTime Function()? clock,
     Future<void> Function(Duration)? sleep,
     this.steamPollInterval = const Duration(seconds: 5),
@@ -140,6 +145,8 @@ class GameRunner {
     this.quickFailWindow = const Duration(seconds: 5),
     this.heartbeatInterval = const Duration(seconds: 60),
   })  : hostEnv = hostEnv ?? Platform.environment,
+        platform = platform ??
+            HostPlatform.fromEnvironment(hostEnv ?? Platform.environment),
         clock = clock ?? (() => DateTime.now().toUtc()),
         sleep = sleep ?? Future.delayed;
 
@@ -148,6 +155,7 @@ class GameRunner {
   final ProcessStarter starter;
   final ProcessTable processTable;
   final Map<String, String> hostEnv;
+  final HostPlatform platform;
   final DateTime Function() clock;
   final Future<void> Function(Duration) sleep;
   final Duration steamPollInterval;
@@ -176,6 +184,7 @@ class GameRunner {
       overrideExe: overrideExe,
       hostEnv: hostEnv,
       umuRunPath: umuRunPath,
+      platform: platform,
     );
     final startedAt = clock();
     final logFile = newLaunchLog(dir, game, startedAt);

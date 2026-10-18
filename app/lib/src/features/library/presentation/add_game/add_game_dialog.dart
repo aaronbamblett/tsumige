@@ -10,8 +10,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../../core/launch/launch_modes.dart';
 import '../../../../core/model.dart';
 import '../../../../core/vndb.dart';
+import '../../../../utils/platform/platform_runtime.dart';
 import '../../../../utils/theme/brand.dart';
 import '../../../../utils/toast.dart';
 import '../../../settings/presentation/sections/settings_widgets.dart';
@@ -75,7 +77,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     _exe = TextEditingController();
     _steamAppId = TextEditingController();
     _tagFocus = FocusNode();
-    _mode = LaunchMode.proton;
+    _mode = defaultLaunchMode(ref.read(hostPlatformProvider));
   }
 
   @override

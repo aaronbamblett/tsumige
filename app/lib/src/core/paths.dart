@@ -8,6 +8,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'host_platform.dart';
+
 String xdgDataHome(Map<String, String> env) {
   final xdg = env['XDG_DATA_HOME'];
   if (xdg != null && xdg.isNotEmpty) return xdg;
@@ -19,10 +21,18 @@ class DataDir {
 
   DataDir(this.root);
 
-  static DataDir resolve(Map<String, String> env) {
+  static DataDir resolve(Map<String, String> env, {HostPlatform? platform}) {
     final override = env['TSUMIGE_DATA_DIR'];
     if (override != null && override.isNotEmpty) return DataDir(override);
-    return DataDir(p.join(xdgDataHome(env), 'tsumige'));
+    switch (platform?.os ?? HostOs.linux) {
+      case HostOs.linux:
+        return DataDir(p.join(xdgDataHome(env), 'tsumige'));
+      case HostOs.macos:
+        return DataDir(
+            p.join(env['HOME'] ?? '', 'Library', 'Application Support', 'Tsumige'));
+      case HostOs.windows:
+        return DataDir(p.windows.join(env['APPDATA'] ?? '', 'Tsumige'));
+    }
   }
 
   File get libraryJson => File(p.join(root, 'library.json'));

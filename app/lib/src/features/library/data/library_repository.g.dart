@@ -55,7 +55,7 @@ final class DataDirProvider
   }
 }
 
-String _$dataDirHash() => r'22948c9c977d5056f2315b96c9b9d83dbc802041';
+String _$dataDirHash() => r'f19b681bb1a86713ad324cfb61c5884ae8f32da6';
 
 @ProviderFor(libraryRepository)
 final libraryRepositoryProvider = LibraryRepositoryProvider._();

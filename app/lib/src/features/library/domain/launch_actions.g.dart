@@ -52,7 +52,7 @@ final class UmuRunPathProvider
   }
 }
 
-String _$umuRunPathHash() => r'1846c95eef84c078dcf9d7cb76bb7666cea053fd';
+String _$umuRunPathHash() => r'957306b128356837c69fc736846b5bc3a8a900f1';
 
 /// The real game runner, wired to the data folder and the repository.
 /// Tests override this with a fake that never starts a process.
@@ -101,7 +101,7 @@ final class GameRunnerProvider
   }
 }
 
-String _$gameRunnerHash() => r'57fb81a2ec4fb413774c746ce5b0421f0fd35c2f';
+String _$gameRunnerHash() => r'953f0715bacf419b1af96fe06f1084f3cdc272ce';
 
 /// The session store behind [gameRunnerProvider], shared with startup
 /// recovery so both write through the repository.

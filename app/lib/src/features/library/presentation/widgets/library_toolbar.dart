@@ -774,18 +774,20 @@ class ToolbarSegment extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.enabled = true,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return InkWell(
       borderRadius: BorderRadius.circular(7),
-      onTap: onTap,
+      onTap: enabled ? onTap : null,
       child: Container(
         height: 32,
         alignment: Alignment.center,
@@ -799,7 +801,11 @@ class ToolbarSegment extends StatelessWidget {
           style: TextStyle(
             fontSize: 13.5,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-            color: selected ? scheme.primary : scheme.onSurfaceVariant,
+            color: !enabled
+                ? scheme.outline
+                : selected
+                ? scheme.primary
+                : scheme.onSurfaceVariant,
           ),
         ),
       ),

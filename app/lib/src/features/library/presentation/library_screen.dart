@@ -13,6 +13,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../core/launch/session_recorder.dart';
 import '../../../core/model.dart' as core;
+import '../../../utils/platform/platform_runtime.dart';
 import '../../../utils/startup_time.dart';
 import '../../../utils/toast.dart';
 import '../data/library_repository.dart';
@@ -91,6 +92,7 @@ class LibraryScreen extends HookConsumerWidget {
       return null;
     }, [libraryAsync.hasValue]);
     final selected = ref.watch(selectedGameProvider);
+    final onLinux = ref.watch(hostPlatformProvider).isLinux;
     final umuMissing = ref.watch(umuRunPathProvider) == null;
     final libraryGames = libraryAsync.value?.library.games ?? const [];
     final usesProton = libraryGames.any(
@@ -110,7 +112,7 @@ class LibraryScreen extends HookConsumerWidget {
                   gridRight: gridWidth - LibraryGrid.horizontalPadding,
                 ),
                 SkippedBanner(skipped: libraryAsync.value?.skipped ?? const []),
-                if (umuMissing && usesProton) const _UmuBanner(),
+                if (onLinux && umuMissing && usesProton) const _UmuBanner(),
                 Expanded(
                   child: Focus(
                     autofocus: true,
