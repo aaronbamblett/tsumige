@@ -419,24 +419,6 @@ void main() {
     expect(paneText(tester, 'Description'), findsOneWidget);
   });
 
-  testWidgets('fifteen tags wrap without overflow at panel width 400',
-      (tester) async {
-    await pumpLibrary(tester, [
-      core.Game(
-        id: 'g1',
-        title: 'Alpha',
-        tags: [
-          for (var i = 0; i < 15; i++) 'Extremely long tag number $i',
-        ],
-      ),
-    ]);
-    await openPane(tester, 'Alpha');
-    await tester.pump();
-    expect(tester.takeException(), isNull);
-    expect(paneText(tester, 'Extremely long tag number 14'),
-        findsOneWidget);
-  });
-
   testWidgets('info tab orders Description, Tags, VNDB tags, Notes',
       (tester) async {
     await pumpLibrary(tester, [
@@ -460,6 +442,86 @@ void main() {
     expect(descriptionY, lessThan(tagsY));
     expect(tagsY, lessThan(vndbTagsY));
     expect(vndbTagsY, lessThan(notesY));
+  });
+
+  testWidgets('twenty long tags fold to two rows with the add chip last',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        tags: [
+          for (var i = 0; i < 20; i++) 'Extremely long tag number $i',
+        ],
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(paneText(tester, 'Show all 20'), findsOneWidget);
+    expect(paneText(tester, 'Extremely long tag number 0'), findsOneWidget);
+    expect(paneText(tester, 'Extremely long tag number 19'), findsNothing);
+    final centers = <Offset>[
+      for (var i = 0; i < 20; i++)
+        if (paneText(tester, 'Extremely long tag number $i')
+            .evaluate()
+            .isNotEmpty)
+          tester.getCenter(
+              paneText(tester, 'Extremely long tag number $i')),
+      tester.getCenter(paneText(tester, '+')),
+    ];
+    expect(centers.length, greaterThan(1));
+    expect(centers.length, lessThan(21));
+    final rows = <double>[];
+    for (final center in centers) {
+      if (rows.every((dy) => (dy - center.dy).abs() > 4)) rows.add(center.dy);
+    }
+    expect(rows, hasLength(2));
+    var lastRowDy = centers.first.dy;
+    for (final center in centers) {
+      if (center.dy > lastRowDy) lastRowDy = center.dy;
+    }
+    Offset? rightmost;
+    for (final center in centers) {
+      if ((center.dy - lastRowDy).abs() < 4 &&
+          (rightmost == null || center.dx > rightmost.dx)) {
+        rightmost = center;
+      }
+    }
+    expect(rightmost, tester.getCenter(paneText(tester, '+')));
+  });
+
+  testWidgets('Show all 20 reveals every tag, then shows fewer',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        tags: [
+          for (var i = 0; i < 20; i++) 'Extremely long tag number $i',
+        ],
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    await tester.ensureVisible(paneText(tester, 'Show all 20'));
+    await tester.tap(paneText(tester, 'Show all 20'));
+    await tester.pumpAndSettle();
+    for (var i = 0; i < 20; i++) {
+      expect(paneText(tester, 'Extremely long tag number $i'), findsOneWidget);
+    }
+    expect(paneText(tester, 'Show fewer'), findsOneWidget);
+    expect(paneText(tester, 'Show all 20'), findsNothing);
+  });
+
+  testWidgets('two short tags show no fold action', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', tags: ['Cozy', 'Short']),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(paneText(tester, 'Cozy'), findsOneWidget);
+    expect(paneText(tester, 'Short'), findsOneWidget);
+    expect(find.textContaining('Show all'), findsNothing);
+    expect(find.textContaining('Show fewer'), findsNothing);
   });
 
   testWidgets('changing the game resets the tab to Info', (tester) async {

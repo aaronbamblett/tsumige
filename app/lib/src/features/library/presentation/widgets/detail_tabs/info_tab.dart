@@ -379,6 +379,7 @@ class _TagsSection extends ConsumerStatefulWidget {
 
 class _TagsSectionState extends ConsumerState<_TagsSection> {
   bool _adding = false;
+  bool _showAll = false;
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
 
@@ -422,20 +423,52 @@ class _TagsSectionState extends ConsumerState<_TagsSection> {
 
   @override
   Widget build(BuildContext context) {
-    return DetailSection(
-      label: 'Tags',
-      child: Wrap(
-        spacing: 6,
-        runSpacing: 6,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          for (final tag in widget.game.tags)
-            TagChip(
-              label: tag,
-              onRemove: () => ref.read(gameEditorProvider).update(
-                  widget.game.id,
-                  (g) => g.tags = [for (final t in g.tags) if (t != tag) t]),
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tags = widget.game.tags;
+        final maxWidth = constraints.maxWidth;
+        final lastWidth = _adding ? 140.0 : _kChipHeight;
+        final widths = [
+          for (final tag in tags) _ownTagWidth(context, tag),
+          lastWidth,
+        ];
+        final overflows =
+            maxWidth.isFinite && _wrapRows(maxWidth, widths) > 2;
+        final visible = !_showAll && overflows
+            ? _fittingTagCount(maxWidth, widths)
+            : tags.length;
+        final scheme = Theme.of(context).colorScheme;
+        return DetailSection(
+          label: 'Tags',
+          actions: [
+            if (overflows)
+              TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: scheme.onSurfaceVariant,
+                  minimumSize: const Size(0, 28),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  textStyle: const TextStyle(fontSize: 12.5),
+                ),
+                onPressed: () => setState(() => _showAll = !_showAll),
+                child: Text(_showAll ? 'Show fewer' : 'Show all ${tags.length}'),
+              ),
+          ],
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              for (var i = 0; i < visible; i++)
+                TagChip(
+                  label: tags[i],
+                  onRemove: () => ref.read(gameEditorProvider).update(
+                      widget.game.id,
+                      (g) => g.tags = [
+                            for (final t in g.tags)
+                              if (t != tags[i]) t
+                          ]),
+                ),
           if (_adding)
             SizedBox(
               width: 140,
@@ -483,10 +516,53 @@ class _TagsSectionState extends ConsumerState<_TagsSection> {
                 ),
               ),
             ),
-        ],
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
+}
+
+/// Width of an own-tag chip: its text at 12.5 px plus the chip's fixed
+/// extras (horizontal padding and the remove button).
+double _ownTagWidth(BuildContext context, String tag) {
+  final style = DefaultTextStyle.of(context)
+      .style
+      .merge(const TextStyle(fontSize: 12.5));
+  final painter = TextPainter(
+    text: TextSpan(text: tag, style: style),
+    textDirection: Directionality.of(context),
+  )..layout();
+  final width = painter.width;
+  painter.dispose();
+  return width + 37;
+}
+
+/// Rows a Wrap with spacing 6 needs for [widths] in [maxWidth].
+int _wrapRows(double maxWidth, List<double> widths) {
+  var rows = 1;
+  var x = 0.0;
+  for (final width in widths) {
+    if (x == 0) {
+      x = width;
+    } else if (x + 6 + width <= maxWidth) {
+      x += 6 + width;
+    } else {
+      rows++;
+      x = width;
+    }
+  }
+  return rows;
+}
+
+/// How many leading tags fit in two rows with the trailing add chip.
+int _fittingTagCount(double maxWidth, List<double> widths) {
+  for (var keep = widths.length - 1; keep >= 0; keep--) {
+    final shown = [...widths.sublist(0, keep), widths.last];
+    if (_wrapRows(maxWidth, shown) <= 2) return keep;
+  }
+  return 0;
 }
 
 const double _kChipHeight = 28;
