@@ -63,6 +63,57 @@ void main() {
     expect(rebuilt.read(sortAscendingProvider), isFalse);
   });
 
+  test('detail fields default to all four', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final container = containerFor(prefs);
+    addTearDown(container.dispose);
+
+    expect(container.read(detailFieldsProvider), keys.detailFieldsAll);
+  });
+
+  test('detail fields round-trip', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final container = containerFor(prefs);
+    addTearDown(container.dispose);
+
+    container
+        .read(detailFieldsProvider.notifier)
+        .set({keys.detailFieldDescription, keys.detailFieldNotes});
+    expect(
+      container.read(detailFieldsProvider),
+      {keys.detailFieldDescription, keys.detailFieldNotes},
+    );
+
+    final rebuilt = containerFor(prefs);
+    addTearDown(rebuilt.dispose);
+    expect(
+      rebuilt.read(detailFieldsProvider),
+      {keys.detailFieldDescription, keys.detailFieldNotes},
+    );
+  });
+
+  test('detail fields garbage means all four', () async {
+    SharedPreferences.setMockInitialValues(
+        {keys.PrefKey.detailFields.key: <String>['bogus']});
+    final prefs = await SharedPreferences.getInstance();
+    final container = containerFor(prefs);
+    addTearDown(container.dispose);
+
+    expect(container.read(detailFieldsProvider), keys.detailFieldsAll);
+  });
+
+  test('detail fields wrong-type stored value means all four', () async {
+    SharedPreferences.setMockInitialValues(
+        {keys.PrefKey.detailFields.key: 42});
+    final prefs = await SharedPreferences.getInstance();
+    final container = containerFor(prefs);
+    addTearDown(container.dispose);
+
+    expect(container.read(detailFieldsProvider), keys.detailFieldsAll);
+  });
+
   test('launch defaults read back', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();

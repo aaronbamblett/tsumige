@@ -109,3 +109,28 @@ class LaunchUmuGameId extends _$LaunchUmuGameId with PrefsMixin<String> {
 
   void set(String value) => state = value;
 }
+
+/// Info tab sections shown on the details panel. Stored as a string list, a
+/// missing key or any unknown entry means every field is shown.
+@riverpod
+class DetailFields extends _$DetailFields with PrefsMixin<Set<String>> {
+  @override
+  Set<String> build() {
+    persistOnChange((next) async => prefs.setStringList(
+        keys.PrefKey.detailFields.key, next.toList()));
+    final raw = prefs.get(keys.PrefKey.detailFields.key);
+    if (raw is! List ||
+        raw.any((e) => e is! String || !keys.detailFieldsAll.contains(e))) {
+      return keys.detailFieldsAll;
+    }
+    return raw.cast<String>().toSet();
+  }
+
+  void set(Set<String> value) => state = value;
+
+  void toggle(String field) {
+    final next = Set<String>.of(state);
+    if (!next.remove(field)) next.add(field);
+    state = next;
+  }
+}

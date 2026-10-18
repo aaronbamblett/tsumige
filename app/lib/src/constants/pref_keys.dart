@@ -18,6 +18,20 @@ const int coverWidthDefault = 192;
 /// Clamp a cover width into [coverWidthMin]..[coverWidthMax].
 int clampCoverWidth(int value) => value.clamp(coverWidthMin, coverWidthMax);
 
+/// Info tab sections the details panel may show. Stored as a string list;
+/// a missing key or any unknown entry means every field is shown.
+const String detailFieldDescription = 'description';
+const String detailFieldTags = 'tags';
+const String detailFieldVndbTags = 'vndbTags';
+const String detailFieldNotes = 'notes';
+
+const Set<String> detailFieldsAll = {
+  detailFieldDescription,
+  detailFieldTags,
+  detailFieldVndbTags,
+  detailFieldNotes,
+};
+
 /// Shared-preferences keys with their defaults.
 enum PrefKey {
   coverWidth('library.coverWidth', coverWidthDefault),
@@ -30,6 +44,7 @@ enum PrefKey {
   launchRunner('launch.runner', null),
   launchLocale('launch.locale', 'ja_JP.UTF-8'),
   launchUmuGameId('launch.umuGameId', 'umu-default'),
+  detailFields('appearance.detailFields', null),
   windowWidth('window.width', null),
   windowHeight('window.height', null),
   windowMaximized('window.maximized', false),

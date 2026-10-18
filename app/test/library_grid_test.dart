@@ -22,6 +22,7 @@ import 'package:tsumige/src/core/paths.dart' as core;
 import 'package:tsumige/src/core/vndb.dart' as core;
 import 'package:tsumige/src/features/library/data/library_repository.dart';
 import 'package:tsumige/src/features/library/domain/cover_source.dart';
+import 'package:tsumige/src/features/library/domain/launch_actions.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_cover_grid_delegate.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_cover_tile.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_detail_pane.dart';
@@ -87,6 +88,7 @@ Future<void> pumpLibrary(WidgetTester tester, List<core.Game> games) async {
         dataDirProvider.overrideWithValue(core.DataDir(temp.path)),
         libraryRepositoryProvider.overrideWithValue(GridFakeRepository(games)),
         coverExistsProvider.overrideWithValue((_) => false),
+        umuRunPathProvider.overrideWithValue('/usr/bin/umu-run'),
       ],
       child: RepaintBoundary(key: testRepaintKey, child: const TsumigeApp()),
     ),

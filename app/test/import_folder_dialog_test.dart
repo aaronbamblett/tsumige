@@ -504,6 +504,16 @@ void main() {
     await _drainToast(tester);
   });
 
+  testWidgets('a matched row imports with empty own tags', (tester) async {
+    final h = await _openAndMatch(tester);
+    await tester.tap(find.byKey(const Key('import-add')));
+    await _waitForSave(tester, h.repo);
+    final demo = _added(h).firstWhere((g) => g.vndbId == 'v900017');
+    expect(demo.title, 'DEMO');
+    expect(demo.tags, isEmpty);
+    await _drainToast(tester);
+  });
+
   testWidgets('an unsure row that is ticked is added as needing a look', (
     tester,
   ) async {

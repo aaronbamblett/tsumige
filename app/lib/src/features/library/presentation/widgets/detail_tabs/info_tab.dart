@@ -8,10 +8,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../../../constants/pref_keys.dart' as keys;
 import '../../../../../core/format.dart';
 import '../../../../../core/model.dart';
-import '../../../../../utils/prefs/app_prefs.dart' show tagFilterProvider;
+import '../../../../../utils/prefs/app_prefs.dart'
+    show detailFieldsProvider, tagFilterProvider;
 import '../../../../../utils/theme/brand.dart';
+import '../../../../../widgets/clamped_wrap.dart';
 import '../../../domain/cover_source.dart';
 import '../../../domain/game_editor.dart';
 import '../../../domain/library_query.dart';
@@ -79,30 +82,37 @@ class InfoTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final fields = ref.watch(detailFieldsProvider);
     final blocks = <Widget>[];
     blocks.add(_facts(context, ref));
-    if (game.tags.isNotEmpty) {
-      blocks.add(_TagsSection(game: game));
+    if (fields.contains(keys.detailFieldDescription)) {
+      blocks.add(_MarkupSection(
+        game: game,
+        label: 'Description',
+        emptyHint: 'No description',
+        editTooltip: 'Edit description',
+        getValue: (g) => g.description,
+        setValue: (g, v) => g.description = v,
+      ));
     }
-    if (game.vndbTags.isNotEmpty) {
-      blocks.add(_VndbTagsSection(key: ValueKey(game.id), game: game));
+    if (fields.contains(keys.detailFieldTags)) {
+      blocks.add(_TagsSection(key: ValueKey('tags-${game.id}'), game: game));
     }
-    blocks.add(_MarkupSection(
-      game: game,
-      label: 'Description',
-      emptyHint: 'No description',
-      editTooltip: 'Edit description',
-      getValue: (g) => g.description,
-      setValue: (g, v) => g.description = v,
-    ));
-    blocks.add(_MarkupSection(
-      game: game,
-      label: 'Notes',
-      emptyHint: 'No notes',
-      editTooltip: 'Edit notes',
-      getValue: (g) => g.notes,
-      setValue: (g, v) => g.notes = v,
-    ));
+    if (fields.contains(keys.detailFieldVndbTags) &&
+        game.vndbTags.isNotEmpty) {
+      blocks.add(
+          _VndbTagsSection(key: ValueKey('vndb-tags-${game.id}'), game: game));
+    }
+    if (fields.contains(keys.detailFieldNotes)) {
+      blocks.add(_MarkupSection(
+        game: game,
+        label: 'Notes',
+        emptyHint: 'No notes',
+        editTooltip: 'Edit notes',
+        getValue: (g) => g.notes,
+        setValue: (g, v) => g.notes = v,
+      ));
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -256,10 +266,21 @@ class _VndbTagsSection extends ConsumerStatefulWidget {
 class _VndbTagsSectionState extends ConsumerState<_VndbTagsSection> {
   var _showAll = false;
   var _showSpoilers = false;
+  var _overflowed = false;
 
   bool _keep(VndbTag tag) {
     if (tag.spoiler > 0 && !_showSpoilers) return false;
     return _showAll ? tag.rating > 0 : tag.rating >= 2.0;
+  }
+
+  /// Collapsed rows: every rated tag, all categories mixed, highest first.
+  List<VndbTag> _collapsed() {
+    final collapsed = [
+      for (final tag in widget.game.vndbTags)
+        if (tag.rating > 0 && (tag.spoiler == 0 || _showSpoilers)) tag,
+    ];
+    collapsed.sort((a, b) => b.rating.compareTo(a.rating));
+    return collapsed;
   }
 
   @override
@@ -268,13 +289,43 @@ class _VndbTagsSectionState extends ConsumerState<_VndbTagsSection> {
     final allCount = tags.where((t) => t.spoiler == 0 && t.rating > 0).length;
     final hasSpoilers = tags.any((t) => t.spoiler > 0);
     final linkStyle = _linkButtonStyle(Theme.of(context).colorScheme);
+    if (!_showAll) {
+      final collapsed = _collapsed();
+      return DetailSection(
+        label: 'VNDB tags',
+        actions: [
+          if (_overflowed)
+            TextButton(
+              style: linkStyle,
+              onPressed: () => setState(() => _showAll = true),
+              child: Text('Show all $allCount'),
+            ),
+          if (hasSpoilers)
+            TextButton(
+              style: linkStyle,
+              onPressed: () => setState(() => _showSpoilers = !_showSpoilers),
+              child: Text(_showSpoilers ? 'Hide spoilers' : 'Show spoilers'),
+            ),
+        ],
+        child: ClampedWrap(
+          spacing: 6,
+          runSpacing: 6,
+          maxRows: 2,
+          onOverflowChanged: (clamped) {
+            if (_showAll || clamped == _overflowed) return;
+            setState(() => _overflowed = clamped);
+          },
+          children: [for (final tag in collapsed) _VndbTagChip(tag: tag)],
+        ),
+      );
+    }
     return DetailSection(
       label: 'VNDB tags',
       actions: [
         TextButton(
           style: linkStyle,
-          onPressed: () => setState(() => _showAll = !_showAll),
-          child: Text(_showAll ? 'Show fewer' : 'Show all $allCount'),
+          onPressed: () => setState(() => _showAll = false),
+          child: const Text('Show fewer'),
         ),
         if (hasSpoilers)
           TextButton(
@@ -368,7 +419,7 @@ class _VndbTagChip extends ConsumerWidget {
 }
 
 class _TagsSection extends ConsumerStatefulWidget {
-  const _TagsSection({required this.game});
+  const _TagsSection({super.key, required this.game});
 
   final Game game;
 
@@ -378,6 +429,8 @@ class _TagsSection extends ConsumerStatefulWidget {
 
 class _TagsSectionState extends ConsumerState<_TagsSection> {
   bool _adding = false;
+  bool _showAll = false;
+  bool _overflowed = false;
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
 
@@ -421,66 +474,98 @@ class _TagsSectionState extends ConsumerState<_TagsSection> {
 
   @override
   Widget build(BuildContext context) {
+    final tags = widget.game.tags;
+    final scheme = Theme.of(context).colorScheme;
+    final trailing = _adding
+        ? SizedBox(
+            width: 140,
+            child: Focus(
+              onKeyEvent: (node, event) {
+                if (event is KeyDownEvent &&
+                    event.logicalKey == LogicalKeyboardKey.escape) {
+                  setState(() {
+                    _adding = false;
+                    _controller.clear();
+                  });
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: TextField(
+                controller: _controller,
+                focusNode: _focusNode,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'New tag',
+                  isDense: true,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                ),
+                onSubmitted: _submit,
+              ),
+            ),
+          )
+        : InkWell(
+            borderRadius: _kChipRadius,
+            onTap: () {
+              setState(() => _adding = true);
+              // Autofocus loses to the already-focused grid tile, so
+              // claim focus explicitly once the field is built.
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) _focusNode.requestFocus();
+              });
+            },
+            child: Container(
+              width: _kChipHeight,
+              height: _kChipHeight,
+              alignment: Alignment.center,
+              decoration: _chipDecoration,
+              child: Text(
+                '+',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          );
     return DetailSection(
       label: 'Tags',
-      child: Wrap(
+      actions: [
+        if (_overflowed)
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: scheme.onSurfaceVariant,
+              minimumSize: const Size(0, 28),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              textStyle: const TextStyle(fontSize: 12.5),
+            ),
+            onPressed: () => setState(() => _showAll = !_showAll),
+            child:
+                Text(_showAll ? 'Show fewer' : 'Show all ${tags.length}'),
+          ),
+      ],
+      child: ClampedWrap(
         spacing: 6,
         runSpacing: 6,
+        maxRows: _showAll ? null : 2,
         crossAxisAlignment: WrapCrossAlignment.center,
+        onOverflowChanged: (clamped) {
+          if (_showAll || clamped == _overflowed) return;
+          setState(() => _overflowed = clamped);
+        },
+        trailing: trailing,
         children: [
-          for (final tag in widget.game.tags)
+          for (var i = 0; i < tags.length; i++)
             TagChip(
-              label: tag,
+              label: tags[i],
               onRemove: () => ref.read(gameEditorProvider).update(
                   widget.game.id,
-                  (g) => g.tags = [for (final t in g.tags) if (t != tag) t]),
-            ),
-          if (_adding)
-            SizedBox(
-              width: 140,
-              child: Focus(
-                onKeyEvent: (node, event) {
-                  if (event is KeyDownEvent &&
-                      event.logicalKey == LogicalKeyboardKey.escape) {
-                    setState(() {
-                      _adding = false;
-                      _controller.clear();
-                    });
-                    return KeyEventResult.handled;
-                  }
-                  return KeyEventResult.ignored;
-                },
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    hintText: 'New tag',
-                    isDense: true,
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  ),
-                  onSubmitted: _submit,
-                ),
-              ),
-            )
-          else
-            InkWell(
-              borderRadius: _kChipRadius,
-              onTap: () => setState(() => _adding = true),
-              child: Container(
-                width: _kChipHeight,
-                height: _kChipHeight,
-                alignment: Alignment.center,
-                decoration: _chipDecoration,
-                child: Text(
-                  '+',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
+                  (g) => g.tags = [
+                        for (final t in g.tags)
+                          if (t != tags[i]) t
+                      ]),
             ),
         ],
       ),

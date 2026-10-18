@@ -208,7 +208,7 @@ void main() {
     await openLaunch(tester, 'Alpha');
     expect(find.text('Proton version'), findsOneWidget);
     expect(find.text('Prefix'), findsOneWidget);
-    expect(find.text('Steam app id'), findsNothing);
+    expect(find.text('Steam app ID'), findsNothing);
 
     await tester.tap(find.byKey(const Key('mode-native')));
     await tester.pumpAndSettle();
@@ -220,7 +220,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('mode-steam')));
     await tester.pumpAndSettle();
-    expect(find.text('Steam app id'), findsOneWidget);
+    expect(find.text('Steam app ID'), findsOneWidget);
     expect(find.text('Game file'), findsNothing);
     expect(find.text('Arguments'), findsNothing);
 
@@ -228,7 +228,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Wine build'), findsOneWidget);
     expect(find.text('Prefix'), findsOneWidget);
-    expect(find.text('Steam app id'), findsNothing);
+    expect(find.text('Steam app ID'), findsNothing);
   });
 
   testWidgets('text field saves on blur and Esc reverts', (tester) async {

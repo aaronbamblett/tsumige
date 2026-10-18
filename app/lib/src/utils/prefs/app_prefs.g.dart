@@ -587,3 +587,65 @@ abstract class _$LaunchUmuGameId extends $Notifier<String> {
     return element.handleCreate(ref, build);
   }
 }
+
+/// Info tab sections shown on the details panel. Stored as a string list, a
+/// missing key or any unknown entry means every field is shown.
+
+@ProviderFor(DetailFields)
+final detailFieldsProvider = DetailFieldsProvider._();
+
+/// Info tab sections shown on the details panel. Stored as a string list, a
+/// missing key or any unknown entry means every field is shown.
+final class DetailFieldsProvider
+    extends $NotifierProvider<DetailFields, Set<String>> {
+  /// Info tab sections shown on the details panel. Stored as a string list, a
+  /// missing key or any unknown entry means every field is shown.
+  DetailFieldsProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'detailFieldsProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$detailFieldsHash();
+
+  @$internal
+  @override
+  DetailFields create() => DetailFields();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(Set<String> value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<Set<String>>(value),
+    );
+  }
+}
+
+String _$detailFieldsHash() => r'307d6bc5a0bdbb75b63efa8bc83960b14a773a78';
+
+/// Info tab sections shown on the details panel. Stored as a string list, a
+/// missing key or any unknown entry means every field is shown.
+
+abstract class _$DetailFields extends $Notifier<Set<String>> {
+  Set<String> build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<Set<String>, Set<String>>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<Set<String>, Set<String>>,
+              Set<String>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}

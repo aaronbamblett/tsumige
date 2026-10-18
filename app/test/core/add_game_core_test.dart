@@ -42,7 +42,7 @@ void main() {
     expect(game.vndbVotecount, 1337);
     expect(game.vndbFetchedAt, now);
     expect(game.description, 'A story.');
-    expect(game.tags, ['Romance', 'Sci-fi']);
+    expect(game.tags, isEmpty);
     expect(game.launch.executable, '/games/demo/run.exe');
     expect(game.launch.mode, LaunchMode.proton);
   });
@@ -91,7 +91,7 @@ void main() {
     expect(game.adultVndb, isTrue);
     expect(game.isAdult, isTrue);
     expect(game.vndbDataFetchedAt, now);
-    expect(game.tags, ['Romance', 'Sci-fi']);
+    expect(game.tags, isEmpty);
   });
 
   test('fillVndbMetadata keeps the basic fields when VNDB fails', () async {

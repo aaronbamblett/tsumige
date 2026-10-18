@@ -1019,7 +1019,7 @@ class _SteamAppIdField extends ConsumerWidget {
     return _LaunchTextField(
       key: const Key('launch-steam-app-id'),
       gameId: gameId,
-      label: 'Steam app id',
+      label: 'Steam app ID',
       initial: initial.steamAppId?.toString() ?? '',
       keyboardType: TextInputType.number,
       validate: (text) {

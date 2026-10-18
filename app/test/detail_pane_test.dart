@@ -24,11 +24,13 @@ import 'package:tsumige/src/core/vndb.dart' as core;
 import 'package:tsumige/src/features/library/data/library_repository.dart';
 import 'package:tsumige/src/features/library/domain/cover_source.dart';
 import 'package:tsumige/src/features/library/domain/game_editor.dart';
+import 'package:tsumige/src/features/library/domain/launch_actions.dart';
 import 'package:tsumige/src/features/library/domain/running_games.dart';
 import 'package:tsumige/src/features/library/domain/selection.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/detail_tabs/related_tab.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_cover_tile.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_detail_pane.dart';
+import 'package:tsumige/src/widgets/clamped_wrap.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 import 'package:tsumige/src/utils/theme/brand.dart';
 
@@ -87,6 +89,7 @@ Future<void> pumpLibrary(WidgetTester tester, List<core.Game> games,
       libraryRepositoryProvider
           .overrideWithValue(DetailFakeRepository(games)),
       coverExistsProvider.overrideWithValue(exists ?? (_) => false),
+      umuRunPathProvider.overrideWithValue('/usr/bin/umu-run'),
       if (coverPicker != null)
         coverPickerProvider.overrideWithValue(coverPicker),
       if (urlOpener != null)
@@ -419,22 +422,371 @@ void main() {
     expect(paneText(tester, 'Description'), findsOneWidget);
   });
 
-  testWidgets('fifteen tags wrap without overflow at panel width 400',
+  testWidgets('info tab orders Description, Tags, VNDB tags, Notes',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        description: 'A story',
+        notes: 'Some notes',
+        tags: ['Cozy'],
+        vndbTags: const [
+          core.VndbTag(
+              name: 'Romance', rating: 2.5, spoiler: 0, category: 'cont'),
+        ],
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    final descriptionY = tester.getTopLeft(paneText(tester, 'Description')).dy;
+    final tagsY = tester.getTopLeft(paneText(tester, 'Tags')).dy;
+    final vndbTagsY = tester.getTopLeft(paneText(tester, 'VNDB tags')).dy;
+    final notesY = tester.getTopLeft(paneText(tester, 'Notes')).dy;
+    expect(descriptionY, lessThan(tagsY));
+    expect(tagsY, lessThan(vndbTagsY));
+    expect(vndbTagsY, lessThan(notesY));
+  });
+
+  testWidgets('twenty long tags fold to two rows with the add chip last',
       (tester) async {
     await pumpLibrary(tester, [
       core.Game(
         id: 'g1',
         title: 'Alpha',
         tags: [
-          for (var i = 0; i < 15; i++) 'Extremely long tag number $i',
+          for (var i = 0; i < 20; i++) 'Extremely long tag number $i',
         ],
       ),
     ]);
     await openPane(tester, 'Alpha');
     await tester.pump();
     expect(tester.takeException(), isNull);
-    expect(paneText(tester, 'Extremely long tag number 14'),
-        findsOneWidget);
+    expect(paneText(tester, 'Show all 20'), findsOneWidget);
+    expect(paneText(tester, 'Extremely long tag number 0'), findsOneWidget);
+    expect(paneText(tester, 'Extremely long tag number 19'), findsNothing);
+    final centers = <Offset>[
+      for (var i = 0; i < 20; i++)
+        if (paneText(tester, 'Extremely long tag number $i')
+            .evaluate()
+            .isNotEmpty)
+          tester.getCenter(
+              paneText(tester, 'Extremely long tag number $i')),
+      tester.getCenter(paneText(tester, '+')),
+    ];
+    expect(centers.length, greaterThan(1));
+    expect(centers.length, lessThan(21));
+    final rows = <double>[];
+    for (final center in centers) {
+      if (rows.every((dy) => (dy - center.dy).abs() > 4)) rows.add(center.dy);
+    }
+    expect(rows, hasLength(2));
+    var lastRowDy = centers.first.dy;
+    for (final center in centers) {
+      if (center.dy > lastRowDy) lastRowDy = center.dy;
+    }
+    Offset? rightmost;
+    for (final center in centers) {
+      if ((center.dy - lastRowDy).abs() < 4 &&
+          (rightmost == null || center.dx > rightmost.dx)) {
+        rightmost = center;
+      }
+    }
+    expect(rightmost, tester.getCenter(paneText(tester, '+')));
+  });
+
+  testWidgets('Show all 20 reveals every tag, then shows fewer',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        tags: [
+          for (var i = 0; i < 20; i++) 'Extremely long tag number $i',
+        ],
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    await tester.ensureVisible(paneText(tester, 'Show all 20'));
+    await tester.tap(paneText(tester, 'Show all 20'));
+    await tester.pumpAndSettle();
+    for (var i = 0; i < 20; i++) {
+      expect(paneText(tester, 'Extremely long tag number $i'), findsOneWidget);
+    }
+    expect(paneText(tester, 'Show fewer'), findsOneWidget);
+    expect(paneText(tester, 'Show all 20'), findsNothing);
+  });
+
+  testWidgets('folded tag chips stay out of keyboard focus', (tester) async {
+    final games = [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        tags: [
+          for (var i = 0; i < 20; i++) 'Extremely long tag number $i',
+        ],
+      ),
+    ];
+    await pumpLibrary(tester, games);
+    await openPane(tester, 'Alpha');
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Show all 20'), findsOneWidget);
+
+    RenderClampedWrap tagsWrap() => tester.renderObject<RenderClampedWrap>(
+          find.descendant(
+            of: find.byType(GameDetailPane),
+            matching: find.byElementPredicate((e) =>
+                e is RenderObjectElement && e.renderObject is RenderClampedWrap),
+          ),
+        );
+
+    Set<String> hiddenTooltips() => {
+          for (var i = tagsWrap().visibleLeadingCount;
+              i < games.single.tags.length;
+              i++)
+            'Remove ${games.single.tags[i]}',
+        };
+
+    bool focusInside(Set<String> tooltips) {
+      final context = FocusManager.instance.primaryFocus?.context;
+      if (context == null) return false;
+      var found = false;
+      (context as Element).visitAncestorElements((el) {
+        final widget = el.widget;
+        if (widget is Tooltip &&
+            widget.message != null &&
+            tooltips.contains(widget.message)) {
+          found = true;
+        }
+        return true;
+      });
+      return found;
+    }
+
+    var sawChip = false;
+    for (var i = 0; i < 60; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(focusInside(hiddenTooltips()), isFalse,
+          reason: 'tab $i landed inside a hidden chip');
+      if (focusInside(
+          {for (final tag in games.single.tags) 'Remove $tag'})) {
+        sawChip = true;
+      }
+    }
+    expect(sawChip, isTrue);
+
+    bool focusInTagsFold() {
+      final context = FocusManager.instance.primaryFocus?.context;
+      if (context == null) return false;
+      var found = false;
+      (context as Element).visitAncestorElements((el) {
+        if (el.widget is ClampedWrap) found = true;
+        return true;
+      });
+      return found;
+    }
+
+    Future<void> resettle() async {
+      if (find.byKey(const Key('settings-close')).evaluate().isNotEmpty) {
+        await tester.tap(find.byKey(const Key('settings-close')));
+        await tester.pumpAndSettle();
+      }
+      if (find.text('Delete game…').evaluate().isNotEmpty) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+      }
+      if (find.byType(GameDetailPane).evaluate().isEmpty) {
+        await openPane(tester, 'Alpha');
+        await tester.pumpAndSettle();
+      } else if (paneText(tester, 'Tags').evaluate().isEmpty) {
+        await tester.tap(tabLabel('Info'));
+        await tester.pumpAndSettle();
+      } else if (paneText(tester, 'Show fewer').evaluate().isNotEmpty) {
+        await tester.tap(paneText(tester, 'Show fewer'));
+        await tester.pumpAndSettle();
+      }
+    }
+
+    Set<String> hiddenFor(List<String> tags) => {
+          for (var i = tagsWrap().visibleLeadingCount; i < tags.length; i++)
+            'Remove ${tags[i]}',
+        };
+
+    var sawFoldEnter = false;
+    for (var i = 0; i < 60; i++) {
+      await resettle();
+      final before = [...games.single.tags];
+      final hiddenBefore = hiddenFor(before);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(focusInside(hiddenFor(games.single.tags)), isFalse,
+          reason: 'tab $i landed inside a hidden chip');
+      // Enter only inside the fold: the hazard is a focused chip remove,
+      // and blind Enter elsewhere drives unrelated dialogs (add game, …).
+      if (focusInTagsFold()) {
+        sawFoldEnter = true;
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.pump();
+      }
+      final removed = before.toSet().difference(games.single.tags.toSet());
+      expect(removed.difference(before.toSet().difference(hiddenBefore)),
+          isEmpty,
+          reason: 'enter $i removed a hidden tag');
+    }
+    expect(sawFoldEnter, isTrue);
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('collapsing after removing tags clears the fold action',
+      (tester) async {
+    final games = [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        tags: [
+          for (var i = 0; i < 20; i++) 'Extremely long tag number $i',
+        ],
+      ),
+    ];
+    await pumpLibrary(tester, games);
+    await openPane(tester, 'Alpha');
+    await tester.ensureVisible(paneText(tester, 'Show all 20'));
+    await tester.tap(paneText(tester, 'Show all 20'));
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Extremely long tag number 19'), findsOneWidget);
+    for (var i = 19; i >= 1; i--) {
+      final remove =
+          find.byTooltip('Remove Extremely long tag number $i');
+      await tester.ensureVisible(remove);
+      await tester.tap(remove);
+      await tester.pump();
+    }
+    expect(games.single.tags, hasLength(1));
+    await tester.ensureVisible(paneText(tester, 'Show fewer'));
+    await tester.tap(paneText(tester, 'Show fewer'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Show all'), findsNothing);
+    expect(find.textContaining('Show fewer'), findsNothing);
+  });
+
+  testWidgets('VNDB collapse after hiding spoilers clears the fold action',
+      (tester) async {
+    const categories = ['cont', 'tech', 'ero'];
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        vndbTags: [
+          const core.VndbTag(
+              name: 'Cozy', rating: 3.0, spoiler: 0, category: 'cont'),
+          const core.VndbTag(
+              name: 'Short', rating: 2.5, spoiler: 0, category: 'tech'),
+          for (var i = 0; i < 40; i++)
+            core.VndbTag(
+              name: 'Secret twist $i',
+              rating: 3.9 - i * 0.05,
+              spoiler: 2,
+              category: categories[i % 3],
+            ),
+        ],
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Show all'), findsNothing);
+    await tester.ensureVisible(paneText(tester, 'Show spoilers'));
+    await tester.tap(paneText(tester, 'Show spoilers'));
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Show all 2'), findsOneWidget);
+    await tester.ensureVisible(paneText(tester, 'Show all 2'));
+    await tester.tap(paneText(tester, 'Show all 2'));
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Content'), findsOneWidget);
+    await tester.ensureVisible(paneText(tester, 'Hide spoilers'));
+    await tester.tap(paneText(tester, 'Hide spoilers'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(paneText(tester, 'Show fewer'));
+    await tester.tap(paneText(tester, 'Show fewer'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Show all'), findsNothing);
+    expect(find.textContaining('Show fewer'), findsNothing);
+  });
+
+  testWidgets('two short tags show no fold action', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(id: 'g1', title: 'Alpha', tags: ['Cozy', 'Short']),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(paneText(tester, 'Cozy'), findsOneWidget);
+    expect(paneText(tester, 'Short'), findsOneWidget);
+    expect(find.textContaining('Show all'), findsNothing);
+    expect(find.textContaining('Show fewer'), findsNothing);
+  });
+
+  List<core.Game> vndbTagGames() {
+    const categories = ['cont', 'tech', 'ero'];
+    return [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        vndbTags: [
+          for (var i = 0; i < 40; i++)
+            core.VndbTag(
+              name: 'VNDB tag $i',
+              rating: 3.9 - i * 0.05,
+              spoiler: 0,
+              category: categories[i % 3],
+            ),
+        ],
+      ),
+    ];
+  }
+
+  testWidgets('forty VNDB tags fold to two mixed rows without headings',
+      (tester) async {
+    await pumpLibrary(tester, vndbTagGames());
+    await openPane(tester, 'Alpha');
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Show all 40'), findsOneWidget);
+    expect(paneText(tester, 'Content'), findsNothing);
+    expect(paneText(tester, 'Technical'), findsNothing);
+    expect(paneText(tester, 'Sexual'), findsNothing);
+    final wrap = tester.renderObject<RenderClampedWrap>(
+      find.ancestor(
+        of: paneText(tester, 'VNDB tag 0'),
+        matching: find.byElementPredicate((e) =>
+            e is RenderObjectElement && e.renderObject is RenderClampedWrap),
+      ),
+    );
+    expect(wrap.overflowed, isTrue);
+    // Collapsed tags sort highest first, so the leading chips are shown.
+    final centers = [
+      for (var i = 0; i < wrap.visibleLeadingCount; i++)
+        tester.getCenter(paneText(tester, 'VNDB tag $i')),
+    ];
+    expect(centers.length, greaterThan(2));
+    final rows = <double>[];
+    for (final center in centers) {
+      if (rows.every((dy) => (dy - center.dy).abs() > 4)) rows.add(center.dy);
+    }
+    expect(rows, hasLength(2));
+  });
+
+  testWidgets('Show all 40 reveals the grouped VNDB tags', (tester) async {
+    await pumpLibrary(tester, vndbTagGames());
+    await openPane(tester, 'Alpha');
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(paneText(tester, 'Show all 40'));
+    await tester.tap(paneText(tester, 'Show all 40'));
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Content'), findsOneWidget);
+    expect(paneText(tester, 'Technical'), findsOneWidget);
+    expect(paneText(tester, 'Sexual'), findsOneWidget);
+    for (var i = 0; i < 40; i++) {
+      expect(paneText(tester, 'VNDB tag $i'), findsOneWidget);
+    }
+    expect(paneText(tester, 'Show fewer'), findsOneWidget);
+    expect(paneText(tester, 'Show all 40'), findsNothing);
   });
 
   testWidgets('changing the game resets the tab to Info', (tester) async {
@@ -521,7 +873,7 @@ void main() {
     ]);
     await openPane(tester, 'Alpha');
     await openTab(tester, 'Launch');
-    expect(find.text('Steam app id'), findsOneWidget);
+    expect(find.text('Steam app ID'), findsOneWidget);
     final appIdField = find.descendant(
       of: find.byKey(const Key('launch-steam-app-id')),
       matching: find.byType(TextField),
@@ -717,7 +1069,8 @@ void main() {
     expect(paneText(tester, 'No description'), findsOneWidget);
     expect(paneText(tester, 'Notes'), findsOneWidget);
     expect(paneText(tester, 'No notes'), findsOneWidget);
-    expect(find.text('Tags'), findsNothing);
+    expect(paneText(tester, 'Tags'), findsOneWidget);
+    expect(paneText(tester, '+'), findsOneWidget);
     expect(find.text('VNDB Rating'), findsNothing);
   });
 
@@ -727,6 +1080,116 @@ void main() {
     ]);
     await openPane(tester, 'Alpha');
     expect(richPaneText(tester, '6.4'), findsOneWidget);
+  });
+
+  testWidgets('empty tags still show the section, and adding saves',
+      (tester) async {
+    final games = [core.Game(id: 'g1', title: 'Alpha')];
+    await pumpLibrary(tester, games);
+    await openPane(tester, 'Alpha');
+    expect(paneText(tester, 'Tags'), findsOneWidget);
+    await tester.ensureVisible(paneText(tester, '+'));
+    await tester.tap(paneText(tester, '+'));
+    await tester.pump();
+    final field = find.descendant(
+      of: find.byType(GameDetailPane),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(field, 'Cozy');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Cozy'), findsOneWidget);
+    expect(games.single.tags, ['Cozy']);
+  });
+
+  testWidgets('tapping + focuses the new tag field for immediate typing',
+      (tester) async {
+    final games = [core.Game(id: 'g1', title: 'Alpha', tags: ['Action'])];
+    await pumpLibrary(tester, games);
+    await openPane(tester, 'Alpha');
+    // Park focus on the tab so the field must steal it explicitly.
+    await tester.tap(tabLabel('Info'));
+    await tester.pump();
+    await tester.ensureVisible(paneText(tester, '+'));
+    await tester.tap(paneText(tester, '+'));
+    await tester.pump();
+    final field = find.descendant(
+      of: find.byType(GameDetailPane),
+      matching: find.byType(TextField),
+    );
+    expect(field, findsOneWidget);
+    expect(tester.widget<TextField>(field).focusNode?.hasFocus, isTrue);
+    await tester.enterText(field, 'Cozy');
+    // Enter submits, as in the sibling tag tests.
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Cozy'), findsOneWidget);
+    expect(games.single.tags, contains('Cozy'));
+  });
+
+  testWidgets('unticking a detail field hides its Info section',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        description: 'A story',
+        notes: 'Some notes',
+        tags: ['Cozy'],
+        vndbTags: const [
+          core.VndbTag(
+              name: 'Romance', rating: 2.5, spoiler: 0, category: 'cont'),
+        ],
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(paneText(tester, 'VNDB tags'), findsOneWidget);
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+        find.byKey(const Key('settings-detail-field-vndbTags')));
+    await tester.tap(
+        find.byKey(const Key('settings-detail-field-vndbTags')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('settings-close')));
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'VNDB tags'), findsNothing);
+    expect(paneText(tester, 'Description'), findsOneWidget);
+    expect(paneText(tester, 'Tags'), findsOneWidget);
+    expect(paneText(tester, 'Notes'), findsOneWidget);
+  });
+
+  testWidgets('hiding every detail field leaves only the facts row',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        description: 'A story',
+        notes: 'Some notes',
+        tags: ['Cozy'],
+        vndbTags: const [
+          core.VndbTag(
+              name: 'Romance', rating: 2.5, spoiler: 0, category: 'cont'),
+        ],
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    for (final id in ['description', 'tags', 'vndbTags', 'notes']) {
+      await tester.ensureVisible(find.byKey(Key('settings-detail-field-$id')));
+      await tester.tap(find.byKey(Key('settings-detail-field-$id')));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('settings-close')));
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Description'), findsNothing);
+    expect(paneText(tester, 'Tags'), findsNothing);
+    expect(paneText(tester, 'VNDB tags'), findsNothing);
+    expect(paneText(tester, 'Notes'), findsNothing);
+    expect(paneText(tester, 'Played'), findsOneWidget);
   });
 
   testWidgets('removing a tag through its close saves', (tester) async {
@@ -1124,7 +1587,7 @@ void main() {
     expect(find.text('Beta'), findsOneWidget);
   });
 
-  testWidgets('VNDB tags default view hides spoiler and weak tags',
+  testWidgets('VNDB tags collapsed view mixes rated tags without headings',
       (tester) async {
     await pumpLibrary(tester, [
       core.Game(id: 'g1', title: 'Alpha', vndbTags: const [
@@ -1136,15 +1599,17 @@ void main() {
       ]),
     ]);
     await openPane(tester, 'Alpha');
+    await tester.pumpAndSettle();
     expect(paneText(tester, 'VNDB tags'), findsOneWidget);
-    expect(paneText(tester, 'Content'), findsOneWidget);
-    expect(paneText(tester, 'Sexual'), findsOneWidget);
+    expect(paneText(tester, 'Content'), findsNothing);
+    expect(paneText(tester, 'Sexual'), findsNothing);
     expect(paneText(tester, 'Technical'), findsNothing);
     expect(paneText(tester, 'Romance'), findsOneWidget);
     expect(paneText(tester, 'Kissing'), findsOneWidget);
-    expect(paneText(tester, 'Weak Tag'), findsNothing);
+    expect(paneText(tester, 'Weak Tag'), findsOneWidget);
     expect(paneText(tester, 'Secret Twist'), findsNothing);
-    expect(paneText(tester, 'Show all 3'), findsOneWidget);
+    expect(paneText(tester, 'Zero Tag'), findsNothing);
+    expect(find.textContaining('Show all'), findsNothing);
     expect(paneText(tester, 'Show spoilers'), findsOneWidget);
   });
 
@@ -1170,20 +1635,33 @@ void main() {
   testWidgets('show all and show spoilers reveal tags and reset on game change',
       (tester) async {
     await pumpLibrary(tester, [
-      core.Game(id: 'g1', title: 'Alpha', vndbTags: const [
-        core.VndbTag(name: 'Romance', rating: 2.5, spoiler: 0, category: 'cont'),
-        core.VndbTag(name: 'Weak Tag', rating: 1.0, spoiler: 0, category: 'cont'),
-        core.VndbTag(name: 'Secret Twist', rating: 2.5, spoiler: 1, category: 'cont'),
+      core.Game(id: 'g1', title: 'Alpha', vndbTags: [
+        const core.VndbTag(
+            name: 'Romance', rating: 2.5, spoiler: 0, category: 'cont'),
+        const core.VndbTag(
+            name: 'Weak Tag', rating: 1.0, spoiler: 0, category: 'cont'),
+        const core.VndbTag(
+            name: 'Secret Twist', rating: 2.5, spoiler: 1, category: 'cont'),
+        for (var i = 0; i < 12; i++)
+          core.VndbTag(
+              name: 'Filler Tag Number $i',
+              rating: 2.0,
+              spoiler: 0,
+              category: 'cont'),
       ]),
       core.Game(id: 'g2', title: 'Beta', vndbTags: const [
         core.VndbTag(name: 'Mystery', rating: 2.5, spoiler: 0, category: 'cont'),
       ]),
     ]);
     await openPane(tester, 'Alpha');
-    await tester.ensureVisible(paneText(tester, 'Show all 2'));
-    await tester.tap(paneText(tester, 'Show all 2'));
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Weak Tag'), findsNothing);
+    await tester.ensureVisible(paneText(tester, 'Show all 14'));
+    await tester.tap(paneText(tester, 'Show all 14'));
     await tester.pumpAndSettle();
     expect(paneText(tester, 'Weak Tag'), findsOneWidget);
+    expect(paneText(tester, 'Content'), findsOneWidget);
+    expect(paneText(tester, 'Filler Tag Number 11'), findsOneWidget);
     expect(paneText(tester, 'Show fewer'), findsOneWidget);
     await tester.ensureVisible(paneText(tester, 'Show spoilers'));
     await tester.tap(paneText(tester, 'Show spoilers'));
@@ -1193,7 +1671,7 @@ void main() {
     expect(paneText(tester, 'Hide spoilers'), findsOneWidget);
     await tester.tap(find.text('Beta').first);
     await tester.pumpAndSettle();
-    expect(paneText(tester, 'Show all 1'), findsOneWidget);
+    expect(find.textContaining('Show all'), findsNothing);
     expect(paneText(tester, 'Show fewer'), findsNothing);
     expect(paneText(tester, 'Mystery'), findsOneWidget);
     expect(paneText(tester, 'Weak Tag'), findsNothing);
