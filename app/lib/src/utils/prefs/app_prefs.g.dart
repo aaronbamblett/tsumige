@@ -627,7 +627,7 @@ final class DetailFieldsProvider
   }
 }
 
-String _$detailFieldsHash() => r'323a2a42b72dc196be56b36c20b73e9853fc18a0';
+String _$detailFieldsHash() => r'307d6bc5a0bdbb75b63efa8bc83960b14a773a78';
 
 /// Info tab sections shown on the details panel. Stored as a string list, a
 /// missing key or any unknown entry means every field is shown.
