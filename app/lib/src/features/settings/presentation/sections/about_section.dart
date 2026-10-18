@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/version.dart';
 import '../../../../utils/theme/brand.dart';
+import '../../../../widgets/tsumige_logo.dart';
 import 'settings_widgets.dart';
 
 /// Opens the project repository in the browser. Overridden in tests so no
@@ -35,7 +36,7 @@ class AboutSection extends ConsumerWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Image.asset(brandMarkAsset(context), height: 48),
+            const TsumigeLogo(size: 48),
             const SizedBox(width: 12),
             Column(
               mainAxisSize: MainAxisSize.min,

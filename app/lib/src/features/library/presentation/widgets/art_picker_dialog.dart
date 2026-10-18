@@ -15,6 +15,7 @@ import '../../../../core/paths.dart';
 import '../../../../core/vndb.dart';
 import '../../../../utils/theme/brand.dart';
 import '../../../../utils/toast.dart';
+import '../../../../widgets/tsumige_logo.dart';
 import '../../data/library_repository.dart';
 import '../../domain/cover_source.dart';
 import '../../domain/add_game.dart';
@@ -288,7 +289,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
         if (art == null) {
           return const Padding(
             padding: EdgeInsets.only(top: 48),
-            child: Center(child: CircularProgressIndicator()),
+            child: Center(child: TsumigeLogoShimmer(size: 48)),
           );
         }
         return _tab == _ArtTab.cover

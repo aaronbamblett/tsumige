@@ -50,6 +50,7 @@ dependencies:
   path: ^1.9.1
   riverpod_annotation: ^4.0.0
   shared_preferences: ^2.0.15
+  shimmer: ^4.0.0
   fluttertoast: ^10.0.0
   url_launcher: ^6.3.3
   uuid: ^4.6.0
@@ -83,6 +84,10 @@ flutter:
   assets:
     - assets/icon/tsumige_mark.png
     - assets/icon/tsumige_mark_on_light.png
+    - assets/icon/tsumige_mark_foreground.png
+    - assets/icon/tsumige_mark_shadow.png
+    - assets/icon/tsumige_mark_on_light_foreground.png
+    - assets/icon/tsumige_mark_on_light_shadow.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

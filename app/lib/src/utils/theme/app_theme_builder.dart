@@ -14,6 +14,15 @@ import 'app_color_scheme.dart';
 import 'brand.dart';
 import 'theme_tokens.dart';
 
+/// The [ColorScheme] a theme uses at [brightness]; Custom is seed-derived.
+ColorScheme schemeFor(
+  AppTheme theme,
+  Brightness brightness,
+  Color customSeed,
+) => theme == AppTheme.custom
+    ? ColorScheme.fromSeed(seedColor: customSeed, brightness: brightness)
+    : schemeFromTokens(tokensFor(theme, brightness), brightness);
+
 /// Single source of truth for app ThemeData. Named themes use brand tokens;
 /// custom uses ColorScheme.fromSeed.
 ThemeData buildAppTheme({
@@ -22,9 +31,7 @@ ThemeData buildAppTheme({
   required Color customSeed,
 }) {
   final tokens = theme == AppTheme.custom ? null : tokensFor(theme, brightness);
-  final ColorScheme scheme = theme == AppTheme.custom
-      ? ColorScheme.fromSeed(seedColor: customSeed, brightness: brightness)
-      : schemeFromTokens(tokens!, brightness);
+  final ColorScheme scheme = schemeFor(theme, brightness, customSeed);
 
   // theme-kit's own light gradients and on-accent colour; the dark blocks and
   // Custom keep the accent→accent2 gradient and its dark content colour.

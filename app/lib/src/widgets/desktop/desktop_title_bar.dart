@@ -10,7 +10,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../../utils/theme/brand.dart';
+import '../tsumige_logo.dart';
 
 const double kDesktopTitleBarHeight = 40;
 
@@ -44,7 +44,7 @@ class DesktopTitleBar extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Image.asset(brandMarkAsset(context), height: 18),
+                    const TsumigeLogo(size: 18),
                     const SizedBox(width: 6),
                     Text(
                       'Tsumige',
