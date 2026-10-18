@@ -25,12 +25,16 @@ void main() {
         .setMockMethodCallHandler(const MethodChannel('window_manager'), null);
   });
 
-  Future<void> pumpBar(WidgetTester tester, AppTheme appTheme) {
+  Future<void> pumpBar(
+    WidgetTester tester,
+    AppTheme appTheme,
+    Brightness brightness,
+  ) {
     return tester.pumpWidget(
       MaterialApp(
         theme: buildAppTheme(
           theme: appTheme,
-          brightness: Brightness.dark,
+          brightness: brightness,
           customSeed: Colors.blue,
         ),
         home: const Scaffold(body: DesktopTitleBar()),
@@ -38,33 +42,23 @@ void main() {
     );
   }
 
-  testWidgets('title bar shows the Tsumige mark before the name', (
-    tester,
-  ) async {
-    await pumpBar(tester, AppTheme.royal);
-
-    final icon = tester.widget<ImageIcon>(find.byType(ImageIcon));
-    expect(
-      (icon.image as AssetImage).assetName,
-      'assets/icon/tsumige_mark.png',
-    );
-    expect(icon.size, 16);
-  });
-
   for (final appTheme in [AppTheme.royal, AppTheme.plum]) {
-    testWidgets(
-      'title bar mark is tinted with primary under ${appTheme.name}',
-      (tester) async {
-        await pumpBar(tester, appTheme);
+    for (final brightness in [Brightness.dark, Brightness.light]) {
+      final asset = brightness == Brightness.dark
+          ? 'assets/icon/tsumige_mark.png'
+          : 'assets/icon/tsumige_mark_on_light.png';
+      testWidgets(
+        'title bar shows the $asset mark in full colour under ${appTheme.name} ${brightness.name}',
+        (tester) async {
+          await pumpBar(tester, appTheme, brightness);
 
-        final scheme = buildAppTheme(
-          theme: appTheme,
-          brightness: Brightness.dark,
-          customSeed: Colors.blue,
-        ).colorScheme;
-        final icon = tester.widget<ImageIcon>(find.byType(ImageIcon));
-        expect(icon.color, scheme.primary);
-      },
-    );
+          expect(find.byType(ImageIcon), findsNothing);
+          final image = tester.widget<Image>(find.byType(Image));
+          expect((image.image as AssetImage).assetName, asset);
+          expect(image.height, 18);
+          expect(image.color, isNull);
+        },
+      );
+    }
   }
 }

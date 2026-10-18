@@ -10,6 +10,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../utils/theme/brand.dart';
+
 const double kDesktopTitleBarHeight = 40;
 
 /// Slim, seamless, theme-reactive window title bar. Windows/Linux draw our own
@@ -42,11 +44,7 @@ class DesktopTitleBar extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    ImageIcon(
-                      const AssetImage('assets/icon/tsumige_mark.png'),
-                      size: 16,
-                      color: scheme.primary,
-                    ),
+                    Image.asset(brandMarkAsset(context), height: 18),
                     const SizedBox(width: 6),
                     Text(
                       'Tsumige',

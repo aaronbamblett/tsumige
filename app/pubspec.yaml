@@ -82,6 +82,7 @@ flutter:
 
   assets:
     - assets/icon/tsumige_mark.png
+    - assets/icon/tsumige_mark_on_light.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

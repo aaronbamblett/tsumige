@@ -35,11 +35,7 @@ class AboutSection extends ConsumerWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            ImageIcon(
-              const AssetImage('assets/icon/tsumige_mark.png'),
-              size: 40,
-              color: theme.colorScheme.primary,
-            ),
+            Image.asset(brandMarkAsset(context), height: 48),
             const SizedBox(width: 12),
             Column(
               mainAxisSize: MainAxisSize.min,

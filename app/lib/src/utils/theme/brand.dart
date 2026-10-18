@@ -139,6 +139,13 @@ double brandHueFor(String label) {
   return h.toDouble();
 }
 
+/// The Tsumige mark for the brightness in use: the default mark is cream, so
+/// light surfaces get the dark-ink variant.
+String brandMarkAsset(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.light
+    ? 'assets/icon/tsumige_mark_on_light.png'
+    : 'assets/icon/tsumige_mark.png';
+
 /// An icon painted with the brand gradient (for the downloaded check-circle,
 /// etc.). Single source — do not inline ShaderMask + gradient at call sites.
 Widget brandGradientIcon(
