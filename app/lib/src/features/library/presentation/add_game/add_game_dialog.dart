@@ -270,7 +270,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     _title.text = picked.title;
     _description.text = picked.description;
     setState(() {
-      _tagList = parseTagsField(picked.tags.join(', '));
+      _tagList = [];
       _manual = false;
       _formError = null;
       if (!_matchReturnsToSetup) _setupBack = _AddStep.match;

@@ -356,12 +356,86 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(
-      find.descendant(of: find.byType(TagChip), matching: find.text('Romance')),
-      findsOneWidget,
-    );
+    expect(find.byType(TagChip), findsNothing);
+    expect(find.text('Romance'), findsNothing);
     expect(find.widgetWithText(BrandButton, 'Add'), findsOneWidget);
     expect(find.widgetWithText(BrandGlassButton, 'Back'), findsOneWidget);
+  });
+
+  testWidgets('a VNDB pick starts with empty own tags', (tester) async {
+    final (_, http, _) = await _pump(
+      tester,
+      rows: [
+        _row(
+          'v900017',
+          'DEMO',
+          imageUrl: null,
+          tags: ['Romance', 'Drama'],
+        ),
+      ],
+    );
+    await _search(tester, 'DEMO', http);
+    await tester.tap(_resultRow('DEMO'));
+    await tester.pumpAndSettle();
+    await _next(tester);
+    expect(find.byType(TagChip), findsNothing);
+    expect(find.text('Romance'), findsNothing);
+    expect(find.text('Drama'), findsNothing);
+  });
+
+  testWidgets('adding from VNDB leaves own tags empty but fills vndbTags', (
+    tester,
+  ) async {
+    final (fake, http, _) = await _pump(
+      tester,
+      rows: [
+        _row(
+          'v900017',
+          'DEMO',
+          imageUrl: null,
+          tags: ['Romance', 'Drama'],
+        ),
+      ],
+    );
+    http.metadataRows = [
+      {
+        'id': 'v900017',
+        'alttitle': 'デモ',
+        'length_minutes': 1200,
+        'length_votes': 88,
+        'olang': 'ja',
+        'developers': [
+          {'id': 'p1', 'name': 'Sample Studio'},
+        ],
+        'tags': [
+          {'name': 'Romance', 'rating': 2.5, 'spoiler': 0, 'category': 'cont'},
+        ],
+        'relations': [],
+      },
+    ];
+    http.releaseRows = [
+      {
+        'vns': [
+          {'id': 'v900017'},
+        ],
+      },
+    ];
+    await _search(tester, 'DEMO', http);
+    await tester.tap(_resultRow('DEMO'));
+    await tester.pumpAndSettle();
+    await _next(tester);
+    await tester.enterText(
+      find.byKey(const Key('add-game-exe')),
+      '/games/demo/run.exe',
+    );
+    await tester.tap(find.byKey(const Key('add-game-add')));
+    await _waitForSave(tester, fake);
+    expect(fake.saves, 1);
+    final game = fake.games.single;
+    expect(game.tags, isEmpty);
+    expect(game.vndbTags.single.name, 'Romance');
+    expect(find.text('Added DEMO'), findsOneWidget);
+    await _drainToast(tester);
   });
 
   testWidgets('Add with no exe and a non-Steam mode needs an executable', (
@@ -458,6 +532,7 @@ void main() {
     await _waitForSave(tester, fake);
     expect(fake.saves, 1);
     final game = fake.games.single;
+    expect(game.tags, isEmpty);
     expect(game.vndbOriginalTitle, 'デモ');
     expect(game.lengthMinutes, 1200);
     expect(game.originalLanguage, 'ja');
