@@ -29,6 +29,7 @@ import 'package:tsumige/src/features/library/domain/selection.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/detail_tabs/related_tab.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_cover_tile.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_detail_pane.dart';
+import 'package:tsumige/src/widgets/clamped_wrap.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 import 'package:tsumige/src/utils/theme/brand.dart';
 
@@ -522,6 +523,71 @@ void main() {
     expect(paneText(tester, 'Short'), findsOneWidget);
     expect(find.textContaining('Show all'), findsNothing);
     expect(find.textContaining('Show fewer'), findsNothing);
+  });
+
+  List<core.Game> vndbTagGames() {
+    const categories = ['cont', 'tech', 'ero'];
+    return [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        vndbTags: [
+          for (var i = 0; i < 40; i++)
+            core.VndbTag(
+              name: 'VNDB tag $i',
+              rating: 3.9 - i * 0.05,
+              spoiler: 0,
+              category: categories[i % 3],
+            ),
+        ],
+      ),
+    ];
+  }
+
+  testWidgets('forty VNDB tags fold to two mixed rows without headings',
+      (tester) async {
+    await pumpLibrary(tester, vndbTagGames());
+    await openPane(tester, 'Alpha');
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Show all 40'), findsOneWidget);
+    expect(paneText(tester, 'Content'), findsNothing);
+    expect(paneText(tester, 'Technical'), findsNothing);
+    expect(paneText(tester, 'Sexual'), findsNothing);
+    final wrap = tester.renderObject<RenderClampedWrap>(
+      find.descendant(
+        of: find.byType(GameDetailPane),
+        matching: find.byType(ClampedWrap),
+      ),
+    );
+    expect(wrap.overflowed, isTrue);
+    // Collapsed tags sort highest first, so the leading chips are shown.
+    final centers = [
+      for (var i = 0; i < wrap.visibleLeadingCount; i++)
+        tester.getCenter(paneText(tester, 'VNDB tag $i')),
+    ];
+    expect(centers.length, greaterThan(2));
+    final rows = <double>[];
+    for (final center in centers) {
+      if (rows.every((dy) => (dy - center.dy).abs() > 4)) rows.add(center.dy);
+    }
+    expect(rows, hasLength(2));
+  });
+
+  testWidgets('Show all 40 reveals the grouped VNDB tags', (tester) async {
+    await pumpLibrary(tester, vndbTagGames());
+    await openPane(tester, 'Alpha');
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(paneText(tester, 'Show all 40'));
+    await tester.tap(paneText(tester, 'Show all 40'));
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Content'), findsOneWidget);
+    expect(paneText(tester, 'Technical'), findsOneWidget);
+    expect(paneText(tester, 'Sexual'), findsOneWidget);
+    for (var i = 0; i < 40; i++) {
+      expect(paneText(tester, 'VNDB tag $i'), findsOneWidget);
+    }
+    expect(paneText(tester, 'Show fewer'), findsOneWidget);
+    expect(paneText(tester, 'Show all 40'), findsNothing);
   });
 
   testWidgets('changing the game resets the tab to Info', (tester) async {
@@ -1211,7 +1277,7 @@ void main() {
     expect(find.text('Beta'), findsOneWidget);
   });
 
-  testWidgets('VNDB tags default view hides spoiler and weak tags',
+  testWidgets('VNDB tags collapsed view mixes rated tags without headings',
       (tester) async {
     await pumpLibrary(tester, [
       core.Game(id: 'g1', title: 'Alpha', vndbTags: const [
@@ -1223,15 +1289,17 @@ void main() {
       ]),
     ]);
     await openPane(tester, 'Alpha');
+    await tester.pumpAndSettle();
     expect(paneText(tester, 'VNDB tags'), findsOneWidget);
-    expect(paneText(tester, 'Content'), findsOneWidget);
-    expect(paneText(tester, 'Sexual'), findsOneWidget);
+    expect(paneText(tester, 'Content'), findsNothing);
+    expect(paneText(tester, 'Sexual'), findsNothing);
     expect(paneText(tester, 'Technical'), findsNothing);
     expect(paneText(tester, 'Romance'), findsOneWidget);
     expect(paneText(tester, 'Kissing'), findsOneWidget);
-    expect(paneText(tester, 'Weak Tag'), findsNothing);
+    expect(paneText(tester, 'Weak Tag'), findsOneWidget);
     expect(paneText(tester, 'Secret Twist'), findsNothing);
-    expect(paneText(tester, 'Show all 3'), findsOneWidget);
+    expect(paneText(tester, 'Zero Tag'), findsNothing);
+    expect(find.textContaining('Show all'), findsNothing);
     expect(paneText(tester, 'Show spoilers'), findsOneWidget);
   });
 
@@ -1257,20 +1325,33 @@ void main() {
   testWidgets('show all and show spoilers reveal tags and reset on game change',
       (tester) async {
     await pumpLibrary(tester, [
-      core.Game(id: 'g1', title: 'Alpha', vndbTags: const [
-        core.VndbTag(name: 'Romance', rating: 2.5, spoiler: 0, category: 'cont'),
-        core.VndbTag(name: 'Weak Tag', rating: 1.0, spoiler: 0, category: 'cont'),
-        core.VndbTag(name: 'Secret Twist', rating: 2.5, spoiler: 1, category: 'cont'),
+      core.Game(id: 'g1', title: 'Alpha', vndbTags: [
+        const core.VndbTag(
+            name: 'Romance', rating: 2.5, spoiler: 0, category: 'cont'),
+        const core.VndbTag(
+            name: 'Weak Tag', rating: 1.0, spoiler: 0, category: 'cont'),
+        const core.VndbTag(
+            name: 'Secret Twist', rating: 2.5, spoiler: 1, category: 'cont'),
+        for (var i = 0; i < 12; i++)
+          core.VndbTag(
+              name: 'Filler Tag Number $i',
+              rating: 2.0,
+              spoiler: 0,
+              category: 'cont'),
       ]),
       core.Game(id: 'g2', title: 'Beta', vndbTags: const [
         core.VndbTag(name: 'Mystery', rating: 2.5, spoiler: 0, category: 'cont'),
       ]),
     ]);
     await openPane(tester, 'Alpha');
-    await tester.ensureVisible(paneText(tester, 'Show all 2'));
-    await tester.tap(paneText(tester, 'Show all 2'));
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Weak Tag'), findsNothing);
+    await tester.ensureVisible(paneText(tester, 'Show all 14'));
+    await tester.tap(paneText(tester, 'Show all 14'));
     await tester.pumpAndSettle();
     expect(paneText(tester, 'Weak Tag'), findsOneWidget);
+    expect(paneText(tester, 'Content'), findsOneWidget);
+    expect(paneText(tester, 'Filler Tag Number 11'), findsOneWidget);
     expect(paneText(tester, 'Show fewer'), findsOneWidget);
     await tester.ensureVisible(paneText(tester, 'Show spoilers'));
     await tester.tap(paneText(tester, 'Show spoilers'));
@@ -1280,7 +1361,7 @@ void main() {
     expect(paneText(tester, 'Hide spoilers'), findsOneWidget);
     await tester.tap(find.text('Beta').first);
     await tester.pumpAndSettle();
-    expect(paneText(tester, 'Show all 1'), findsOneWidget);
+    expect(find.textContaining('Show all'), findsNothing);
     expect(paneText(tester, 'Show fewer'), findsNothing);
     expect(paneText(tester, 'Mystery'), findsOneWidget);
     expect(paneText(tester, 'Weak Tag'), findsNothing);

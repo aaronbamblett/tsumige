@@ -258,10 +258,21 @@ class _VndbTagsSection extends ConsumerStatefulWidget {
 class _VndbTagsSectionState extends ConsumerState<_VndbTagsSection> {
   var _showAll = false;
   var _showSpoilers = false;
+  var _overflowed = false;
 
   bool _keep(VndbTag tag) {
     if (tag.spoiler > 0 && !_showSpoilers) return false;
     return _showAll ? tag.rating > 0 : tag.rating >= 2.0;
+  }
+
+  /// Collapsed rows: every rated tag, all categories mixed, highest first.
+  List<VndbTag> _collapsed() {
+    final collapsed = [
+      for (final tag in widget.game.vndbTags)
+        if (tag.rating > 0 && (tag.spoiler == 0 || _showSpoilers)) tag,
+    ];
+    collapsed.sort((a, b) => b.rating.compareTo(a.rating));
+    return collapsed;
   }
 
   @override
@@ -270,13 +281,43 @@ class _VndbTagsSectionState extends ConsumerState<_VndbTagsSection> {
     final allCount = tags.where((t) => t.spoiler == 0 && t.rating > 0).length;
     final hasSpoilers = tags.any((t) => t.spoiler > 0);
     final linkStyle = _linkButtonStyle(Theme.of(context).colorScheme);
+    if (!_showAll) {
+      final collapsed = _collapsed();
+      return DetailSection(
+        label: 'VNDB tags',
+        actions: [
+          if (_overflowed)
+            TextButton(
+              style: linkStyle,
+              onPressed: () => setState(() => _showAll = true),
+              child: Text('Show all $allCount'),
+            ),
+          if (hasSpoilers)
+            TextButton(
+              style: linkStyle,
+              onPressed: () => setState(() => _showSpoilers = !_showSpoilers),
+              child: Text(_showSpoilers ? 'Hide spoilers' : 'Show spoilers'),
+            ),
+        ],
+        child: ClampedWrap(
+          spacing: 6,
+          runSpacing: 6,
+          maxRows: 2,
+          onOverflowChanged: (clamped) {
+            if (_showAll || clamped == _overflowed) return;
+            setState(() => _overflowed = clamped);
+          },
+          children: [for (final tag in collapsed) _VndbTagChip(tag: tag)],
+        ),
+      );
+    }
     return DetailSection(
       label: 'VNDB tags',
       actions: [
         TextButton(
           style: linkStyle,
-          onPressed: () => setState(() => _showAll = !_showAll),
-          child: Text(_showAll ? 'Show fewer' : 'Show all $allCount'),
+          onPressed: () => setState(() => _showAll = false),
+          child: const Text('Show fewer'),
         ),
         if (hasSpoilers)
           TextButton(
