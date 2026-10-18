@@ -29,6 +29,7 @@ import 'art_overlay.dart';
 import 'art_store.dart';
 import 'detail_tabs/related_tab.dart';
 import 'dialog_shell.dart';
+import 'game_cover_grid_delegate.dart';
 import 'library_toolbar.dart';
 
 /// Opens the Cover and Background picker over the current screen.
@@ -379,7 +380,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
         ...art.releaseImages.where((i) => !i.portrait),
       ],
       columns: 5,
-      aspectRatio: 3 / 4,
+      aspectRatio: kGameCoverAspectRatio,
       isCurrent: _isCurrentCover,
     );
   }
@@ -519,7 +520,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
         SizedBox(
           width: 220,
           child: AspectRatio(
-            aspectRatio: 3 / 4,
+            aspectRatio: kGameCoverAspectRatio,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: image,
@@ -533,7 +534,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
         ),
         const SizedBox(height: 10),
         Text(
-          'Covers are cropped to 3:4 in the grid.',
+          'Covers are cropped to 2:3 in the grid.',
           style: TextStyle(fontSize: 12, color: scheme.outline),
         ),
       ],
@@ -755,7 +756,7 @@ enum _SgdbKind {
   };
 
   double get aspectRatio => switch (this) {
-    grids => 2 / 3,
+    grids => kGameCoverAspectRatio,
     heroes => 440 / 340,
   };
 

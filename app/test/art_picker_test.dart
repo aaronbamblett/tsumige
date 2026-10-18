@@ -658,4 +658,35 @@ void main() {
       expect(find.text('Current'), findsNothing);
     });
   });
+
+  group('2:3 cover crop', () {
+    testWidgets('VNDB cover tiles use the 2:3 library ratio', (tester) async {
+      await _pumpDialog(tester);
+      final tile = _tile(_main['url'] as String);
+      expect(tile, findsOneWidget);
+      final image = find.descendant(of: tile, matching: find.byType(Image));
+      expect(image, findsOneWidget);
+      final size = tester.getSize(image);
+      expect(size.width / size.height, closeTo(2 / 3, 0.01));
+    });
+
+    testWidgets('the library preview uses the 2:3 cover ratio', (tester) async {
+      await _pumpDialog(tester);
+      final previews = [
+        for (final element in tester.elementList(find.byType(AspectRatio)))
+          tester.getSize(find.byWidget(element.widget)),
+      ].where((size) => (size.width - 220).abs() < 0.5);
+      expect(previews, hasLength(1));
+      final size = previews.single;
+      expect(size.width / size.height, closeTo(2 / 3, 0.01));
+    });
+
+    testWidgets('the cover hint names the 2:3 crop', (tester) async {
+      await _pumpDialog(tester);
+      expect(
+        find.text('Covers are cropped to 2:3 in the grid.'),
+        findsOneWidget,
+      );
+    });
+  });
 }

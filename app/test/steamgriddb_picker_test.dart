@@ -382,6 +382,26 @@ void main() {
     expect(downloads, contains(_sgdbCover));
   });
 
+  testWidgets('SteamGridDB cover tiles use the 2:3 library ratio', (
+    tester,
+  ) async {
+    await _pumpSgdbDialog(
+      tester,
+      prefsKey: 'fake-test-key',
+      config: _SgdbConfig(
+        vndbExtlinks: [
+          {'name': 'steam', 'id': '123'},
+        ],
+      ),
+    );
+    final tile = find.byKey(ValueKey('art-$_sgdbCover'));
+    expect(tile, findsOneWidget);
+    final image = find.descendant(of: tile, matching: find.byType(Image));
+    expect(image, findsOneWidget);
+    final size = tester.getSize(image);
+    expect(size.width / size.height, closeTo(2 / 3, 0.01));
+  });
+
   testWidgets('the user-set Steam app id wins over VNDB extlinks', (
     tester,
   ) async {
