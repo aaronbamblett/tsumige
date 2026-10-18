@@ -293,6 +293,49 @@ void main() {
     }
   });
 
+  testWidgets('detail field row toggles with the keyboard', (tester) async {
+    final container = await pumpSettings(tester, SettingsFakeRepository());
+    const rowKey = Key('settings-detail-field-notes');
+    await tester.ensureVisible(find.byKey(rowKey));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(rowKey),
+        matching: find.byType(ExcludeFocus),
+      ),
+      findsOneWidget,
+    );
+
+    bool rowFocused() {
+      final context = FocusManager.instance.primaryFocus?.context;
+      if (context == null) return false;
+      var found = false;
+      (context as Element).visitAncestorElements((el) {
+        if (el.widget.key == rowKey) found = true;
+        return true;
+      });
+      return found;
+    }
+
+    var reached = false;
+    for (var i = 0; i < 120 && !reached; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      reached = rowFocused();
+    }
+    expect(reached, isTrue);
+    expect(
+      container.read(detailFieldsProvider).contains(keys.detailFieldNotes),
+      isTrue,
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    expect(
+      container.read(detailFieldsProvider).contains(keys.detailFieldNotes),
+      isFalse,
+    );
+  });
+
   testWidgets('unticking VNDB tags updates the pref', (tester) async {
     final container = await pumpSettings(tester, SettingsFakeRepository());
     await tester.ensureVisible(

@@ -133,20 +133,20 @@ class _DetailFieldRow extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
     final selected =
         ref.watch(detailFieldsProvider).contains(field.id);
+    final toggle = ref.read(detailFieldsProvider.notifier).toggle;
     return InkWell(
       key: Key('settings-detail-field-${field.id}'),
       borderRadius: BorderRadius.circular(8),
-      onTap: () =>
-          ref.read(detailFieldsProvider.notifier).toggle(field.id),
+      onTap: () => toggle(field.id),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            IgnorePointer(
+            ExcludeFocus(
               child: Checkbox(
                 value: selected,
-                onChanged: (_) {},
+                onChanged: (_) => toggle(field.id),
               ),
             ),
             Text(
