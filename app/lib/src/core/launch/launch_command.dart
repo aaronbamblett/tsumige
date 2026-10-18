@@ -141,8 +141,8 @@ Map<String, String> cleanAppImageEnv(Map<String, String> hostEnv) {
   return cleaned;
 }
 
-String? _parentDir(String exe) {
-  final dir = p.dirname(exe);
+String? _parentDir(String exe, p.Context context) {
+  final dir = context.dirname(exe);
   if (dir == '.' || dir.isEmpty) return null;
   return dir;
 }
@@ -180,19 +180,26 @@ LaunchCommand buildLaunchCommand(
     if (appId == null) {
       throw const LaunchConfigError('Steam App ID is not set');
     }
-    command = host.isMacOS
-        ? LaunchCommand(
-            executable: 'open',
-            args: ['steam://rungameid/$appId'],
-            env: extraEnv,
-            workingDirectory: null,
-          )
-        : LaunchCommand(
-            executable: 'steam',
-            args: ['-applaunch', '$appId'],
-            env: extraEnv,
-            workingDirectory: null,
-          );
+    command = switch (host.os) {
+      HostOs.linux => LaunchCommand(
+          executable: 'steam',
+          args: ['-applaunch', '$appId'],
+          env: extraEnv,
+          workingDirectory: null,
+        ),
+      HostOs.macos => LaunchCommand(
+          executable: 'open',
+          args: ['steam://rungameid/$appId'],
+          env: extraEnv,
+          workingDirectory: null,
+        ),
+      HostOs.windows => LaunchCommand(
+          executable: 'explorer.exe',
+          args: ['steam://rungameid/$appId'],
+          env: extraEnv,
+          workingDirectory: null,
+        ),
+    };
   } else {
     if (overrideExe != null && mode == LaunchMode.native) {
       throw const LaunchConfigError(
@@ -204,7 +211,10 @@ LaunchCommand buildLaunchCommand(
     }
     final exe = expandTilde(rawExe, hostEnv);
     final extraArgs = splitArgs(game.launch.arguments ?? '');
-    final workingDirectory = _parentDir(exe);
+    final workingDirectory = _parentDir(
+      exe,
+      p.Context(style: host.isWindows ? p.Style.windows : p.Style.posix),
+    );
     switch (mode) {
       case LaunchMode.native:
         final isAppBundle = host.isMacOS && exe.endsWith('.app');
@@ -291,8 +301,22 @@ String? findOnPath(
   HostPlatform? platform,
 }) {
   final check = isExecutable ?? ((path) => File(path).existsSync());
+  final host = platform ?? HostPlatform.fromEnvironment(hostEnv);
   final pathVar = hostEnv['PATH'];
   if (pathVar == null || pathVar.isEmpty) return null;
+  if (host.isWindows) {
+    final extensions = (hostEnv['PATHEXT'] ?? '.COM;.EXE;.BAT;.CMD')
+        .split(';')
+        .where((ext) => ext.isNotEmpty);
+    for (final dir in pathVar.split(';')) {
+      if (dir.isEmpty) continue;
+      for (final ext in extensions) {
+        final candidate = p.windows.join(dir, '$name$ext');
+        if (check(candidate)) return candidate;
+      }
+    }
+    return null;
+  }
   for (final dir in pathVar.split(':')) {
     if (dir.isEmpty) continue;
     final candidate = p.join(dir, name);

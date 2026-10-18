@@ -15,6 +15,7 @@ import 'package:tsumige/src/core/launch/game_runner.dart';
 import 'package:tsumige/src/core/launch/launch_command.dart';
 import 'package:tsumige/src/core/launch/process_table.dart';
 import 'package:tsumige/src/core/launch/session_recorder.dart';
+import 'package:tsumige/src/core/launch/steam_registry.dart';
 import 'package:tsumige/src/core/model.dart';
 import 'package:tsumige/src/core/paths.dart';
 
@@ -56,6 +57,20 @@ class FakeStartedProcess implements StartedProcess {
 
   @override
   final Future<void> logClosed;
+}
+
+class FakeSteamRegistry implements SteamRegistry {
+  FakeSteamRegistry(this.values);
+
+  final List<int?> values;
+  var polls = 0;
+
+  @override
+  Future<int?> runningAppId() async {
+    final value = values[polls < values.length ? polls : values.length - 1];
+    polls++;
+    return value;
+  }
 }
 
 class FakeStarter implements ProcessStarter {
@@ -136,6 +151,7 @@ void main() {
     bool Function()? present,
     Duration heartbeatInterval = const Duration(seconds: 60),
     HostPlatform platform = const HostPlatform(HostOs.linux),
+    SteamRegistry? registry,
   }) {
     return GameRunner(
       dir: dir,
@@ -144,6 +160,7 @@ void main() {
       processTable: FakeTable(present ?? () => false),
       hostEnv: const {},
       platform: platform,
+      steamRegistry: registry,
       clock: () => now,
       sleep: (d) async {
         now = now.add(d);
@@ -422,6 +439,55 @@ void main() {
     final result = await future;
     expect(result.sessionSeconds, 130);
     expect(markerFile().existsSync(), isFalse);
+  });
+
+  test('Windows Steam records the session from RunningAppID changes', () async {
+    final store = storeWith(steamGame());
+    final starter = FakeStarter((command, log) async =>
+        FakeStartedProcess(pid: 7, exitCode: Future.value(0)));
+    final registry = FakeSteamRegistry([null, null, 4242, 4242, 4242, null]);
+    final phases = <LaunchPhase>[];
+    final result = await runner(
+      store: store,
+      starter: starter,
+      platform: const HostPlatform(HostOs.windows),
+      registry: registry,
+    ).launch(steamGame(), defaults, onPhase: phases.add);
+
+    expect(starter.started.single.executable, 'explorer.exe');
+    expect(starter.started.single.args, ['steam://rungameid/4242']);
+    expect(registry.polls, 6);
+    expect(result.sessionSeconds, 15);
+    final sessions = store.current.library.games.single.playSessions;
+    expect(sessions.single.startedAt, t0.add(const Duration(seconds: 10)));
+    expect(sessions.single.durationSeconds, 15);
+    expect(phases, [
+      LaunchPhase.starting,
+      LaunchPhase.running,
+      LaunchPhase.ended,
+    ]);
+    expect(markerFile().existsSync(), isFalse);
+  });
+
+  test('Windows Steam that never reports the app records nothing after 3 min',
+      () async {
+    final store = storeWith(steamGame());
+    final starter = FakeStarter((command, log) async =>
+        FakeStartedProcess(pid: 7, exitCode: Future.value(0)));
+    final registry = FakeSteamRegistry([null]);
+    final phases = <LaunchPhase>[];
+    final result = await runner(
+      store: store,
+      starter: starter,
+      platform: const HostPlatform(HostOs.windows),
+      registry: registry,
+    ).launch(steamGame(), defaults, onPhase: phases.add);
+
+    expect(result.sessionSeconds, isNull);
+    expect(store.current.library.games.single.playSessions, isEmpty);
+    expect(registry.polls, 37);
+    expect(now.difference(t0), const Duration(minutes: 3));
+    expect(phases, [LaunchPhase.starting, LaunchPhase.ended]);
   });
 
   test('macOS Steam hands off to Steam, returns at once, and records nothing',
