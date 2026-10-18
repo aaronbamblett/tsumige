@@ -25,6 +25,7 @@ import 'src/utils/startup_time.dart';
 import 'src/utils/theme/app_theme_builder.dart';
 import 'src/widgets/app_error_app.dart';
 import 'src/widgets/desktop/desktop_window_scaffold.dart';
+import 'src/widgets/tsumige_logo.dart';
 
 Widget tsumigeRouterBuilder(BuildContext context, Widget? child) =>
     DesktopWindowScaffold(child: FToastBuilder()(context, child));
@@ -82,7 +83,15 @@ class TsumigeApp extends ConsumerWidget {
         scrollBehavior: const AppScrollBehavior(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: const Scaffold(body: SizedBox.shrink()),
+        home: Scaffold(
+          body: Center(
+            child: Builder(
+              builder: (context) => TsumigeLogoShimmer(
+                size: MediaQuery.sizeOf(context).shortestSide * 0.35,
+              ),
+            ),
+          ),
+        ),
       ),
       error: (error, _) => AppErrorApp(error: error),
       data: (_) => MaterialApp.router(

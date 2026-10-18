@@ -4,6 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -26,6 +27,7 @@ import 'package:tsumige/src/features/library/domain/game_editor.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/art_picker_dialog.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 import 'package:tsumige/src/utils/theme/brand.dart';
+import 'package:tsumige/src/widgets/tsumige_logo.dart';
 
 const _main = {
   'url': 'https://t.vndb.org/cv/16/98416.jpg',
@@ -281,6 +283,25 @@ Uint8List _png() =>
     Uint8List.fromList(img.encodePng(img.Image(width: 16, height: 16)));
 
 void main() {
+  testWidgets('the loading state shows the 48 px logo shimmer', (tester) async {
+    final temp = Directory.systemTemp.createTempSync('tsumige_art_loading_');
+    addTearDown(() => temp.deleteSync(recursive: true));
+    final g = core.Game(id: 'g1', title: 'Sample Game', vndbId: 'v900016');
+    final harness = _Harness(
+      tester,
+      temp,
+      core.LoadedLibrary(library: core.Library(games: [g])),
+    );
+    await harness.open(
+      game: g,
+      http: MockClient((_) => Completer<http.Response>().future),
+    );
+    await tester.pump();
+
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(tester.getSize(find.byType(TsumigeLogoShimmer)), const Size(48, 48));
+  });
+
   testWidgets(
     'cover tab lists main, then portrait, then landscape release images',
     (tester) async {
