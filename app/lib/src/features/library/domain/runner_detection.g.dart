@@ -50,7 +50,7 @@ final class WineRunnersProvider
   }
 }
 
-String _$wineRunnersHash() => r'4cd2e68e339f6b96fc2aac47c23cb2d1b9544d62';
+String _$wineRunnersHash() => r'13aa0912c1d1417c6e1ddcb7e54d0ae5ff3eee5d';
 
 /// Detected Proton runners. Rescan with `ref.invalidate(protonRunnersProvider)`.
 
@@ -96,7 +96,7 @@ final class ProtonRunnersProvider
   }
 }
 
-String _$protonRunnersHash() => r'deff5b9066d64691cb5d8934a80642d547964d4b';
+String _$protonRunnersHash() => r'91ba3872630d4caac6ce380ef2349cc86cee250a';
 
 /// Detected Steam prefixes. Rescan with `ref.invalidate(steamPrefixesProvider)`.
 
@@ -142,4 +142,4 @@ final class SteamPrefixesProvider
   }
 }
 
-String _$steamPrefixesHash() => r'd6bbbf016b2499ecd3cf3776eb9bafca811ecbcb';
+String _$steamPrefixesHash() => r'33b4b03a59841373372d4da973bfa68efb0e329c';

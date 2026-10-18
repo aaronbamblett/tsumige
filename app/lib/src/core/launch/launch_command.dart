@@ -8,9 +8,11 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../host_platform.dart';
 import '../model.dart';
 import 'args.dart';
 import 'env.dart';
+import 'launch_modes.dart';
 
 class LaunchConfigError implements Exception {
   final String message;
@@ -22,14 +24,12 @@ class LaunchConfigError implements Exception {
 }
 
 class LaunchDefaults {
-  final LaunchMode mode;
   final String prefix;
   final String? runner;
   final String locale;
   final String umuGameId;
 
   const LaunchDefaults({
-    required this.mode,
     required this.prefix,
     this.runner,
     required this.locale,
@@ -88,8 +88,59 @@ bool _mapsEqual(Map<String, String> a, Map<String, String> b) {
   return true;
 }
 
-String? _parentDir(String exe) {
-  final dir = p.dirname(exe);
+const _appImageVars = ['APPIMAGE', 'APPDIR', 'ARGV0', 'OWD'];
+
+const _appDirPathVars = [
+  'LD_LIBRARY_PATH',
+  'LD_PRELOAD',
+  'PATH',
+  'XDG_DATA_DIRS',
+  'GSETTINGS_SCHEMA_DIR',
+  'QT_PLUGIN_PATH',
+  'GDK_PIXBUF_MODULE_FILE',
+  'PYTHONPATH',
+];
+
+/// The environment a launched game gets: the host's, minus the AppImage's own
+/// variables when running from one, then the game's own variables.
+Map<String, String> gameEnvironment(
+  Map<String, String> hostEnv,
+  Map<String, String> gameEnv, {
+  required HostPlatform platform,
+}) {
+  final base = platform.inAppImage ? cleanAppImageEnv(hostEnv) : hostEnv;
+  return {...base, ...gameEnv};
+}
+
+/// Drops the AppImage's variables and every path entry inside `$APPDIR`. A
+/// path variable left with no entries is removed.
+Map<String, String> cleanAppImageEnv(Map<String, String> hostEnv) {
+  final cleaned = {...hostEnv}
+    ..removeWhere((key, _) => _appImageVars.contains(key));
+  final appDir = hostEnv['APPDIR'];
+  if (appDir == null || appDir.isEmpty) return cleaned;
+  final root = appDir.endsWith('/')
+      ? appDir.substring(0, appDir.length - 1)
+      : appDir;
+  if (root.isEmpty) return cleaned;
+  bool inside(String entry) => entry == root || entry.startsWith('$root/');
+  for (final key in _appDirPathVars) {
+    final value = cleaned[key];
+    if (value == null) continue;
+    final entries = value.split(':');
+    final kept = entries.where((entry) => !inside(entry)).toList();
+    if (kept.length == entries.length) continue;
+    if (kept.isEmpty) {
+      cleaned.remove(key);
+    } else {
+      cleaned[key] = kept.join(':');
+    }
+  }
+  return cleaned;
+}
+
+String? _parentDir(String exe, p.Context context) {
+  final dir = context.dirname(exe);
   if (dir == '.' || dir.isEmpty) return null;
   return dir;
 }
@@ -109,10 +160,14 @@ LaunchCommand buildLaunchCommand(
   String? overrideExe,
   required Map<String, String> hostEnv,
   String? umuRunPath,
+  HostPlatform? platform,
 }) {
-  final mode = game.launch.mode ?? defaults.mode;
+  final host = platform ?? HostPlatform.fromEnvironment(hostEnv);
+  final mode = effectiveLaunchMode(game, host);
+  final unavailable = launchModeUnavailableMessage(mode, host);
+  if (unavailable != null) throw LaunchConfigError(unavailable);
   final extraEnv = parseEnv(game.launch.environment ?? '');
-  final inFlatpak = hostEnv.containsKey('FLATPAK_ID');
+  final inFlatpak = host.inFlatpak;
   LaunchCommand command;
   if (mode == LaunchMode.steam) {
     if (overrideExe != null) {
@@ -123,12 +178,26 @@ LaunchCommand buildLaunchCommand(
     if (appId == null) {
       throw const LaunchConfigError('Steam App ID is not set');
     }
-    command = LaunchCommand(
-      executable: 'steam',
-      args: ['-applaunch', '$appId'],
-      env: extraEnv,
-      workingDirectory: null,
-    );
+    command = switch (host.os) {
+      HostOs.linux => LaunchCommand(
+          executable: 'steam',
+          args: ['-applaunch', '$appId'],
+          env: extraEnv,
+          workingDirectory: null,
+        ),
+      HostOs.macos => LaunchCommand(
+          executable: 'open',
+          args: ['steam://rungameid/$appId'],
+          env: extraEnv,
+          workingDirectory: null,
+        ),
+      HostOs.windows => LaunchCommand(
+          executable: 'explorer.exe',
+          args: ['steam://rungameid/$appId'],
+          env: extraEnv,
+          workingDirectory: null,
+        ),
+    };
   } else {
     if (overrideExe != null && mode == LaunchMode.native) {
       throw const LaunchConfigError(
@@ -140,14 +209,20 @@ LaunchCommand buildLaunchCommand(
     }
     final exe = expandTilde(rawExe, hostEnv);
     final extraArgs = splitArgs(game.launch.arguments ?? '');
-    final workingDirectory = _parentDir(exe);
+    final workingDirectory = _parentDir(
+      exe,
+      p.Context(style: host.isWindows ? p.Style.windows : p.Style.posix),
+    );
     switch (mode) {
       case LaunchMode.native:
+        final isAppBundle = host.isMacOS && exe.endsWith('.app');
         command = LaunchCommand(
-          executable: exe,
-          args: extraArgs,
+          executable: isAppBundle ? 'open' : exe,
+          args: isAppBundle
+              ? ['-W', '-n', exe, '--args', ...extraArgs]
+              : extraArgs,
           env: extraEnv,
-          workingDirectory: workingDirectory,
+          workingDirectory: isAppBundle ? null : workingDirectory,
         );
       case LaunchMode.wine:
         final runner = expandTilde(
@@ -221,10 +296,33 @@ String? findOnPath(
   String name,
   Map<String, String> hostEnv, {
   bool Function(String path)? isExecutable,
+  HostPlatform? platform,
 }) {
   final check = isExecutable ?? ((path) => File(path).existsSync());
+  final host = platform ?? HostPlatform.fromEnvironment(hostEnv);
   final pathVar = hostEnv['PATH'];
   if (pathVar == null || pathVar.isEmpty) return null;
+  if (host.isWindows) {
+    final extensions = (hostEnv['PATHEXT'] ?? '.COM;.EXE;.BAT;.CMD')
+        .split(';')
+        .where((ext) => ext.isNotEmpty)
+        .toList();
+    final lowerName = name.toLowerCase();
+    final endsWithExt = extensions.any(
+      (ext) => lowerName.endsWith(ext.toLowerCase()),
+    );
+    for (final dir in pathVar.split(';')) {
+      if (dir.isEmpty) continue;
+      final candidates = [
+        if (endsWithExt) p.windows.join(dir, name),
+        for (final ext in extensions) p.windows.join(dir, '$name$ext'),
+      ];
+      for (final candidate in candidates) {
+        if (check(candidate)) return candidate;
+      }
+    }
+    return null;
+  }
   for (final dir in pathVar.split(':')) {
     if (dir.isEmpty) continue;
     final candidate = p.join(dir, name);

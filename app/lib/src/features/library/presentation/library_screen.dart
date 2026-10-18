@@ -11,8 +11,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../core/launch/launch_modes.dart';
 import '../../../core/launch/session_recorder.dart';
 import '../../../core/model.dart' as core;
+import '../../../utils/platform/platform_runtime.dart';
 import '../../../utils/startup_time.dart';
 import '../../../utils/toast.dart';
 import '../data/library_repository.dart';
@@ -91,12 +93,13 @@ class LibraryScreen extends HookConsumerWidget {
       return null;
     }, [libraryAsync.hasValue]);
     final selected = ref.watch(selectedGameProvider);
+    final platform = ref.watch(hostPlatformProvider);
+    final onLinux = platform.isLinux;
     final umuMissing = ref.watch(umuRunPathProvider) == null;
     final libraryGames = libraryAsync.value?.library.games ?? const [];
     final usesProton = libraryGames.any(
       (game) =>
-          (game.launch.mode ?? core.LaunchMode.proton) ==
-          core.LaunchMode.proton,
+          effectiveLaunchMode(game, platform) == core.LaunchMode.proton,
     );
     return Scaffold(
       body: SafeArea(
@@ -110,7 +113,7 @@ class LibraryScreen extends HookConsumerWidget {
                   gridRight: gridWidth - LibraryGrid.horizontalPadding,
                 ),
                 SkippedBanner(skipped: libraryAsync.value?.skipped ?? const []),
-                if (umuMissing && usesProton) const _UmuBanner(),
+                if (onLinux && umuMissing && usesProton) const _UmuBanner(),
                 Expanded(
                   child: Focus(
                     autofocus: true,

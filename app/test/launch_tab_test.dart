@@ -13,6 +13,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tsumige/main.dart';
 import 'package:tsumige/src/core/covers.dart' as core;
+import 'package:tsumige/src/core/host_platform.dart';
 import 'package:tsumige/src/core/launch/detect.dart' as detect;
 import 'package:tsumige/src/core/model.dart' as core;
 import 'package:tsumige/src/core/paths.dart' as core;
@@ -24,6 +25,7 @@ import 'package:tsumige/src/features/library/domain/runner_detection.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/detail_tabs/launch_tab.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/library_toolbar.dart';
 import 'package:tsumige/src/features/settings/presentation/sections/settings_widgets.dart';
+import 'package:tsumige/src/utils/platform/platform_runtime.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 import 'package:tsumige/src/utils/theme/brand.dart';
 
@@ -58,6 +60,7 @@ Future<LaunchFakeRepository> pumpLaunch(
       pathPicker,
   List<core.LaunchMode>? launchModes,
   void Function()? onRunnerScan,
+  HostPlatform? hostPlatform,
 }) async {
   tester.view.physicalSize = const Size(1280, 800);
   tester.view.devicePixelRatio = 1.0;
@@ -87,6 +90,8 @@ Future<LaunchFakeRepository> pumpLaunch(
       }),
       if (launchModes != null)
         availableLaunchModesProvider.overrideWithValue(launchModes),
+      if (hostPlatform != null)
+        hostPlatformProvider.overrideWithValue(hostPlatform),
       protonRunnersProvider.overrideWith((ref) => Future.value(protons)),
       steamPrefixesProvider.overrideWith((ref) => Future.value(prefixes)),
       if (pathPicker != null)
@@ -129,6 +134,74 @@ String fieldText(WidgetTester tester, Key key) {
 }
 
 void main() {
+  testWidgets('macOS disables a saved Proton mode and says why',
+      (tester) async {
+    await pumpLaunch(
+      tester,
+      [core.Game(id: 'g1', title: 'Alpha', launch: core.LaunchOverrides(
+        mode: core.LaunchMode.proton,
+        executable: '/games/alpha/game.exe',
+      ))],
+      hostPlatform: const HostPlatform(HostOs.macos),
+    );
+    await openLaunch(tester, 'Alpha');
+
+    expect(find.byKey(const Key('mode-native')), findsOneWidget);
+    expect(find.byKey(const Key('mode-steam')), findsOneWidget);
+    expect(find.byKey(const Key('mode-wine')), findsNothing);
+    final proton = find.descendant(
+        of: find.byKey(const Key('mode-proton')), matching: find.byType(InkWell));
+    expect(tester.widget<InkWell>(proton).onTap, isNull);
+    expect(find.byKey(const Key('launch-mode-unavailable')),
+        findsOneWidget);
+    expect(find.text("Proton isn't available on macOS."), findsOneWidget);
+    expect(find.text('Run .exe inside prefix…'), findsNothing);
+
+    final play = tester.widget<Tooltip>(
+        find.ancestor(of: find.text('Play'), matching: find.byType(Tooltip)).first);
+    expect(play.message, "Proton isn't available on macOS.");
+  });
+
+  testWidgets('macOS runs a game with no saved mode as native and enables Play',
+      (tester) async {
+    await pumpLaunch(
+      tester,
+      [core.Game(id: 'g1', title: 'Alpha', launch: core.LaunchOverrides(
+        executable: '/Applications/Alpha.app',
+      ))],
+      hostPlatform: const HostPlatform(HostOs.macos),
+    );
+    await openLaunch(tester, 'Alpha');
+
+    expect(
+      tester.widget<BrandButton>(find.widgetWithText(BrandButton, 'Play'))
+          .onPressed,
+      isNotNull,
+    );
+    expect(find.byKey(const Key('launch-mode-unavailable')), findsNothing);
+    expect(find.text('Executable'), findsOneWidget);
+    expect(find.text('Proton version'), findsNothing);
+  });
+
+  testWidgets('Linux offers every mode and no unavailable hint',
+      (tester) async {
+    await pumpLaunch(
+      tester,
+      [core.Game(id: 'g1', title: 'Alpha', launch: core.LaunchOverrides(
+        mode: core.LaunchMode.proton,
+        executable: '/games/alpha/game.exe',
+      ))],
+      hostPlatform: const HostPlatform(HostOs.linux),
+    );
+    await openLaunch(tester, 'Alpha');
+
+    for (final key in ['proton', 'wine', 'native', 'steam']) {
+      expect(find.byKey(Key('mode-$key')), findsOneWidget);
+    }
+    expect(find.byKey(const Key('launch-mode-unavailable')), findsNothing);
+    expect(find.text('Run .exe inside prefix…'), findsOneWidget);
+  });
+
   testWidgets('mode switch hides and shows the right fields',
       (tester) async {
     await pumpLaunch(tester, [core.Game(id: 'g1', title: 'Alpha')]);

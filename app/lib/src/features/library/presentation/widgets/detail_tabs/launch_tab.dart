@@ -12,7 +12,9 @@ import 'package:path/path.dart' as p;
 import '../../../../../core/launch/args.dart';
 import '../../../../../core/launch/detect.dart';
 import '../../../../../core/launch/env.dart';
+import '../../../../../core/launch/launch_modes.dart';
 import '../../../../../core/model.dart';
+import '../../../../../utils/platform/platform_runtime.dart';
 import '../../../../../utils/prefs/app_prefs.dart';
 import '../../../../../utils/theme/brand.dart';
 import '../../../../../utils/toast.dart';
@@ -22,16 +24,9 @@ import '../../../domain/runner_detection.dart';
 import '../library_toolbar.dart';
 import 'info_tab.dart';
 
-String launchModeName(LaunchMode mode) => switch (mode) {
-  LaunchMode.proton => 'Proton',
-  LaunchMode.wine => 'Wine',
-  LaunchMode.native => 'Native',
-  LaunchMode.steam => 'Steam',
-};
-
-/// Modes offered by the Mode control. Platform detection will narrow this.
+/// Modes offered by the Mode control on this platform.
 final availableLaunchModesProvider = Provider<List<LaunchMode>>(
-  (ref) => LaunchMode.values,
+  (ref) => launchModesFor(ref.watch(hostPlatformProvider)),
 );
 
 Widget launchFieldLabel(BuildContext context, String label, bool isDefault) {
@@ -74,7 +69,7 @@ class _LaunchTabState extends ConsumerState<LaunchTab> {
     final defaultRunner = ref.watch(launchRunnerProvider);
     final defaultLocale = ref.watch(launchLocaleProvider);
     final defaultUmu = ref.watch(launchUmuGameIdProvider);
-    final mode = game.launch.mode ?? LaunchMode.proton;
+    final mode = effectiveLaunchMode(game, ref.watch(hostPlatformProvider));
     final wines = ref.watch(wineRunnersProvider).value ?? const <WineRunner>[];
     final protons =
         ref.watch(protonRunnersProvider).value ?? const <ProtonRunner>[];
@@ -208,26 +203,47 @@ class LaunchModeSegment extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final modes = [...ref.watch(availableLaunchModesProvider)];
+    final available = ref.watch(availableLaunchModesProvider);
+    final platform = ref.watch(hostPlatformProvider);
+    final modes = [...available];
     if (!modes.contains(mode)) modes.add(mode);
-    return ToolbarBox(
-      key: key,
-      child: Padding(
-        padding: const EdgeInsets.all(3),
-        child: Row(
-          children: [
-            for (final option in modes)
-              Expanded(
-                child: ToolbarSegment(
-                  key: Key('mode-${option.name}'),
-                  label: launchModeName(option),
-                  selected: option == mode,
-                  onTap: () => onChanged(option),
-                ),
-              ),
-          ],
+    final unavailable = launchModeUnavailableMessage(mode, platform);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ToolbarBox(
+          key: key,
+          child: Padding(
+            padding: const EdgeInsets.all(3),
+            child: Row(
+              children: [
+                for (final option in modes)
+                  Expanded(
+                    child: ToolbarSegment(
+                      key: Key('mode-${option.name}'),
+                      label: launchModeName(option),
+                      selected: option == mode,
+                      enabled: available.contains(option),
+                      onTap: () => onChanged(option),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
-      ),
+        if (unavailable != null && !available.contains(mode))
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              unavailable,
+              key: const Key('launch-mode-unavailable'),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    fontSize: 11.5,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
+      ],
     );
   }
 }

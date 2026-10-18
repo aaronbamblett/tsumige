@@ -16,6 +16,7 @@ import '../../../core/launch/launch_command.dart';
 import '../../../core/launch/process_table.dart';
 import '../../../core/launch/session_recorder.dart';
 import '../../../core/model.dart' as core;
+import '../../../utils/platform/platform_runtime.dart';
 import '../../../utils/prefs/app_prefs.dart';
 import '../../../utils/toast.dart';
 import '../data/library_repository.dart';
@@ -25,17 +26,23 @@ part 'launch_actions.g.dart';
 
 /// `umu-run` resolved from PATH. A seam so tests can force it missing.
 @riverpod
-String? umuRunPath(Ref ref) => findOnPath('umu-run', Platform.environment);
+String? umuRunPath(Ref ref) => findOnPath(
+      'umu-run',
+      Platform.environment,
+      platform: ref.watch(hostPlatformProvider),
+    );
 
 /// The real game runner, wired to the data folder and the repository.
 /// Tests override this with a fake that never starts a process.
 @riverpod
 GameRunner gameRunner(Ref ref) {
+  final platform = ref.watch(hostPlatformProvider);
   return GameRunner(
     dir: ref.watch(dataDirProvider),
     store: ref.watch(sessionStoreProvider),
-    starter: IoProcessStarter(),
+    starter: IoProcessStarter(platform: platform),
     processTable: ProcProcessTable(),
+    platform: platform,
   );
 }
 
@@ -88,7 +95,6 @@ class LaunchActions {
   final Ref _ref;
 
   LaunchDefaults _defaults() => LaunchDefaults(
-        mode: core.LaunchMode.proton,
         prefix: _ref.read(launchPrefixProvider),
         runner: _ref.read(launchRunnerProvider),
         locale: _ref.read(launchLocaleProvider),
@@ -130,6 +136,9 @@ class LaunchActions {
         _ref.invalidate(libraryProvider);
       }
       if (!context.mounted) return;
+      if (result.startedInSteam) {
+        Toast(context).show(steamUntrackedOnMacOSMessage);
+      }
       if (result.quickFailure) {
         Toast(context).showError(
           '${game.title} exited right away. Log: ${result.logFile.path}',

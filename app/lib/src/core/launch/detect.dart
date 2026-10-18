@@ -8,6 +8,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../host_platform.dart';
+
 class WineRunner {
   const WineRunner({
     required this.name,
@@ -42,7 +44,11 @@ class SteamPrefix {
 List<WineRunner> detectWineRunners(
   Map<String, String> hostEnv, {
   String fsRoot = '',
+  HostPlatform? platform,
 }) {
+  if (!(platform ?? HostPlatform.fromEnvironment(hostEnv)).isLinux) {
+    return <WineRunner>[];
+  }
   final runners = <WineRunner>[];
   try {
     _addPathWineRunners(runners, hostEnv, fsRoot);
@@ -68,7 +74,11 @@ List<WineRunner> detectWineRunners(
 List<ProtonRunner> detectProtonRunners(
   Map<String, String> hostEnv, {
   String fsRoot = '',
+  HostPlatform? platform,
 }) {
+  if (!(platform ?? HostPlatform.fromEnvironment(hostEnv)).isLinux) {
+    return <ProtonRunner>[];
+  }
   final runners = <ProtonRunner>[];
   try {
     final home = _hostHomeDir(hostEnv);
@@ -96,7 +106,11 @@ List<ProtonRunner> detectProtonRunners(
 List<SteamPrefix> detectSteamPrefixes(
   Map<String, String> hostEnv, {
   String fsRoot = '',
+  HostPlatform? platform,
 }) {
+  if (!(platform ?? HostPlatform.fromEnvironment(hostEnv)).isLinux) {
+    return <SteamPrefix>[];
+  }
   final prefixes = <SteamPrefix>[];
   try {
     final home = _hostHomeDir(hostEnv);

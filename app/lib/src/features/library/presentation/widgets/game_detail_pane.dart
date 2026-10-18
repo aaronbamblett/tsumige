@@ -14,8 +14,10 @@ import 'package:path/path.dart' as p;
 
 import '../../../../core/covers.dart';
 import '../../../../core/launch/game_runner.dart';
+import '../../../../core/launch/launch_modes.dart';
 import '../../../../core/model.dart';
 import '../../../../core/trash.dart';
+import '../../../../utils/platform/platform_runtime.dart';
 import '../../../../utils/theme/brand.dart';
 import '../../data/library_repository.dart';
 import '../../domain/cover_source.dart';
@@ -554,10 +556,12 @@ class _Footer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final actions = ref.watch(launchActionsProvider);
     final scheme = Theme.of(context).colorScheme;
-    final LaunchMode mode = game.launch.mode ?? LaunchMode.proton;
+    final platform = ref.watch(hostPlatformProvider);
+    final LaunchMode mode = effectiveLaunchMode(game, platform);
     final phase = ref.watch(runningGamesProvider)[game.id];
     final busy = phase != null;
-    final showRunExe = mode == LaunchMode.proton || mode == LaunchMode.wine;
+    final showRunExe = platform.isLinux &&
+        (mode == LaunchMode.proton || mode == LaunchMode.wine);
     final launchTip = _launchTooltip(ref, phase, mode);
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
@@ -624,6 +628,9 @@ class _Footer extends ConsumerWidget {
 
   String? _launchTooltip(WidgetRef ref, LaunchPhase? phase, LaunchMode mode) {
     if (phase != null) return _phaseLabel(phase);
+    final unavailable =
+        launchModeUnavailableMessage(mode, ref.watch(hostPlatformProvider));
+    if (unavailable != null) return unavailable;
     if (mode == LaunchMode.steam) {
       if (game.launch.steamAppId == null) return 'Steam App ID is not set';
     } else {

@@ -36,7 +36,7 @@ Future<void> main() async {
   appMainEntry = DateTime.now();
   WidgetsFlutterBinding.ensureInitialized();
   final env = Platform.environment;
-  await migrateLegacyDataDir(env);
+  if (Platform.isLinux) await migrateLegacyDataDir(env);
   if (Platform.isLinux) await migrateLegacyPrefsFile(env);
   final prefs = await SharedPreferences.getInstance();
   await migrateLaunchPrefix(prefs, env);

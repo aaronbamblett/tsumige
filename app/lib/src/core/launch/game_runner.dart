@@ -7,12 +7,18 @@
 import 'dart:async';
 import 'dart:io';
 
+import '../host_platform.dart';
 import '../model.dart';
 import '../paths.dart';
 import 'launch_command.dart';
+import 'launch_modes.dart';
 import 'log_files.dart';
 import 'process_table.dart';
 import 'session_recorder.dart';
+import 'steam_registry.dart';
+
+const steamUntrackedOnMacOSMessage =
+    "Started in Steam. Playtime isn't tracked for Steam games on macOS.";
 
 /// A started game process. `exitCode` completes as soon as the OS process
 /// exits. `logClosed` completes when the output streams have drained and the
@@ -43,10 +49,13 @@ class _IoStartedProcess implements StartedProcess {
 }
 
 class IoProcessStarter implements ProcessStarter {
-  IoProcessStarter({Map<String, String>? hostEnv})
-      : hostEnv = hostEnv ?? Platform.environment;
+  IoProcessStarter({Map<String, String>? hostEnv, HostPlatform? platform})
+      : hostEnv = hostEnv ?? Platform.environment,
+        platform = platform ??
+            HostPlatform.fromEnvironment(hostEnv ?? Platform.environment);
 
   final Map<String, String> hostEnv;
+  final HostPlatform platform;
 
   @override
   Future<StartedProcess> start(LaunchCommand command, File log) async {
@@ -54,7 +63,7 @@ class IoProcessStarter implements ProcessStarter {
       command.executable,
       command.args,
       workingDirectory: command.workingDirectory,
-      environment: {...hostEnv, ...command.env},
+      environment: gameEnvironment(hostEnv, command.env, platform: platform),
       includeParentEnvironment: false,
       mode: ProcessStartMode.normal,
     );
@@ -108,12 +117,14 @@ class LaunchResult {
     required this.exitCode,
     required this.quickFailure,
     this.sessionSeconds,
+    this.startedInSteam = false,
   });
 
   final File logFile;
   final int exitCode;
   final bool quickFailure;
   final int? sessionSeconds;
+  final bool startedInSteam;
 }
 
 class _SteamSession {
@@ -133,6 +144,8 @@ class GameRunner {
     required this.starter,
     required this.processTable,
     Map<String, String>? hostEnv,
+    HostPlatform? platform,
+    SteamRegistry? steamRegistry,
     DateTime Function()? clock,
     Future<void> Function(Duration)? sleep,
     this.steamPollInterval = const Duration(seconds: 5),
@@ -140,6 +153,9 @@ class GameRunner {
     this.quickFailWindow = const Duration(seconds: 5),
     this.heartbeatInterval = const Duration(seconds: 60),
   })  : hostEnv = hostEnv ?? Platform.environment,
+        platform = platform ??
+            HostPlatform.fromEnvironment(hostEnv ?? Platform.environment),
+        steamRegistry = steamRegistry ?? RegSteamRegistry(),
         clock = clock ?? (() => DateTime.now().toUtc()),
         sleep = sleep ?? Future.delayed;
 
@@ -148,6 +164,8 @@ class GameRunner {
   final ProcessStarter starter;
   final ProcessTable processTable;
   final Map<String, String> hostEnv;
+  final HostPlatform platform;
+  final SteamRegistry steamRegistry;
   final DateTime Function() clock;
   final Future<void> Function(Duration) sleep;
   final Duration steamPollInterval;
@@ -176,6 +194,7 @@ class GameRunner {
       overrideExe: overrideExe,
       hostEnv: hostEnv,
       umuRunPath: umuRunPath,
+      platform: platform,
     );
     final startedAt = clock();
     final logFile = newLaunchLog(dir, game, startedAt);
@@ -183,16 +202,30 @@ class GameRunner {
     try {
       emit(LaunchPhase.starting);
       final process = await starter.start(command, logFile);
+      if (platform.isMacOS &&
+          effectiveLaunchMode(game, platform) == LaunchMode.steam) {
+        // macOS can't tell which Steam game is running, so no session is kept.
+        final code = await process.exitCode;
+        await process.logClosed;
+        await updateLatestLog(dir, logFile);
+        if (code != 0) throw const LaunchConfigError("Couldn't open Steam.");
+        return LaunchResult(
+          logFile: logFile,
+          exitCode: 0,
+          quickFailure: false,
+          startedInSteam: true,
+        );
+      }
       // Native, Wine and Proton run the game in the spawned process itself,
       // so it is visible as soon as `Process.start` returns. Steam reports
       // `running` later, when the game process first appears (see below).
-      if ((game.launch.mode ?? defaults.mode) != LaunchMode.steam) {
+      if (effectiveLaunchMode(game, platform) != LaunchMode.steam) {
         emit(LaunchPhase.running);
       }
       await writeRunningMarker(dir, game.id, startedAt, startedAt);
       heartbeat =
           _RunningHeartbeat(dir, game.id, startedAt, clock, heartbeatInterval);
-      if ((game.launch.mode ?? defaults.mode) == LaunchMode.steam) {
+      if (effectiveLaunchMode(game, platform) == LaunchMode.steam) {
         // Timing `steam -applaunch` itself would be wrong: it exits at once.
         process.exitCode.then((_) {}, onError: (_) {});
         final session = await _steamSession(
@@ -251,8 +284,7 @@ class GameRunner {
     DateTime? firstSeen;
     final deadline = clock().add(steamAppearTimeout);
     while (firstSeen == null) {
-      final pids = await processTable.pidsWithEnv('SteamAppId', '$appId');
-      if (pids.isNotEmpty) {
+      if (await _steamRunning(appId)) {
         firstSeen = clock();
         onFirstSeen?.call();
         break;
@@ -263,13 +295,23 @@ class GameRunner {
     final start = firstSeen;
     while (true) {
       await sleep(steamPollInterval);
-      final pids = await processTable.pidsWithEnv('SteamAppId', '$appId');
-      if (pids.isEmpty) {
+      if (!await _steamRunning(appId)) {
         var seconds = clock().difference(start).inSeconds;
         if (seconds < 0) seconds = 0;
         return _SteamSession(start, seconds);
       }
     }
+  }
+
+  /// Windows reads Steam's registry key; Linux looks for a process whose
+  /// environment names the app id.
+  Future<bool> _steamRunning(int appId) async {
+    if (platform.isWindows) {
+      final running = await steamRegistry.runningAppId();
+      return running == appId;
+    }
+    final pids = await processTable.pidsWithEnv('SteamAppId', '$appId');
+    return pids.isNotEmpty;
   }
 
 }

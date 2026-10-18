@@ -13,6 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tsumige/main.dart';
+import 'package:tsumige/src/core/host_platform.dart';
 import 'package:tsumige/src/core/launch/game_runner.dart';
 import 'package:tsumige/src/core/launch/launch_command.dart';
 import 'package:tsumige/src/core/launch/process_table.dart';
@@ -24,6 +25,7 @@ import 'package:tsumige/src/core/vndb.dart' as core;
 import 'package:tsumige/src/features/library/data/library_repository.dart';
 import 'package:tsumige/src/features/library/domain/cover_source.dart';
 import 'package:tsumige/src/features/library/domain/launch_actions.dart';
+import 'package:tsumige/src/utils/platform/platform_runtime.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 import 'package:tsumige/src/utils/theme/brand.dart';
 
@@ -120,6 +122,7 @@ Future<Directory> pumpLaunch(
   String? umu,
   Future<String?> Function(core.Game)? picker,
   FakeRunner? runner,
+  HostPlatform? platform,
 }) async {
   tester.view.physicalSize = const Size(1280, 800);
   tester.view.devicePixelRatio = 1.0;
@@ -149,6 +152,7 @@ Future<Directory> pumpLaunch(
       gameRunnerProvider.overrideWithValue(runner ?? FakeRunner()),
       umuRunPathProvider.overrideWithValue(umu),
       exePickerProvider.overrideWithValue(picker ?? noPick),
+      if (platform != null) hostPlatformProvider.overrideWithValue(platform),
     ],
     child: const TsumigeApp(),
   ));
@@ -311,6 +315,26 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(repo.loads, greaterThan(before));
+  });
+
+  testWidgets('a macOS Steam launch says playtime is not tracked',
+      (tester) async {
+    final runner = FakeRunner()
+      ..nextResult = LaunchResult(
+        logFile: File('/tmp/x/Steam.log'),
+        exitCode: 0,
+        quickFailure: false,
+        startedInSteam: true,
+      );
+    await pumpLaunch(tester, [steamGame('g1', 'Alpha')],
+        runner: runner, platform: const HostPlatform(HostOs.macos));
+    await openPane(tester, 'Alpha');
+    await tester.tap(launchButton());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text(steamUntrackedOnMacOSMessage), findsOneWidget);
+    expect(launchButton(), findsOneWidget);
+    await tester.pump(const Duration(seconds: 6));
   });
 
   testWidgets('a quick failure toasts the log path', (tester) async {
