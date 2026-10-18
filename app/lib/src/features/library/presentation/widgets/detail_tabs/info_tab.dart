@@ -507,7 +507,14 @@ class _TagsSectionState extends ConsumerState<_TagsSection> {
           )
         : InkWell(
             borderRadius: _kChipRadius,
-            onTap: () => setState(() => _adding = true),
+            onTap: () {
+              setState(() => _adding = true);
+              // Autofocus loses to the already-focused grid tile, so
+              // claim focus explicitly once the field is built.
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) _focusNode.requestFocus();
+              });
+            },
             child: Container(
               width: _kChipHeight,
               height: _kChipHeight,

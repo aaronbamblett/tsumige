@@ -1100,6 +1100,31 @@ void main() {
     expect(games.single.tags, ['Cozy']);
   });
 
+  testWidgets('tapping + focuses the new tag field for immediate typing',
+      (tester) async {
+    final games = [core.Game(id: 'g1', title: 'Alpha', tags: ['Action'])];
+    await pumpLibrary(tester, games);
+    await openPane(tester, 'Alpha');
+    // Park focus on the tab so the field must steal it explicitly.
+    await tester.tap(tabLabel('Info'));
+    await tester.pump();
+    await tester.ensureVisible(paneText(tester, '+'));
+    await tester.tap(paneText(tester, '+'));
+    await tester.pump();
+    final field = find.descendant(
+      of: find.byType(GameDetailPane),
+      matching: find.byType(TextField),
+    );
+    expect(field, findsOneWidget);
+    expect(tester.widget<TextField>(field).focusNode?.hasFocus, isTrue);
+    await tester.enterText(field, 'Cozy');
+    // Enter submits, as in the sibling tag tests.
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Cozy'), findsOneWidget);
+    expect(games.single.tags, contains('Cozy'));
+  });
+
   testWidgets('unticking a detail field hides its Info section',
       (tester) async {
     await pumpLibrary(tester, [
