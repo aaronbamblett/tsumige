@@ -5,7 +5,10 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = tsumige
+PRODUCT_NAME = Tsumige
+
+// The executable inside the bundle keeps its lowercase name.
+EXECUTABLE_NAME = tsumige
 
 // The application's bundle identifier
 PRODUCT_BUNDLE_IDENTIFIER = app.tsumige.Tsumige

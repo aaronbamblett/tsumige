@@ -12,7 +12,6 @@ import 'package:tsumige/src/core/model.dart';
 const _macos = HostPlatform(HostOs.macos);
 
 const _defaults = LaunchDefaults(
-  mode: LaunchMode.native,
   prefix: '/p',
   locale: '',
   umuGameId: 'umu-default',
@@ -69,6 +68,14 @@ void main() {
         workingDirectory: '/Users/v/Games/suba',
       ),
     );
+  });
+
+  test('a game with no saved mode runs as native on macOS', () {
+    final command = _build(LaunchOverrides(
+      executable: '/Applications/Subahibi.app',
+    ));
+    expect(command.executable, 'open');
+    expect(command.args.take(3), ['-W', '-n', '/Applications/Subahibi.app']);
   });
 
   test('a Steam game opens its steam:// link with no session', () {

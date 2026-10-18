@@ -162,6 +162,27 @@ void main() {
     expect(play.message, "Proton isn't available on macOS.");
   });
 
+  testWidgets('macOS runs a game with no saved mode as native and enables Play',
+      (tester) async {
+    await pumpLaunch(
+      tester,
+      [core.Game(id: 'g1', title: 'Alpha', launch: core.LaunchOverrides(
+        executable: '/Applications/Alpha.app',
+      ))],
+      hostPlatform: const HostPlatform(HostOs.macos),
+    );
+    await openLaunch(tester, 'Alpha');
+
+    expect(
+      tester.widget<BrandButton>(find.widgetWithText(BrandButton, 'Play'))
+          .onPressed,
+      isNotNull,
+    );
+    expect(find.byKey(const Key('launch-mode-unavailable')), findsNothing);
+    expect(find.text('Executable'), findsOneWidget);
+    expect(find.text('Proton version'), findsNothing);
+  });
+
   testWidgets('Linux offers every mode and no unavailable hint',
       (tester) async {
     await pumpLaunch(

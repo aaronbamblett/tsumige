@@ -556,10 +556,11 @@ class _Footer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final actions = ref.watch(launchActionsProvider);
     final scheme = Theme.of(context).colorScheme;
-    final LaunchMode mode = game.launch.mode ?? LaunchMode.proton;
+    final platform = ref.watch(hostPlatformProvider);
+    final LaunchMode mode = effectiveLaunchMode(game, platform);
     final phase = ref.watch(runningGamesProvider)[game.id];
     final busy = phase != null;
-    final showRunExe = ref.watch(hostPlatformProvider).isLinux &&
+    final showRunExe = platform.isLinux &&
         (mode == LaunchMode.proton || mode == LaunchMode.wine);
     final launchTip = _launchTooltip(ref, phase, mode);
     return Container(

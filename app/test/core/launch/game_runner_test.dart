@@ -97,7 +97,6 @@ class FakeTable implements ProcessTable {
 }
 
 const defaults = LaunchDefaults(
-  mode: LaunchMode.native,
   prefix: '/p',
   locale: '',
   umuGameId: 'umu-default',
@@ -487,6 +486,24 @@ void main() {
     expect(store.current.library.games.single.playSessions, isEmpty);
     expect(registry.polls, 37);
     expect(now.difference(t0), const Duration(minutes: 3));
+    expect(phases, [LaunchPhase.starting, LaunchPhase.ended]);
+  });
+
+  test('macOS Steam reports a launch error when open fails', () async {
+    final store = storeWith(steamGame());
+    final starter = FakeStarter((command, log) async =>
+        FakeStartedProcess(pid: 7, exitCode: Future.value(1)));
+    final phases = <LaunchPhase>[];
+    await expectLater(
+      runner(
+        store: store,
+        starter: starter,
+        platform: const HostPlatform(HostOs.macos),
+      ).launch(steamGame(), defaults, onPhase: phases.add),
+      throwsA(isA<LaunchConfigError>()
+          .having((e) => e.message, 'message', "Couldn't open Steam.")),
+    );
+    expect(store.current.library.games.single.playSessions, isEmpty);
     expect(phases, [LaunchPhase.starting, LaunchPhase.ended]);
   });
 

@@ -26,6 +26,11 @@ List<LaunchMode> launchModesFor(HostPlatform platform) => switch (platform.os) {
 LaunchMode defaultLaunchMode(HostPlatform platform) =>
     platform.isLinux ? LaunchMode.proton : LaunchMode.native;
 
+/// The mode a game runs in: its saved mode, or the platform default. Every
+/// place that shows or runs a game's mode goes through here.
+LaunchMode effectiveLaunchMode(Game game, HostPlatform platform) =>
+    game.launch.mode ?? defaultLaunchMode(platform);
+
 /// The refusal shown for a saved mode this platform can't run, or null when
 /// the mode is available.
 String? launchModeUnavailableMessage(LaunchMode mode, HostPlatform platform) {

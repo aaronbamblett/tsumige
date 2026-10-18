@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../core/launch/launch_modes.dart';
 import '../../../core/launch/session_recorder.dart';
 import '../../../core/model.dart' as core;
 import '../../../utils/platform/platform_runtime.dart';
@@ -92,13 +93,13 @@ class LibraryScreen extends HookConsumerWidget {
       return null;
     }, [libraryAsync.hasValue]);
     final selected = ref.watch(selectedGameProvider);
-    final onLinux = ref.watch(hostPlatformProvider).isLinux;
+    final platform = ref.watch(hostPlatformProvider);
+    final onLinux = platform.isLinux;
     final umuMissing = ref.watch(umuRunPathProvider) == null;
     final libraryGames = libraryAsync.value?.library.games ?? const [];
     final usesProton = libraryGames.any(
       (game) =>
-          (game.launch.mode ?? core.LaunchMode.proton) ==
-          core.LaunchMode.proton,
+          effectiveLaunchMode(game, platform) == core.LaunchMode.proton,
     );
     return Scaffold(
       body: SafeArea(

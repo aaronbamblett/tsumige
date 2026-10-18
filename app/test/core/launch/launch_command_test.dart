@@ -9,7 +9,6 @@ import 'package:tsumige/src/core/launch/launch_command.dart';
 import 'package:tsumige/src/core/model.dart';
 
 const defaults = LaunchDefaults(
-  mode: LaunchMode.proton,
   prefix: '/defaults/prefix',
   runner: '/defaults/proton',
   locale: 'ja_JP.UTF-8',
@@ -86,7 +85,6 @@ void main() {
     final command = buildLaunchCommand(
       game,
       const LaunchDefaults(
-          mode: LaunchMode.wine,
           prefix: '/p',
           locale: '',
           umuGameId: 'umu-default'),
@@ -146,7 +144,6 @@ void main() {
     final command = buildLaunchCommand(
       game,
       const LaunchDefaults(
-        mode: LaunchMode.proton,
         prefix: '/defaults/prefix',
         runner: '/defaults/proton',
         locale: 'ja_JP.UTF-8',
@@ -175,7 +172,6 @@ void main() {
     final command = buildLaunchCommand(
       game,
       const LaunchDefaults(
-          mode: LaunchMode.proton,
           prefix: '/p',
           locale: 'ja_JP.UTF-8',
           umuGameId: 'umu-default'),
@@ -194,7 +190,6 @@ void main() {
     final command = buildLaunchCommand(
       game,
       const LaunchDefaults(
-          mode: LaunchMode.proton,
           prefix: '/p',
           runner: '/proton',
           locale: '',

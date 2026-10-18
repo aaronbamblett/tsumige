@@ -129,7 +129,8 @@ jobs:
         if: matrix.target == 'macos'
         run: |
           mkdir -p dist
-          APP=$(find app/build/macos/Build/Products/Release -maxdepth 1 -name "*.app" | head -1)
+          APP=app/build/macos/Build/Products/Release/Tsumige.app
+          test -d "$APP"
           ditto -c -k --sequesterRsrc --keepParent "$APP" "dist/Tsumige-${{ github.ref_name }}-macos.zip"
 
       - name: Package Windows

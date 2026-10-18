@@ -24,14 +24,12 @@ class LaunchConfigError implements Exception {
 }
 
 class LaunchDefaults {
-  final LaunchMode mode;
   final String prefix;
   final String? runner;
   final String locale;
   final String umuGameId;
 
   const LaunchDefaults({
-    required this.mode,
     required this.prefix,
     this.runner,
     required this.locale,
@@ -165,7 +163,7 @@ LaunchCommand buildLaunchCommand(
   HostPlatform? platform,
 }) {
   final host = platform ?? HostPlatform.fromEnvironment(hostEnv);
-  final mode = game.launch.mode ?? defaults.mode;
+  final mode = effectiveLaunchMode(game, host);
   final unavailable = launchModeUnavailableMessage(mode, host);
   if (unavailable != null) throw LaunchConfigError(unavailable);
   final extraEnv = parseEnv(game.launch.environment ?? '');
@@ -307,11 +305,19 @@ String? findOnPath(
   if (host.isWindows) {
     final extensions = (hostEnv['PATHEXT'] ?? '.COM;.EXE;.BAT;.CMD')
         .split(';')
-        .where((ext) => ext.isNotEmpty);
+        .where((ext) => ext.isNotEmpty)
+        .toList();
+    final lowerName = name.toLowerCase();
+    final endsWithExt = extensions.any(
+      (ext) => lowerName.endsWith(ext.toLowerCase()),
+    );
     for (final dir in pathVar.split(';')) {
       if (dir.isEmpty) continue;
-      for (final ext in extensions) {
-        final candidate = p.windows.join(dir, '$name$ext');
+      final candidates = [
+        if (endsWithExt) p.windows.join(dir, name),
+        for (final ext in extensions) p.windows.join(dir, '$name$ext'),
+      ];
+      for (final candidate in candidates) {
         if (check(candidate)) return candidate;
       }
     }

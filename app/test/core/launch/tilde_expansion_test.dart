@@ -9,7 +9,6 @@ import 'package:tsumige/src/core/launch/launch_command.dart';
 import 'package:tsumige/src/core/model.dart';
 
 const defaults = LaunchDefaults(
-  mode: LaunchMode.proton,
   prefix: '/defaults/prefix',
   runner: '/defaults/proton',
   locale: 'ja_JP.UTF-8',
@@ -41,7 +40,6 @@ void main() {
       ),
     );
     const tildeDefaults = LaunchDefaults(
-      mode: LaunchMode.wine,
       prefix: '~/Games/tsumige/prefix',
       locale: '',
       umuGameId: 'umu-default',

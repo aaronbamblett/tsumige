@@ -21,12 +21,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tsumige/src/core/covers.dart' as core;
 import 'package:tsumige/src/core/model.dart' as core;
 import 'package:tsumige/src/core/paths.dart' as core;
+import 'package:tsumige/src/core/host_platform.dart';
 import 'package:tsumige/src/core/vndb.dart' as core;
 import 'package:tsumige/src/features/library/data/library_repository.dart';
 import 'package:tsumige/src/features/library/domain/add_game.dart';
 import 'package:tsumige/src/features/library/domain/game_editor.dart';
 import 'package:tsumige/src/features/library/presentation/add_game/add_game_dialog.dart';
 import 'package:tsumige/src/features/library/presentation/add_game/import_folder_dialog.dart';
+import 'package:tsumige/src/utils/platform/platform_runtime.dart';
 import 'package:tsumige/src/utils/theme/brand.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 
@@ -174,6 +176,7 @@ Future<_Harness> _open(
   Completer<void>? gate,
   String? gateQuery,
   Completer<String?>? picker,
+  HostPlatform? platform,
 }) async {
   tester.view.physicalSize = surface;
   tester.view.devicePixelRatio = 1.0;
@@ -207,6 +210,7 @@ Future<_Harness> _open(
           ({String? initialDirectory, PathPickMode? mode}) async =>
               picker != null ? picker.future : root,
         ),
+        if (platform != null) hostPlatformProvider.overrideWithValue(platform),
       ],
       child: MaterialApp(
         builder: FToastBuilder(),
@@ -242,6 +246,7 @@ Future<_Harness> _openAndMatch(
   Size surface = const Size(1400, 980),
   bool duplicate = false,
   int folders = 5,
+  HostPlatform? platform,
 }) async {
   final harness = await _open(
     tester,
@@ -249,6 +254,7 @@ Future<_Harness> _openAndMatch(
     results: results,
     surface: surface,
     duplicate: duplicate,
+    platform: platform,
   );
   for (var i = 0; i < 200; i++) {
     final done =
@@ -394,6 +400,21 @@ void main() {
     await _waitForSave(tester, h.repo);
     expect(_added(h), hasLength(2));
     expect([for (final g in _added(h)) g.tags], [[], []]);
+    await _drainToast(tester);
+  });
+
+  testWidgets('on macOS the folder import saves games in native mode', (
+    tester,
+  ) async {
+    final h = await _openAndMatch(
+      tester,
+      platform: const HostPlatform(HostOs.macos),
+    );
+    await tester.tap(find.byKey(const Key('import-add')));
+    await _waitForSave(tester, h.repo);
+    expect(_added(h), isNotEmpty);
+    expect([for (final g in _added(h)) g.launch.mode],
+        everyElement(core.LaunchMode.native));
     await _drainToast(tester);
   });
 

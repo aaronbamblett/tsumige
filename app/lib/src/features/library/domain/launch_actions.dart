@@ -13,7 +13,6 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/launch/game_runner.dart';
 import '../../../core/launch/launch_command.dart';
-import '../../../core/launch/launch_modes.dart';
 import '../../../core/launch/process_table.dart';
 import '../../../core/launch/session_recorder.dart';
 import '../../../core/model.dart' as core;
@@ -96,7 +95,6 @@ class LaunchActions {
   final Ref _ref;
 
   LaunchDefaults _defaults() => LaunchDefaults(
-        mode: defaultLaunchMode(_ref.read(hostPlatformProvider)),
         prefix: _ref.read(launchPrefixProvider),
         runner: _ref.read(launchRunnerProvider),
         locale: _ref.read(launchLocaleProvider),

@@ -69,7 +69,7 @@ class _LaunchTabState extends ConsumerState<LaunchTab> {
     final defaultRunner = ref.watch(launchRunnerProvider);
     final defaultLocale = ref.watch(launchLocaleProvider);
     final defaultUmu = ref.watch(launchUmuGameIdProvider);
-    final mode = game.launch.mode ?? LaunchMode.proton;
+    final mode = effectiveLaunchMode(game, ref.watch(hostPlatformProvider));
     final wines = ref.watch(wineRunnersProvider).value ?? const <WineRunner>[];
     final protons =
         ref.watch(protonRunnersProvider).value ?? const <ProtonRunner>[];

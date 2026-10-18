@@ -11,8 +11,10 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:path/path.dart' as p;
 
+import '../../../../core/launch/launch_modes.dart';
 import '../../../../core/model.dart';
 import '../../../../core/vndb.dart';
+import '../../../../utils/platform/platform_runtime.dart';
 import '../../../../utils/theme/brand.dart';
 import '../../../../utils/toast.dart';
 import '../../../settings/presentation/sections/settings_widgets.dart';
@@ -348,6 +350,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     final httpClient = ref.read(addGameHttpClientProvider);
     final dataDir = ref.read(dataDirProvider);
     final tags = _tagOn ? [_folderTag] : const <String>[];
+    final mode = defaultLaunchMode(ref.read(hostPlatformProvider));
     setState(() {
       _saving = true;
       _done = 0;
@@ -364,7 +367,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
             title: row.folder.name,
             tags: tags,
             exe: exe,
-            mode: LaunchMode.proton,
+            mode: mode,
           ),
         );
       } else {
@@ -374,7 +377,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
           description: vn.description,
           tags: tags,
           exe: exe,
-          mode: LaunchMode.proton,
+          mode: mode,
           steamAppId: null,
           vndb: vndb,
           httpClient: httpClient,

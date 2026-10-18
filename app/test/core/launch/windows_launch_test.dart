@@ -12,7 +12,6 @@ import 'package:tsumige/src/core/model.dart';
 const _windows = HostPlatform(HostOs.windows);
 
 const _defaults = LaunchDefaults(
-  mode: LaunchMode.native,
   prefix: '/p',
   locale: '',
   umuGameId: 'umu-default',
@@ -81,6 +80,36 @@ void main() {
       r'C:\Bin\umu-run.COM',
       r'C:\Bin\umu-run.EXE',
     ]);
+  });
+
+  test('findOnPath tries the bare name first when it already has a PATHEXT '
+      'extension', () {
+    final checked = <String>[];
+    final found = findOnPath(
+      'umu-run.exe',
+      const {'PATH': r'C:\Bin', 'PATHEXT': '.COM;.EXE'},
+      platform: _windows,
+      isExecutable: (path) {
+        checked.add(path);
+        return path == r'C:\Bin\umu-run.exe';
+      },
+    );
+    expect(found, r'C:\Bin\umu-run.exe');
+    expect(checked.first, r'C:\Bin\umu-run.exe');
+  });
+
+  test('findOnPath appends PATHEXT to a name without an extension', () {
+    final checked = <String>[];
+    findOnPath(
+      'umu-run',
+      const {'PATH': r'C:\Bin', 'PATHEXT': '.COM;.EXE'},
+      platform: _windows,
+      isExecutable: (path) {
+        checked.add(path);
+        return false;
+      },
+    );
+    expect(checked, [r'C:\Bin\umu-run.COM', r'C:\Bin\umu-run.EXE']);
   });
 
   test('findOnPath uses the default PATHEXT when none is set', () {

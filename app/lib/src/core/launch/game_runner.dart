@@ -11,6 +11,7 @@ import '../host_platform.dart';
 import '../model.dart';
 import '../paths.dart';
 import 'launch_command.dart';
+import 'launch_modes.dart';
 import 'log_files.dart';
 import 'process_table.dart';
 import 'session_recorder.dart';
@@ -202,10 +203,12 @@ class GameRunner {
       emit(LaunchPhase.starting);
       final process = await starter.start(command, logFile);
       if (platform.isMacOS &&
-          (game.launch.mode ?? defaults.mode) == LaunchMode.steam) {
+          effectiveLaunchMode(game, platform) == LaunchMode.steam) {
         // macOS can't tell which Steam game is running, so no session is kept.
+        final code = await process.exitCode;
         await process.logClosed;
         await updateLatestLog(dir, logFile);
+        if (code != 0) throw const LaunchConfigError("Couldn't open Steam.");
         return LaunchResult(
           logFile: logFile,
           exitCode: 0,
@@ -216,13 +219,13 @@ class GameRunner {
       // Native, Wine and Proton run the game in the spawned process itself,
       // so it is visible as soon as `Process.start` returns. Steam reports
       // `running` later, when the game process first appears (see below).
-      if ((game.launch.mode ?? defaults.mode) != LaunchMode.steam) {
+      if (effectiveLaunchMode(game, platform) != LaunchMode.steam) {
         emit(LaunchPhase.running);
       }
       await writeRunningMarker(dir, game.id, startedAt, startedAt);
       heartbeat =
           _RunningHeartbeat(dir, game.id, startedAt, clock, heartbeatInterval);
-      if ((game.launch.mode ?? defaults.mode) == LaunchMode.steam) {
+      if (effectiveLaunchMode(game, platform) == LaunchMode.steam) {
         // Timing `steam -applaunch` itself would be wrong: it exits at once.
         process.exitCode.then((_) {}, onError: (_) {});
         final session = await _steamSession(

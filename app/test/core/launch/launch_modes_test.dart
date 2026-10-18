@@ -15,7 +15,6 @@ const _macos = HostPlatform(HostOs.macos);
 const _windows = HostPlatform(HostOs.windows);
 
 const _defaults = LaunchDefaults(
-  mode: LaunchMode.proton,
   prefix: '/defaults/prefix',
   runner: '/defaults/proton',
   locale: '',
@@ -53,6 +52,22 @@ void main() {
     expect(launchModeUnavailableMessage(LaunchMode.proton, _linux), isNull);
     expect(launchModeUnavailableMessage(LaunchMode.native, _macos), isNull);
     expect(launchModeUnavailableMessage(LaunchMode.steam, _windows), isNull);
+  });
+
+  test('a game with no saved mode runs in the platform default', () {
+    final unset = Game(id: 'g1', title: 'Subahibi');
+    expect(effectiveLaunchMode(unset, _linux), LaunchMode.proton);
+    expect(effectiveLaunchMode(unset, _macos), LaunchMode.native);
+    expect(effectiveLaunchMode(unset, _windows), LaunchMode.native);
+  });
+
+  test('a saved mode wins over the platform default', () {
+    final saved = Game(
+      id: 'g1',
+      title: 'Subahibi',
+      launch: LaunchOverrides(mode: LaunchMode.proton),
+    );
+    expect(effectiveLaunchMode(saved, _macos), LaunchMode.proton);
   });
 
   test('launching a saved mode the platform lacks is refused', () {
