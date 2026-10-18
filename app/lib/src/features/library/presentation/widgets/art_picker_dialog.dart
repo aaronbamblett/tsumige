@@ -734,16 +734,39 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
   int? _selectedSearchId;
   var _grids = const <ArtCandidate>[];
   var _loadedFor = '';
+  var _generation = 0;
+  late final ProviderSubscription<String> _keySub;
 
   @override
   void initState() {
     super.initState();
     _keyController = TextEditingController();
     _keyController.addListener(() => setState(() {}));
+    _keySub = ref.listenManual<String>(steamGridDbKeyProvider, (
+      previous,
+      next,
+    ) {
+      if (!mounted) return;
+      final wasEmpty = (previous ?? '').trim().isEmpty;
+      final isEmpty = next.trim().isEmpty;
+      if (wasEmpty && isEmpty) return;
+      if (isEmpty) {
+        setState(_reset);
+      } else if (!_editingKey) {
+        setState(() => _loadedFor = '${widget.game.id}|${next.trim()}');
+        unawaited(_load());
+      }
+    });
+    if (ref.read(steamGridDbKeyProvider).trim().isNotEmpty) {
+      _loadedFor =
+          '${widget.game.id}|${ref.read(steamGridDbKeyProvider).trim()}';
+      Future.microtask(_load);
+    }
   }
 
   @override
   void dispose() {
+    _keySub.close();
     _keyController.dispose();
     super.dispose();
   }
@@ -751,10 +774,18 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
   @override
   void didUpdateWidget(_SteamGridDbSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.game.id != widget.game.id) _reset();
+    if (oldWidget.game.id != widget.game.id) {
+      _reset();
+      if (ref.read(steamGridDbKeyProvider).trim().isNotEmpty) {
+        _loadedFor =
+            '${widget.game.id}|${ref.read(steamGridDbKeyProvider).trim()}';
+        Future.microtask(_load);
+      }
+    }
   }
 
   void _reset() {
+    _generation++;
     _editingKey = false;
     _loading = false;
     _error = null;
@@ -768,32 +799,37 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
   Future<void> _load() async {
     final client = ref.read(steamGridDbClientProvider);
     if (client == null) return;
+    final generation = ++_generation;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
       final game = widget.game;
-      final List<int> ids;
+      List<int> ids = const [];
       if (game.launch.steamAppId != null) {
         ids = [game.launch.steamAppId!];
       } else if (game.vndbId != null) {
-        ids = await ref
-            .read(vndbSearchClientProvider)
-            .fetchSteamAppIds(game.vndbId!);
-      } else {
-        ids = const [];
+        try {
+          ids = await ref
+              .read(vndbSearchClientProvider)
+              .fetchSteamAppIds(game.vndbId!);
+        } catch (_) {
+          ids = const [];
+        }
       }
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       if (ids.isNotEmpty) {
         final merged = <ArtCandidate>[];
         final seen = <String>{};
         for (final id in ids) {
-          for (final art in await client.gridsForSteamApp(id)) {
+          final arts = await client.gridsForSteamApp(id);
+          if (!mounted || generation != _generation) return;
+          for (final art in arts) {
             if (seen.add(art.url)) merged.add(art);
           }
         }
-        if (!mounted) return;
+        if (!mounted || generation != _generation) return;
         setState(() {
           _loading = false;
           _steamIds = ids;
@@ -802,7 +838,7 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
         });
       } else {
         final results = await client.searchGames(game.title);
-        if (!mounted) return;
+        if (!mounted || generation != _generation) return;
         final folded = normalizeGridTitle(game.title);
         int? selected;
         for (final result in results) {
@@ -819,39 +855,37 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
         if (selected != null) {
           await _loadSearchGrids(client, selected);
         } else {
-          if (mounted) {
-            setState(() {
-              _loading = false;
-              _grids = const [];
-            });
-          }
+          if (!mounted || generation != _generation) return;
+          setState(() {
+            _loading = false;
+            _grids = const [];
+          });
         }
       }
     } on SteamGridDbBadKeyException {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = 'badKey';
-        });
-      }
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _loading = false;
+        _error = 'badKey';
+      });
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = 'network';
-        });
-      }
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _loading = false;
+        _error = 'network';
+      });
     }
   }
 
   Future<void> _loadSearchGrids(SteamGridDbClient client, int gameId) async {
+    final generation = ++_generation;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
       final grids = await client.gridsForGame(gameId);
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       final seen = <String>{};
       setState(() {
         _loading = false;
@@ -861,19 +895,17 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
         ];
       });
     } on SteamGridDbBadKeyException {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = 'badKey';
-        });
-      }
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _loading = false;
+        _error = 'badKey';
+      });
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = 'network';
-        });
-      }
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _loading = false;
+        _error = 'network';
+      });
     }
   }
 
@@ -885,11 +917,29 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
   }
 
   void _saveKey() {
-    ref.read(steamGridDbKeyProvider.notifier).set(_keyController.text);
-    setState(() {
-      _editingKey = false;
-      _loadedFor = '';
-    });
+    final next = _keyController.text;
+    final unchanged =
+        ref.read(steamGridDbKeyProvider).trim() == next.trim() &&
+        next.trim().isNotEmpty;
+    _keyController.clear();
+    setState(() => _editingKey = false);
+    ref.read(steamGridDbKeyProvider.notifier).set(next);
+    if (unchanged) {
+      setState(
+        () => _loadedFor = '${widget.game.id}|${next.trim()}',
+      );
+      unawaited(_load());
+    }
+  }
+
+  void _cancelKeyEdit() {
+    _keyController.clear();
+    setState(() => _editingKey = false);
+    final key = ref.read(steamGridDbKeyProvider).trim();
+    if (key.isNotEmpty && _loadedFor != '${widget.game.id}|$key') {
+      setState(() => _loadedFor = '${widget.game.id}|$key');
+      unawaited(_load());
+    }
   }
 
   @override
@@ -897,18 +947,6 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
     final scheme = Theme.of(context).colorScheme;
     final key = ref.watch(steamGridDbKeyProvider);
     final hasKey = key.trim().isNotEmpty;
-    if (!hasKey && _loadedFor.isNotEmpty) {
-      Future.microtask(() {
-        if (mounted) setState(_reset);
-      });
-    }
-    if (hasKey && !_editingKey) {
-      final token = '${widget.game.id}|${key.trim()}';
-      if (_loadedFor != token && !_loading) {
-        _loadedFor = token;
-        Future.microtask(_load);
-      }
-    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1007,6 +1045,14 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
                   child: const Text('Get a key'),
                 ),
                 const Spacer(),
+                BrandGlassButton(
+                  key: const Key('sgdb-key-cancel'),
+                  height: 40,
+                  expand: false,
+                  onPressed: _cancelKeyEdit,
+                  label: const Text('Cancel'),
+                ),
+                const SizedBox(width: 10),
                 BrandButton(
                   key: const Key('sgdb-key-save'),
                   height: 40,

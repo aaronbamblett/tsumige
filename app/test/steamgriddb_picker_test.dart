@@ -53,6 +53,8 @@ class _SgdbConfig {
     this.hangGrids = false,
     this.vndbExtlinks = const <Map<String, Object?>>[],
     this.sgdbRequests,
+    this.vndbReleaseStatus = 200,
+    this.gridGates = const {},
   });
 
   int gridsStatus;
@@ -61,6 +63,8 @@ class _SgdbConfig {
   bool hangGrids;
   List<Map<String, Object?>> vndbExtlinks;
   List<Uri>? sgdbRequests;
+  int vndbReleaseStatus;
+  Map<int, Completer<http.Response>> gridGates;
 }
 
 http.Client _fakeSgdbHttp(_SgdbConfig config, List<String> downloads) {
@@ -88,6 +92,10 @@ http.Client _fakeSgdbHttp(_SgdbConfig config, List<String> downloads) {
         );
       }
       if (url.path.contains('/grids/')) {
+        final gate = int.tryParse(url.pathSegments.last) != null
+            ? config.gridGates[int.parse(url.pathSegments.last)]
+            : null;
+        if (gate != null) return gate.future;
         return http.Response(
           config.gridsStatus == 200
               ? _gridsBody(config.gridsUrls)
@@ -117,6 +125,9 @@ http.Client _fakeSgdbHttp(_SgdbConfig config, List<String> downloads) {
         );
       }
       if (url.path.endsWith('/release')) {
+        if (config.vndbReleaseStatus != 200) {
+          return http.Response('error', config.vndbReleaseStatus);
+        }
         return http.Response(
           jsonEncode({
             'results': [
@@ -486,5 +497,123 @@ void main() {
       tester.getSize(find.byType(TsumigeLogoShimmer)),
       const Size(32, 32),
     );
+  });
+
+  testWidgets('a late first chip response does not clobber the second', (
+    tester,
+  ) async {
+    const aTile = 'https://example.com/sgdb-a.jpg';
+    const bTile = 'https://example.com/sgdb-b.jpg';
+    final aGate = Completer<http.Response>();
+    final bGate = Completer<http.Response>();
+    await _pumpSgdbDialog(
+      tester,
+      game: core.Game(id: 'g1', title: 'DiviDead'),
+      prefsKey: 'fake-test-key',
+      config: _SgdbConfig(
+        searchNames: ['Alpha Game', 'Beta Game'],
+        gridGates: {10: aGate, 11: bGate},
+      ),
+    );
+    expect(find.text('Pick the matching game.'), findsOneWidget);
+    await tester.tap(find.text('Alpha Game'));
+    await tester.pump();
+    await tester.tap(find.text('Beta Game'));
+    await tester.pump();
+    bGate.complete(http.Response(_gridsBody([bTile]), 200));
+    await tester.pump();
+    await tester.pump();
+    aGate.complete(http.Response(_gridsBody([aTile]), 200));
+    await _settle(tester);
+    expect(find.byKey(ValueKey('art-$bTile')), findsOneWidget);
+    expect(find.byKey(ValueKey('art-$aTile')), findsNothing);
+    expect(
+      tester.widget<Text>(find.text('Beta Game')).style?.fontWeight,
+      FontWeight.w600,
+    );
+    expect(
+      tester.widget<Text>(find.text('Alpha Game')).style?.fontWeight,
+      FontWeight.w400,
+    );
+  });
+
+  testWidgets('a VNDB failure falls through to the name search', (
+    tester,
+  ) async {
+    await _pumpSgdbDialog(
+      tester,
+      prefsKey: 'fake-test-key',
+      config: _SgdbConfig(
+        vndbReleaseStatus: 500,
+        searchNames: ['Divi-Dead'],
+      ),
+    );
+    expect(find.text("Couldn't reach SteamGridDB."), findsNothing);
+    expect(
+      find.byKey(ValueKey('art-$_sgdbCover')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('canceling the key form keeps the no-key note without saving', (
+    tester,
+  ) async {
+    await _pumpSgdbDialog(tester);
+    await tester.tap(find.byKey(const Key('sgdb-set-key')));
+    await tester.pump();
+    expect(find.byKey(const Key('sgdb-key-field')), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('sgdb-key-field')),
+      'typed-but-cancelled',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('sgdb-key-cancel')));
+    await tester.pump();
+    expect(find.byKey(const Key('sgdb-key-field')), findsNothing);
+    expect(
+      find.text(
+        'Covers from SteamGridDB need your own free API key. '
+        'Get one in your SteamGridDB preferences.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('sgdb-set-key')), findsOneWidget);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ArtPickerDialog)),
+    );
+    expect(container.read(steamGridDbKeyProvider), isEmpty);
+  });
+
+  testWidgets('canceling the key form keeps the bad-key message without saving', (
+    tester,
+  ) async {
+    await _pumpSgdbDialog(
+      tester,
+      prefsKey: 'fake-test-key',
+      config: _SgdbConfig(
+        gridsStatus: 401,
+        vndbExtlinks: [
+          {'name': 'steam', 'id': '123'},
+        ],
+      ),
+    );
+    expect(
+      find.text("SteamGridDB didn't accept the key."),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('sgdb-set-key')));
+    await tester.pump();
+    expect(find.byKey(const Key('sgdb-key-field')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('sgdb-key-cancel')));
+    await tester.pump();
+    expect(find.byKey(const Key('sgdb-key-field')), findsNothing);
+    expect(
+      find.text("SteamGridDB didn't accept the key."),
+      findsOneWidget,
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ArtPickerDialog)),
+    );
+    expect(container.read(steamGridDbKeyProvider), 'fake-test-key');
   });
 }
