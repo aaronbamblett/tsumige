@@ -181,7 +181,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     });
     final List<ImportFolder> folders;
     try {
-      folders = await scanImportFolder(root);
+      folders = await scanImportFolder(root, ref.read(hostPlatformProvider));
     } on FileSystemException catch (e) {
       if (!mounted || token != _scanToken) return;
       setState(() => _scanning = false);
@@ -363,12 +363,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       final vn = row.vn;
       if (vn == null) {
         built.add(
-          plainGame(
-            title: row.folder.name,
-            tags: tags,
-            exe: exe,
-            mode: mode,
-          ),
+          plainGame(title: row.folder.name, tags: tags, exe: exe, mode: mode),
         );
       } else {
         final result = await buildVnGame(
@@ -726,7 +721,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
               child: SettingsDropdown<String>(
                 key: Key('import-exe-$index'),
                 value: row.exePath,
-                hint: const Text("Pick the game's .exe"),
+                hint: const Text("Pick the game file"),
                 items: [
                   for (final exe in row.folder.exes)
                     DropdownMenuItem(

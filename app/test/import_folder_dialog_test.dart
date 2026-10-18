@@ -139,20 +139,29 @@ void _exe(String root, String relative) {
 
 /// Root "Visual novels" with five subfolders:
 ///  DEMO          exact match, pre-ticked
-///  Nothing Here  no exe, no match
+///  Nothing Here  an exe, no match
 ///  Owned Game    matches a library game, disabled
 ///  Rena sensei   close match, pre-ticked
 ///  Solo Quest    two results (check match), two exes
-String _fixture(Directory temp, {bool duplicate = false}) {
+String _fixture(Directory temp, {bool duplicate = false, bool macos = false}) {
   final root = p.join(temp.path, 'Visual novels');
-  _exe(root, 'DEMO/DEMO.exe');
+  void launch(String relative) {
+    if (!macos) {
+      _exe(root, relative);
+      return;
+    }
+    final bundle = p.join(root, '${p.withoutExtension(relative)}.app');
+    Directory(bundle).createSync(recursive: true);
+  }
+
+  launch('DEMO/DEMO.exe');
   _exe(root, 'DEMO/unins000.exe');
-  _exe(root, 'Nothing Here/notes.txt');
-  _exe(root, 'Owned Game/Owned.exe');
-  _exe(root, 'Rena sensei/RenaPool.exe');
-  _exe(root, 'Solo Quest/Solo.exe');
-  _exe(root, 'Solo Quest/bin/Extra.exe');
-  if (duplicate) _exe(root, 'DEMO Copy/demo copy.exe');
+  launch('Nothing Here/Nothing.exe');
+  launch('Owned Game/Owned.exe');
+  launch('Rena sensei/RenaPool.exe');
+  launch('Solo Quest/Solo.exe');
+  launch('Solo Quest/bin/Extra.exe');
+  if (duplicate) launch('DEMO Copy/demo copy.exe');
   return root;
 }
 
@@ -184,9 +193,15 @@ Future<_Harness> _open(
     tester.view.resetPhysicalSize();
     tester.view.resetDevicePixelRatio();
   });
-  final temp = Directory.systemTemp.createTempSync('tsumige_import_dialog_test_');
+  final temp = Directory.systemTemp.createTempSync(
+    'tsumige_import_dialog_test_',
+  );
   addTearDown(() => temp.deleteSync(recursive: true));
-  final root = _fixture(temp, duplicate: duplicate);
+  final root = _fixture(
+    temp,
+    duplicate: duplicate,
+    macos: platform?.isMacOS ?? false,
+  );
   SharedPreferences.setMockInitialValues({});
   final repo = _FakeRepository([
     ...(games ?? [_ownedGame()]),
@@ -315,7 +330,6 @@ void main() {
     expect(find.text('In library'), findsOneWidget);
     expect(find.text('No VNDB match'), findsOneWidget);
     expect(find.text('Find'), findsOneWidget);
-    expect(find.text("Pick the game's .exe"), findsOneWidget);
     expect(find.text('Solo Quest Remake'), findsOneWidget);
     expect(_checked(tester, 0), isTrue);
     expect(_checked(tester, 1), isFalse);
@@ -413,8 +427,9 @@ void main() {
     await tester.tap(find.byKey(const Key('import-add')));
     await _waitForSave(tester, h.repo);
     expect(_added(h), isNotEmpty);
-    expect([for (final g in _added(h)) g.launch.mode],
-        everyElement(core.LaunchMode.native));
+    expect([
+      for (final g in _added(h)) g.launch.mode,
+    ], everyElement(core.LaunchMode.native));
     await _drainToast(tester);
   });
 
@@ -682,7 +697,9 @@ Future<_Harness> _openAddDialog(
     tester.view.resetPhysicalSize();
     tester.view.resetDevicePixelRatio();
   });
-  final temp = Directory.systemTemp.createTempSync('tsumige_import_entry_test_');
+  final temp = Directory.systemTemp.createTempSync(
+    'tsumige_import_entry_test_',
+  );
   addTearDown(() => temp.deleteSync(recursive: true));
   final root = _fixture(temp);
   SharedPreferences.setMockInitialValues({});

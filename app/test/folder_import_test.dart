@@ -8,11 +8,15 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:tsumige/src/core/host_platform.dart';
 import 'package:tsumige/src/core/vndb.dart';
 import 'package:tsumige/src/features/library/domain/folder_import.dart';
 
 VnSearchResult _vn(String id, String title, {List<String> titles = const []}) =>
     VnSearchResult(id: id, title: title, titles: titles);
+
+const _linux = HostPlatform(HostOs.linux);
+const _macos = HostPlatform(HostOs.macos);
 
 void _exe(String root, String relative, {int size = 10}) {
   final file = File(p.join(root, relative));
@@ -34,7 +38,7 @@ void main() {
       _exe(temp.path, '.Hidden/Game.exe');
       _exe(temp.path, 'beta/Beta.exe');
       _exe(temp.path, 'Alpha/Alpha.exe');
-      final folders = await scanImportFolder(temp.path);
+      final folders = await scanImportFolder(temp.path, _linux);
       expect([for (final f in folders) f.name], ['Alpha', 'beta']);
     });
 
@@ -46,7 +50,7 @@ void main() {
         _exe(temp.path, 'Alpha/setup.exe');
         _exe(temp.path, 'Alpha/UnityCrashHandler64.exe');
         _exe(temp.path, 'Alpha/redist/vc_redist.exe');
-        final folder = (await scanImportFolder(temp.path)).single;
+        final folder = (await scanImportFolder(temp.path, _linux)).single;
         expect([for (final e in folder.exes) e.relative], ['Game.exe']);
         expect(chooseExe(folder, const [])!.relative, 'Game.exe');
       },
@@ -57,7 +61,7 @@ void main() {
       _exe(temp.path, 'Beta/Beta.exe', size: 100);
       _exe(temp.path, 'Beta/Beta_patch.exe', size: 800);
       _exe(temp.path, 'Beta/bin/Beta.exe', size: 700);
-      final folder = (await scanImportFolder(temp.path)).single;
+      final folder = (await scanImportFolder(temp.path, _linux)).single;
       expect(
         [for (final e in folder.exes) e.relative],
         ['Beta.exe', p.join('bin', 'Beta.exe')],
@@ -67,24 +71,26 @@ void main() {
 
     test('a launcher is kept when it is the only exe', () async {
       _exe(temp.path, 'Epsilon/Launcher.exe');
-      final folder = (await scanImportFolder(temp.path)).single;
+      final folder = (await scanImportFolder(temp.path, _linux)).single;
       expect([for (final e in folder.exes) e.relative], ['Launcher.exe']);
     });
 
-    test('stops below depth 3', () async {
-      _exe(temp.path, 'Gamma/a/b/c/Deep.exe');
-      _exe(temp.path, 'Gamma/a/b/c/d/TooDeep.exe');
-      final folder = (await scanImportFolder(temp.path)).single;
-      expect(
-        [for (final e in folder.exes) e.relative],
-        [p.join('a', 'b', 'c', 'Deep.exe')],
-      );
+    test('a game at level 3 is found', () async {
+      _exe(temp.path, 'Gamma/a/b/Deep.exe');
+      final folder = (await scanImportFolder(temp.path, _linux)).single;
+      expect(folder.path, p.join(temp.path, 'Gamma', 'a', 'b'));
+      expect([for (final e in folder.exes) e.relative], ['Deep.exe']);
+    });
+
+    test('a game at level 4 is not searched', () async {
+      _exe(temp.path, 'Gamma/a/b/c/TooDeep.exe');
+      expect(await scanImportFolder(temp.path, _linux), isEmpty);
     });
 
     test('candidate lists are relative to the subfolder', () async {
       _exe(temp.path, 'Delta/Delta.exe');
       _exe(temp.path, 'Delta/bin/Other.exe');
-      final folder = (await scanImportFolder(temp.path)).single;
+      final folder = (await scanImportFolder(temp.path, _linux)).single;
       expect(
         [for (final e in folder.exes) e.relative],
         ['Delta.exe', p.join('bin', 'Other.exe')],
@@ -92,28 +98,86 @@ void main() {
       expect(folder.exes.every((e) => p.isAbsolute(e.path)), isTrue);
     });
 
-    test('a folder with no exe has no candidates', () async {
+    test('a folder with no launchable is not listed', () async {
       _exe(temp.path, 'Empty/readme.txt');
-      final folder = (await scanImportFolder(temp.path)).single;
-      expect(folder.exes, isEmpty);
-      expect(chooseExe(folder, const []), isNull);
+      expect(await scanImportFolder(temp.path, _linux), isEmpty);
     });
 
     test('the choice prefers the title match over the size', () async {
-      _exe(temp.path, 'Zeta/bin/Other.exe', size: 500);
-      _exe(temp.path, 'Zeta/bin/Zeta Quest.exe', size: 10);
-      final folder = (await scanImportFolder(temp.path)).single;
-      expect(
-        chooseExe(folder, const [])!.relative,
-        p.join('bin', 'Zeta Quest.exe'),
-      );
+      _exe(temp.path, 'Zeta/Other.exe', size: 500);
+      _exe(temp.path, 'Zeta/Zeta Quest.exe', size: 10);
+      final folder = (await scanImportFolder(temp.path, _linux)).single;
+      expect(chooseExe(folder, const [])!.relative, 'Zeta Quest.exe');
     });
 
     test('a top-level exe wins over a better title match', () async {
       _exe(temp.path, 'Zeta/bin/Zeta Quest.exe', size: 10);
       _exe(temp.path, 'Zeta/Other.exe', size: 5);
-      final folder = (await scanImportFolder(temp.path)).single;
+      final folder = (await scanImportFolder(temp.path, _linux)).single;
       expect(chooseExe(folder, const ['Zeta Quest'])!.relative, 'Other.exe');
+    });
+  });
+
+  group('game detection', () {
+    test('a folder with movie, savedata and system is one game', () async {
+      _exe(temp.path, 'Amanatsu/Amanatsu.exe');
+      _exe(temp.path, 'Amanatsu/movie/op.mp4.exe');
+      _exe(temp.path, 'Amanatsu/savedata/save.exe');
+      _exe(temp.path, 'Amanatsu/system/system.exe');
+      final folders = await scanImportFolder(
+        p.join(temp.path, 'Amanatsu'),
+        _linux,
+      );
+      expect([for (final f in folders) f.name], ['Amanatsu']);
+      expect(folders.single.path, p.join(temp.path, 'Amanatsu'));
+    });
+
+    test(
+      'a library root gives its games and no empty or junk folders',
+      () async {
+        _exe(temp.path, 'Alpha/Alpha.exe');
+        _exe(temp.path, 'Beta/Beta.exe');
+        _exe(temp.path, 'Gamma/Gamma.exe');
+        Directory(p.join(temp.path, 'Empty')).createSync();
+        _exe(temp.path, 'JunkOnly/unins000.exe');
+        _exe(temp.path, 'JunkOnly/setup.exe');
+        final folders = await scanImportFolder(temp.path, _linux);
+        expect([for (final f in folders) f.name], ['Alpha', 'Beta', 'Gamma']);
+      },
+    );
+
+    test('a game nested in a studio folder within depth is found', () async {
+      _exe(temp.path, 'Studio/Game/Game.exe');
+      final folders = await scanImportFolder(temp.path, _linux);
+      expect([for (final f in folders) f.name], ['Game']);
+    });
+
+    test('a game deeper than depth 3 is not found', () async {
+      _exe(temp.path, 'A/B/C/Game/Game.exe');
+      expect(await scanImportFolder(temp.path, _linux), isEmpty);
+    });
+
+    test('a .app bundle is a game on macOS only', () async {
+      Directory(p.join(temp.path, 'Mac', 'Mac.app', 'Contents'))
+          .createSync(recursive: true);
+      final mac = await scanImportFolder(temp.path, _macos);
+      expect([for (final f in mac) f.exes.single.relative], ['Mac.app']);
+      expect(await scanImportFolder(temp.path, _linux), isEmpty);
+    });
+
+    test('an ELF binary is a game on Linux by its magic bytes', () async {
+      final file = File(p.join(temp.path, 'Elf', 'game.x86_64'));
+      file.parent.createSync();
+      file.writeAsBytesSync([0x7f, 0x45, 0x4c, 0x46, 0, 0]);
+      final folders = await scanImportFolder(temp.path, _linux);
+      expect([for (final f in folders) f.name], ['Elf']);
+    });
+
+    test('a launchable picked folder is the only game', () async {
+      _exe(temp.path, 'Solo/Solo.exe');
+      _exe(temp.path, 'Solo/Extra/Extra.exe');
+      final folders = await scanImportFolder(p.join(temp.path, 'Solo'), _linux);
+      expect([for (final f in folders) f.name], ['Solo']);
     });
   });
 

@@ -9,6 +9,7 @@ import 'dart:math' as math;
 
 import 'package:path/path.dart' as p;
 
+import '../../../core/host_platform.dart';
 import '../../../core/vndb.dart';
 
 /// One .exe found under a candidate folder.
@@ -34,13 +35,18 @@ class ImportFolder {
     required this.name,
     required this.path,
     required this.exes,
+    this.skipped = const [],
   });
 
   final String name;
   final String path;
 
-  /// Every candidate exe, in scan order. Empty when none was found.
+  /// Every candidate launchable, in scan order. Empty when none was found.
   final List<ExeFile> exes;
+
+  /// Relative paths of launchables dropped as installers, uninstallers and
+  /// other junk.
+  final List<String> skipped;
 }
 
 enum ImportMatchState { matched, check, none }
@@ -81,27 +87,143 @@ final _excludedNames = [
     RegExp('^${pattern.split('*').map(RegExp.escape).join('.*')}\$'),
 ];
 
-/// Lists the direct, non-hidden subfolders of [root] with their exe
-/// candidates, sorted by name.
-Future<List<ImportFolder>> scanImportFolder(String root) async {
-  final folders = <ImportFolder>[];
-  await for (final entity in Directory(root).list()) {
-    if (entity is! Directory) continue;
-    final name = p.basename(entity.path);
-    if (name.startsWith('.')) continue;
-    folders.add(
-      ImportFolder(
-        name: name,
-        path: entity.path,
-        exes: await _findExes(entity.path),
-      ),
-    );
+/// The deepest folder level, below the picked folder, that is searched for
+/// games. Direct subfolders are level 1.
+const _maxGameDepth = 3;
+
+/// The game folders under [root]. A folder that directly holds a launchable
+/// is a game and its subfolders are not searched. When [root] itself holds
+/// one, it is the only game. Folders with no launchable within
+/// [_maxGameDepth] levels are never listed.
+Future<List<ImportFolder>> scanImportFolder(
+  String root,
+  HostPlatform platform,
+) async {
+  if (await _holdsLaunchable(root, platform)) {
+    return [await _importFolder(root, platform)];
   }
+  final folders = <ImportFolder>[];
+  await _collectGames(root, 1, platform, folders);
   folders.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
   return folders;
 }
 
-Future<List<ExeFile>> _findExes(String folder) async {
+Future<void> _collectGames(
+  String dir,
+  int depth,
+  HostPlatform platform,
+  List<ImportFolder> out,
+) async {
+  for (final sub in await _subfolders(dir)) {
+    if (await _holdsLaunchable(sub, platform)) {
+      out.add(await _importFolder(sub, platform));
+    } else if (depth < _maxGameDepth) {
+      await _collectGames(sub, depth + 1, platform, out);
+    }
+  }
+}
+
+Future<List<String>> _subfolders(String dir) async {
+  final List<FileSystemEntity> entries;
+  try {
+    entries = await Directory(dir).list().toList();
+  } on FileSystemException {
+    return const [];
+  }
+  final names = <String>[
+    for (final entry in entries)
+      if (entry is Directory &&
+          !p.basename(entry.path).startsWith('.') &&
+          !_excludedDirs.contains(p.basename(entry.path).toLowerCase()))
+        entry.path,
+  ];
+  names.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  return names;
+}
+
+/// Whether [dir] directly holds a launchable that isn't junk.
+Future<bool> _holdsLaunchable(String dir, HostPlatform platform) async {
+  final List<FileSystemEntity> entries;
+  try {
+    entries = await Directory(dir).list().toList();
+  } on FileSystemException {
+    return false;
+  }
+  for (final entry in entries) {
+    final stem = p.basenameWithoutExtension(entry.path).toLowerCase();
+    if (_excludedNames.any((re) => re.hasMatch(stem))) continue;
+    if (await _isLaunchable(entry, platform)) return true;
+  }
+  return false;
+}
+
+Future<ImportFolder> _importFolder(String path, HostPlatform platform) async {
+  final found = await _findExes(path, platform);
+  return ImportFolder(
+    name: p.basename(path),
+    path: path,
+    exes: found.exes,
+    skipped: found.skipped,
+  );
+}
+
+const _nativeExtensions = {'', '.x86', '.x86_64', '.bin', '.run'};
+
+/// Whether [entity] is something a game launches from on [platform]: an
+/// .exe on Linux and Windows, a .app bundle on macOS, a .sh on Linux and
+/// macOS, an .AppImage on Linux, a .command on macOS, or a native binary
+/// recognised by its magic bytes.
+Future<bool> _isLaunchable(
+  FileSystemEntity entity,
+  HostPlatform platform,
+) async {
+  final ext = p.extension(entity.path).toLowerCase();
+  if (entity is Directory) return platform.isMacOS && ext == '.app';
+  if (entity is! File) return false;
+  if (ext == '.exe') return !platform.isMacOS;
+  if (ext == '.sh') return !platform.isWindows;
+  if (ext == '.appimage') return platform.isLinux;
+  if (ext == '.command') return platform.isMacOS;
+  if (!_nativeExtensions.contains(ext)) return false;
+  return isNativeBinary(entity.path, platform);
+}
+
+/// Whether the file at [path] is an ELF binary on Linux or a Mach-O binary on
+/// macOS, by its first four bytes.
+Future<bool> isNativeBinary(String path, HostPlatform platform) async {
+  final List<int> head;
+  try {
+    final file = await File(path).open();
+    try {
+      head = await file.read(4);
+    } finally {
+      await file.close();
+    }
+  } on FileSystemException {
+    return false;
+  }
+  if (platform.isLinux) {
+    return _startsWith(head, const [0x7f, 0x45, 0x4c, 0x46]);
+  }
+  if (platform.isMacOS) {
+    return _startsWith(head, const [0xfe, 0xed, 0xfa, 0xce]) ||
+        _startsWith(head, const [0xfe, 0xed, 0xfa, 0xcf]) ||
+        _startsWith(head, const [0xce, 0xfa, 0xed, 0xfe]) ||
+        _startsWith(head, const [0xcf, 0xfa, 0xed, 0xfe]) ||
+        _startsWith(head, const [0xca, 0xfe, 0xba, 0xbe]);
+  }
+  return false;
+}
+
+bool _startsWith(List<int> head, List<int> magic) =>
+    head.length >= magic.length &&
+    [for (var i = 0; i < magic.length; i++) head[i] == magic[i]]
+        .every((same) => same);
+
+Future<({List<ExeFile> exes, List<String> skipped})> _findExes(
+  String folder,
+  HostPlatform platform,
+) async {
   final found = <ExeFile>[];
 
   Future<void> walk(String dir, int depth) async {
@@ -114,22 +236,23 @@ Future<List<ExeFile>> _findExes(String folder) async {
     entries.sort((a, b) => a.path.compareTo(b.path));
     final subdirs = <String>[];
     for (final entry in entries) {
-      if (entry is Directory) {
-        final name = p.basename(entry.path);
-        if (depth < 3 && !_excludedDirs.contains(name.toLowerCase())) {
+      final name = p.basename(entry.path);
+      if (entry is Directory && !_isBundle(entry, platform)) {
+        if (depth < _maxGameDepth &&
+            !_excludedDirs.contains(name.toLowerCase())) {
           subdirs.add(entry.path);
         }
-      } else if (entry is File &&
-          p.extension(entry.path).toLowerCase() == '.exe') {
-        found.add(
-          ExeFile(
-            path: entry.path,
-            relative: p.relative(entry.path, from: folder),
-            size: await entry.length(),
-            topLevel: dir == folder,
-          ),
-        );
+        continue;
       }
+      if (!await _isLaunchable(entry, platform)) continue;
+      found.add(
+        ExeFile(
+          path: entry.path,
+          relative: p.relative(entry.path, from: folder),
+          size: entry is File ? await entry.length() : 0,
+          topLevel: dir == folder,
+        ),
+      );
     }
     for (final subdir in subdirs) {
       await walk(subdir, depth + 1);
@@ -137,13 +260,27 @@ Future<List<ExeFile>> _findExes(String folder) async {
   }
 
   await walk(folder, 0);
-  return _candidates(found);
+  final skipped = [
+    for (final exe in found)
+      if (_isJunk(exe.path)) exe.relative,
+  ];
+  return (exes: _candidates(found), skipped: skipped);
+}
+
+bool _isBundle(FileSystemEntity entry, HostPlatform platform) =>
+    entry is Directory &&
+    platform.isMacOS &&
+    p.extension(entry.path).toLowerCase() == '.app';
+
+bool _isJunk(String path) {
+  final stem = p.basenameWithoutExtension(path).toLowerCase();
+  return _excludedNames.any((re) => re.hasMatch(stem));
 }
 
 List<ExeFile> _candidates(List<ExeFile> found) {
   var candidates = [
     for (final exe in found)
-      if (!_excludedNames.any((re) => re.hasMatch(exe.stem.toLowerCase()))) exe,
+      if (!_isJunk(exe.path)) exe,
   ];
   final nonpatch = [
     for (final exe in candidates)
