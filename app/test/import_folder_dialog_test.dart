@@ -24,6 +24,7 @@ import 'package:tsumige/src/core/paths.dart' as core;
 import 'package:tsumige/src/core/host_platform.dart';
 import 'package:tsumige/src/core/vndb.dart' as core;
 import 'package:tsumige/src/features/library/data/library_repository.dart';
+import 'package:tsumige/src/features/library/presentation/widgets/dialog_shell.dart';
 import 'package:tsumige/src/features/library/domain/add_game.dart';
 import 'package:tsumige/src/features/library/domain/game_editor.dart';
 import 'package:tsumige/src/features/library/presentation/add_game/add_game_dialog.dart';
@@ -630,36 +631,44 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
   });
 
-  testWidgets('the footer is one row of six controls at both sizes', (
+  testWidgets('the footer keeps its controls in view at both sizes', (
     tester,
   ) async {
-    for (final surface in [const Size(1400, 980), const Size(1000, 640)]) {
-      await _openAndMatch(tester, surface: surface);
-      final keys = [
-        'import-browse',
-        'import-scan',
-        'import-add',
-        'import-cancel',
-      ];
-      final ys = [
-        for (final key in keys) tester.getCenter(find.byKey(Key(key))).dy,
-        tester.getCenter(find.byKey(const Key('import-hide-imported'))).dy,
-        tester
-            .getCenter(
-              find.descendant(
-                of: find.byKey(const Key('import-hide-imported')),
-                matching: find.byType(Checkbox),
-              ),
-            )
-            .dy,
-      ];
-      for (final dy in ys) {
-        expect(dy, closeTo(ys.first, 1), reason: '$surface');
-      }
-      expect(tester.takeException(), isNull, reason: '$surface');
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
+    const keys = [
+      'import-browse',
+      'import-scan',
+      'import-hide-imported',
+      'import-add',
+      'import-cancel',
+    ];
+    Finder hide() => find.byKey(const Key('import-hide-imported'));
+    Finder hideBox() =>
+        find.descendant(of: hide(), matching: find.byType(Checkbox));
+
+    await _openAndMatch(tester, surface: const Size(1400, 980));
+    final wide = [
+      for (final key in keys) tester.getCenter(find.byKey(Key(key))).dy,
+      tester.getCenter(hideBox()).dy,
+    ];
+    for (var i = 0; i < wide.length; i++) {
+      expect(wide[i], closeTo(wide.first, 1), reason: 'control $i $wide');
     }
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
+    await _openAndMatch(tester, surface: const Size(1000, 640));
+    final shell = tester.getRect(find.byType(DialogShell));
+    for (final key in keys) {
+      final rect = tester.getRect(find.byKey(Key(key)));
+      expect(shell.contains(rect.topLeft), isTrue, reason: key);
+      expect(shell.contains(rect.bottomRight), isTrue, reason: key);
+    }
+    final add = tester.getRect(find.byKey(const Key('import-add')));
+    final cancel = tester.getRect(find.byKey(const Key('import-cancel')));
+    expect(cancel.right, lessThanOrEqualTo(shell.right));
+    expect(add.right, lessThan(cancel.left));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('an unmatched cover is an empty box with no icon', (

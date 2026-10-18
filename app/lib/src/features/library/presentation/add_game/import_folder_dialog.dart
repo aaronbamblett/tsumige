@@ -621,84 +621,83 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-      child: LayoutBuilder(
-        builder: (context, constraints) => SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: constraints.maxWidth),
-            child: IntrinsicWidth(
-              child: Row(
-                children: [
-                  BrandGlassButton(
+      child: Row(
+        children: [
+          Expanded(
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                IntrinsicWidth(
+                  child: BrandGlassButton(
                     key: const Key('import-browse'),
                     height: 40,
                     expand: false,
                     onPressed: _saving ? null : () => _browse(),
                     label: const Text('Browse…'),
                   ),
-                  const SizedBox(width: 10),
-                  BrandGlassButton(
+                ),
+                IntrinsicWidth(
+                  child: BrandGlassButton(
                     key: const Key('import-scan'),
                     height: 40,
                     expand: false,
                     onPressed: _saving ? null : () => _browse(append: true),
                     label: const Text('Scan Folder…'),
                   ),
-                  const SizedBox(width: 16),
-                  InkWell(
-                    key: const Key('import-hide-imported'),
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: _saving
-                        ? null
-                        : () => setState(() => _hideImported = !_hideImported),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 4,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IgnorePointer(
-                            child: Checkbox(
-                              value: _hideImported,
-                              onChanged: (_) {},
-                            ),
+                ),
+                InkWell(
+                  key: const Key('import-hide-imported'),
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: _saving
+                      ? null
+                      : () => setState(() => _hideImported = !_hideImported),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IgnorePointer(
+                          child: Checkbox(
+                            value: _hideImported,
+                            onChanged: (_) {},
                           ),
-                          Text(
-                            'Hide imported',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: scheme.onSurfaceVariant,
-                            ),
+                        ),
+                        Text(
+                          'Hide imported',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: scheme.onSurfaceVariant,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                  const Spacer(),
-                  BrandButton(
-                    key: const Key('import-add'),
-                    height: 40,
-                    expand: false,
-                    onPressed: _saving || count == 0 ? null : _add,
-                    label: Text(
-                      _saving ? 'Adding $_done of $_total…' : 'Add Games',
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  BrandGlassButton(
-                    key: const Key('import-cancel'),
-                    height: 40,
-                    expand: false,
-                    onPressed: _saving ? null : _close,
-                    label: const Text('Cancel'),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        ),
+          const SizedBox(width: 10),
+          BrandButton(
+            key: const Key('import-add'),
+            height: 40,
+            expand: false,
+            onPressed: _saving || count == 0 ? null : _add,
+            label: Text(_saving ? 'Adding $_done of $_total…' : 'Add Games'),
+          ),
+          const SizedBox(width: 10),
+          BrandGlassButton(
+            key: const Key('import-cancel'),
+            height: 40,
+            expand: false,
+            onPressed: _saving ? null : _close,
+            label: const Text('Cancel'),
+          ),
+        ],
       ),
     );
   }
