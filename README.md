@@ -1,32 +1,59 @@
-# Tsumige
+<p align="center">
+ <picture>
+  <source media="(prefers-color-scheme: dark)" srcset="app/assets/icon/tsumige_mark.png">
+  <source media="(prefers-color-scheme: light)" srcset="app/assets/icon/tsumige_mark_on_light.png">
+  <img width=120px height=120px src="app/assets/icon/tsumige_mark.png" alt="Tsumige logo"/>
+ </picture>
+</p>
 
-Visual novel library and launcher.
+<h1 align="center">Tsumige</h1>
 
-Licensed under the Mozilla Public License 2.0. See `LICENSE`.
+<div align="center">
 
-## Install
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)](https://github.com/aaronbamblett/tsumige/releases)
+[![License: MPL-2.0](https://img.shields.io/badge/license-MPL--2.0-blue)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/aaronbamblett/tsumige?label=download)](https://github.com/aaronbamblett/tsumige/releases/latest)
 
-Download the file for your system from the
-[releases page](https://github.com/aaronbamblett/tsumige/releases).
+</div>
 
-- **Linux (Flatpak, recommended):** `flatpak remote-add --if-not-exists tsumige https://flatpak.tsumige.app/index.flatpakrepo`, then `flatpak install tsumige app.tsumige.Tsumige`.
-- **Linux (AppImage):** download `Tsumige-…-x86_64.AppImage`, run `chmod +x` on it, then run it.
-- **macOS:** unzip `Tsumige-…-macos.zip`. The app is unsigned, so right-click it and choose Open the first time.
-- **Windows:** unzip `Tsumige-…-windows-x64.zip` and run `tsumige.exe`.
+<p align="center">A good-looking library and launcher for your visual novels</p>
+
+> *Tsumige* (積みゲー) is the pile of games you've bought and haven't played yet. It's a sibling of [Tsumiru](https://tsumiru.app), the manga and webtoon reader, and shares its look and themes.
+
+## What it is
+
+Tsumige keeps your visual novels in one library with their cover art, descriptions and tags from [VNDB](https://vndb.org), and starts each one with the settings it needs. Everything stays on your computer: no account, no server, and your library is a JSON file in your data folder. Guides and the FAQ are at [tsumige.app](https://tsumige.app).
+
+## Features
+
+- **Cover art.** Covers and backgrounds come from VNDB. You can swap in another from the release packages or screenshots, or use your own image.
+- **VNDB metadata.** Search VNDB when you add a game and the description, developer, release date, length, rating and tags fill in.
+- **Folder import.** Point Tsumige at a folder of games. Each subfolder is matched to VNDB and its .exe is picked for you, and you check every match before anything is added.
+- **Launching.** Proton (through umu-run), Wine, native executables and Steam. Prefix, Proton or Wine version and game locale are set per game, and installers or patches run inside the same prefix.
+- **Playtime.** Every session is recorded from launch to exit, with a total and a history for each game.
+- **Library tools.** Search, sort, favourites, your own tags and VNDB tags (spoilers hidden until you ask), related titles, and an adult filter.
+- **Themes.** Built-in themes, light and dark, and a custom accent colour.
+
+## Download
+
+Get the latest build from [Releases](https://github.com/aaronbamblett/tsumige/releases/latest). The [download page](https://tsumige.app/download/) has install steps for each platform.
+
+- **Linux:** the Flatpak from our own repo updates itself. An AppImage is also on Releases.
+- **macOS and Windows:** builds are on Releases. Linux is the platform in daily use; macOS and Windows support is newer.
 
 ## Building
 
-Flutter 3.47.7 via fvm (`.fvmrc` at the repo root applies in subfolders).
-Run every dart/flutter command through `fvm`, from `app/`:
+The Flutter version is pinned in `.fvmrc`. The app lives in `app/`.
 
-```sh
+```bash
 cd app
-fvm flutter pub get
-fvm flutter test
-fvm flutter build linux --release
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs
+flutter build linux --release   # or: macos / windows
 ```
 
-`flutter build linux` needs the GTK dev files visible to pkg-config. With a
-Linuxbrew setup, if cmake reports `gtk+-3.0` not found, relink the package
-whose `.pc` link went missing (`brew unlink shared-mime-info &&
-brew link shared-mime-info`) and rebuild from a clean `app/build/linux`.
+## Credits and license
+
+Game data comes from [VNDB](https://vndb.org).
+
+Licensed under the [Mozilla Public License 2.0](LICENSE). Source files keep their MPL-2.0 headers.
