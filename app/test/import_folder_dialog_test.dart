@@ -359,6 +359,15 @@ void main() {
     expect(find.text('Add Games'), findsOneWidget);
   });
 
+  testWidgets('Scan Folder does not list a folder twice', (tester) async {
+    await _openAndMatch(tester);
+    await tester.tap(find.byKey(const Key('import-scan')));
+    await _settle(tester);
+    expect(find.byKey(const Key('import-check-4')), findsOneWidget);
+    expect(find.byKey(const Key('import-check-5')), findsNothing);
+    expect(find.text('Rena-sensei to Pool Ryokou'), findsOneWidget);
+  });
+
   testWidgets('the header checkbox ticks every eligible row', (tester) async {
     final h = await _openAndMatch(tester);
     await tester.tap(find.byKey(const Key('import-check-all')));
