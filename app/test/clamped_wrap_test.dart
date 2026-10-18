@@ -79,6 +79,37 @@ void main() {
     expect(trailingCenter.dx, greaterThan(fifthCenter.dx));
   });
 
+  testWidgets('hidden children are absent from semantics', (tester) async {
+    final handle = tester.ensureSemantics();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 320,
+            child: ClampedWrap(
+              spacing: 6,
+              runSpacing: 8,
+              maxRows: 1,
+              children: [
+                for (var i = 0; i < 10; i++)
+                  SizedBox(
+                    width: 100,
+                    height: 24,
+                    child: Text('chip $i'),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('chip 0'), findsOneWidget);
+    expect(find.bySemanticsLabel('chip 2'), findsOneWidget);
+    expect(find.bySemanticsLabel('chip 9'), findsNothing);
+    handle.dispose();
+  });
+
   testWidgets('null maxRows shows everything', (tester) async {
     final overflows = <bool>[];
     await _pumpWrap(

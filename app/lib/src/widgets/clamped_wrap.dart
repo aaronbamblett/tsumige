@@ -351,6 +351,15 @@ class RenderClampedWrap extends RenderBox
   }
 
   @override
+  void visitChildrenForSemantics(RenderObjectVisitor visitor) {
+    RenderBox? child = firstChild;
+    while (child != null) {
+      if (_isShown(child)) visitor(child);
+      child = childAfter(child);
+    }
+  }
+
+  @override
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
     RenderBox? child = lastChild;
     while (child != null) {
