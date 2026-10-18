@@ -379,6 +379,7 @@ List<String> vnTitles(VnSearchResult vn) => [
   vn.title,
   if (vn.alttitle != null) vn.alttitle!,
   ...vn.titles,
+  ...vn.aliases,
 ].where((t) => t.isNotEmpty).toList();
 
 /// Similarity of a folder name to a title, from 0 to 1. Equal once spaces
@@ -508,7 +509,10 @@ String cleanFolderName(String folder) {
     RegExp(r'[^\p{L}\p{N}\s]', unicode: true),
     '',
   );
-  return unpunctuated.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).join(' ');
+  return unpunctuated
+      .split(RegExp(r'\s+'))
+      .where((w) => w.isNotEmpty)
+      .join(' ');
 }
 
 /// The folder name with any subtitle or trailing words dropped, for a retry

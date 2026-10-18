@@ -120,6 +120,7 @@ class VnSearchResult {
   final String title;
   final String? alttitle;
   final List<String> titles;
+  final List<String> aliases;
   final String? released;
   final double? rating;
   final int votecount;
@@ -134,6 +135,7 @@ class VnSearchResult {
     required this.title,
     this.alttitle,
     List<String>? titles,
+    List<String>? aliases,
     this.released,
     this.rating,
     this.votecount = 0,
@@ -143,12 +145,13 @@ class VnSearchResult {
     List<String>? developers,
     List<String>? tags,
   })  : titles = titles ?? const [],
+        aliases = aliases ?? const [],
         developers = developers ?? const [],
         tags = tags ?? const [];
 }
 
 const String _searchFields =
-    'id,title,alttitle,titles.title,released,rating,votecount,'
+    'id,title,alttitle,titles.title,aliases,released,rating,votecount,'
     'image.url,image.sexual,description,'
     'tags.name,tags.rating,tags.spoiler,developers.name';
 
@@ -225,11 +228,18 @@ VnSearchResult _parseSearchResult(Map raw) {
       for (final entry in titlesRaw)
         if (entry is Map && entry['title'] is String) entry['title'] as String,
   ];
+  final aliasesRaw = raw['aliases'];
+  final aliases = <String>[
+    if (aliasesRaw is List)
+      for (final alias in aliasesRaw)
+        if (alias is String) alias,
+  ];
   return VnSearchResult(
     id: raw['id'] as String,
     title: raw['title'] is String ? raw['title'] as String : '',
     alttitle: alttitleRaw is String ? alttitleRaw : null,
     titles: titles,
+    aliases: aliases,
     released: releasedRaw is String ? releasedRaw : null,
     rating: ratingRaw is num ? ratingRaw.toDouble() : null,
     votecount: votecountRaw is int ? votecountRaw : 0,

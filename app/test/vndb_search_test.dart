@@ -64,7 +64,7 @@ void main() {
     expect(seenBody!['sort'], 'searchrank');
     expect(seenBody!['results'], 20);
     expect(seenBody!['fields'],
-        'id,title,alttitle,titles.title,released,rating,votecount,'
+        'id,title,alttitle,titles.title,aliases,released,rating,votecount,'
         'image.url,image.sexual,description,'
         'tags.name,tags.rating,tags.spoiler,developers.name');
     expect(seenHeaders!['User-Agent'], contains('tsumige/'));
@@ -155,6 +155,28 @@ void main() {
     final results = await client.search('Patient Game');
     expect(calls, 2);
     expect(results.single.id, 'v1');
+  });
+
+  test('aliases parse into the search result', () async {
+    final client = VndbClient(
+      client: MockClient((request) async => http.Response(
+          _page([
+            {
+              'id': 'v5',
+              'title': 'Main Title',
+              'titles': [],
+              'votecount': 0,
+              'description': '',
+              'developers': [],
+              'tags': [],
+              'aliases': ['Short Name', 'Other Name'],
+            },
+          ]),
+          200)),
+      retryDelay: Duration.zero,
+    );
+    final result = (await client.search('Short Name')).single;
+    expect(result.aliases, ['Short Name', 'Other Name']);
   });
 
   test('sexual covers and missing fields parse', () async {

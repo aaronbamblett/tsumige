@@ -287,6 +287,21 @@ void main() {
     });
   });
 
+  group('aliases', () {
+    test('an alias equal to the folder name is a match', () {
+      final results = [
+        VnSearchResult(
+          id: 'v1',
+          title: 'Completely Different Title',
+          aliases: const ['Alias Folder'],
+        ),
+      ];
+      final match = matchFolder('Alias Folder', results);
+      expect(match.state, ImportMatchState.matched);
+      expect(match.vn!.id, 'v1');
+    });
+  });
+
   group('reported matches', () {
     test('DEMO beats Jewel Ademox, which only contains it', () {
       final m = matchFolder('DEMO', [
