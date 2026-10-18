@@ -8,6 +8,14 @@ import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 
+/// Alignment the library grid and the Related tab used before positions were
+/// saved: [Image] draws centred unless told otherwise.
+const kLibraryCoverAlignment = Alignment.center;
+
+/// Alignment the details pane used before positions were saved: every pane
+/// image passes `Alignment.topCenter`.
+const kDetailPaneArtAlignment = Alignment.topCenter;
+
 /// A [FileImage] whose cache identity includes the file's version, so a file
 /// replaced at the same path is decoded again instead of served from the
 /// image cache.

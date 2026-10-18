@@ -220,7 +220,7 @@ class GameDetailPane extends HookConsumerWidget {
             cacheWidth: physicalWidth,
           ),
           fit: BoxFit.cover,
-          alignment: Alignment.topCenter,
+          alignment: game.backgroundAlignment ?? kDetailPaneArtAlignment,
           gaplessPlayback: true,
           frameBuilder: (context, child, frame, _) =>
               frame == null ? const SizedBox.shrink() : child,
@@ -231,6 +231,7 @@ class GameDetailPane extends HookConsumerWidget {
     if (game.cover == null || game.cover!.isEmpty) return const SizedBox.shrink();
     final thumb = thumbPath(dir, game.id, 512);
     final original = File(p.join(dir.coversOriginal.path, game.cover!));
+    final coverAlignment = game.coverAlignment ?? kDetailPaneArtAlignment;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -238,7 +239,7 @@ class GameDetailPane extends HookConsumerWidget {
           Image(
             image: artFileImage(File(thumb), version: version(thumb)),
             fit: BoxFit.cover,
-            alignment: Alignment.topCenter,
+            alignment: coverAlignment,
             gaplessPlayback: true,
             errorBuilder: (_, _, _) => const SizedBox.shrink(),
           ),
@@ -249,7 +250,7 @@ class GameDetailPane extends HookConsumerWidget {
             cacheWidth: physicalWidth,
           ),
           fit: BoxFit.cover,
-          alignment: Alignment.topCenter,
+          alignment: coverAlignment,
           gaplessPlayback: true,
           frameBuilder: (context, child, frame, _) =>
               frame == null ? const SizedBox.shrink() : child,

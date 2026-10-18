@@ -1867,4 +1867,113 @@ void main() {
     expect(games.single.adultOverride, isNull);
     expect(games.single.isAdult, isFalse);
   });
+
+  testWidgets('the pane background draws the saved background position',
+      (tester) async {
+    late Directory temp;
+    final bytes = Uint8List.fromList(
+        img.encodePng(img.Image(width: 16, height: 16)));
+    await pumpLibrary(
+      tester,
+      [
+        core.Game(
+          id: 'g1',
+          title: 'Alpha',
+          cover: 'g1.png',
+          background: 'g1.png',
+          backgroundAlignment: const Alignment(0.5, 0.5),
+        )
+      ],
+      exposeTemp: (dir) {
+        temp = dir;
+        Directory(p.join(dir.path, 'covers', 'background'))
+            .createSync(recursive: true);
+        File(p.join(dir.path, 'covers', 'background', 'g1.png'))
+            .writeAsBytesSync(bytes);
+      },
+      exists: (path) => File(path).existsSync(),
+    );
+    await openPane(tester, 'Alpha');
+    final bgPath = p.join(temp.path, 'covers', 'background', 'g1.png');
+    expect(
+      tester.widget<Image>(_paneFileImage(bgPath)).alignment,
+      const Alignment(0.5, 0.5),
+    );
+  });
+
+  testWidgets('the pane cover fallback draws the saved cover position',
+      (tester) async {
+    late Directory temp;
+    final bytes = Uint8List.fromList(
+        img.encodePng(img.Image(width: 16, height: 16)));
+    await pumpLibrary(
+      tester,
+      [
+        core.Game(
+          id: 'g1',
+          title: 'Alpha',
+          cover: 'g1.png',
+          coverAlignment: const Alignment(-0.5, 0.5),
+        )
+      ],
+      exposeTemp: (dir) {
+        temp = dir;
+        Directory(p.join(dir.path, 'covers', 'original'))
+            .createSync(recursive: true);
+        File(p.join(dir.path, 'covers', 'original', 'g1.png'))
+            .writeAsBytesSync(bytes);
+      },
+      exists: (path) => File(path).existsSync(),
+    );
+    await openPane(tester, 'Alpha');
+    final coverPath = p.join(temp.path, 'covers', 'original', 'g1.png');
+    expect(
+      tester.widget<Image>(_paneFileImage(coverPath)).alignment,
+      const Alignment(-0.5, 0.5),
+    );
+  });
+
+  testWidgets('a related owned game draws its saved cover position',
+      (tester) async {
+    late Directory temp;
+    final bytes = Uint8List.fromList(
+        img.encodePng(img.Image(width: 16, height: 16)));
+    await pumpLibrary(
+      tester,
+      [
+        core.Game(id: 'g1', title: 'Alpha', relations: const [
+          core.VnRelation(
+              vndbId: 'v2', relation: 'seq', title: 'Beta', official: true),
+        ]),
+        core.Game(
+          id: 'g2',
+          title: 'Beta',
+          vndbId: 'v2',
+          cover: 'g2.png',
+          coverAlignment: const Alignment(-0.5, 0.5),
+        ),
+      ],
+      exposeTemp: (dir) {
+        temp = dir;
+        Directory(p.join(dir.path, 'covers', 'original'))
+            .createSync(recursive: true);
+        File(p.join(dir.path, 'covers', 'original', 'g2.png'))
+            .writeAsBytesSync(bytes);
+      },
+      exists: (path) => File(path).existsSync(),
+    );
+    await openPane(tester, 'Alpha');
+    await openTab(tester, 'Related');
+    final coverPath = p.join(temp.path, 'covers', 'original', 'g2.png');
+    final images = tester.widgetList<Image>(
+      find.descendant(
+        of: find.byType(RelatedTab),
+        matching: _fileImage(coverPath),
+      ),
+    );
+    expect(images, isNotEmpty);
+    for (final image in images) {
+      expect(image.alignment, const Alignment(-0.5, 0.5));
+    }
+  });
 }

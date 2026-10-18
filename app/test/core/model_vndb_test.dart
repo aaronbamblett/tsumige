@@ -6,6 +6,7 @@
 
 import 'dart:convert';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tsumige/src/core/model.dart';
 
@@ -154,6 +155,65 @@ void main() {
     expect(game.adultVndb, isNull);
     expect(game.adultOverride, isNull);
     expect(game.vndbDataFetchedAt, isNull);
+  });
+
+  test('cover and background positions round-trip as [x, y]', () {
+    final game = Game(
+      id: 'g8',
+      coverAlignment: const Alignment(0.2, -0.4),
+      backgroundAlignment: const Alignment(-1, 1),
+    );
+    final json = jsonDecode(jsonEncode(game.toJson())) as Map<String, Object?>;
+    expect(json['cover_alignment'], [0.2, -0.4]);
+    expect(json['background_alignment'], [-1.0, 1.0]);
+    final back = Game.fromJson(json);
+    expect(back.coverAlignment, const Alignment(0.2, -0.4));
+    expect(back.backgroundAlignment, const Alignment(-1, 1));
+  });
+
+  test('old files without positions load with null, nulls write no keys', () {
+    final old = Game.fromJson({'id': 'g9', 'cover': 'g9.png'});
+    expect(old.coverAlignment, isNull);
+    expect(old.backgroundAlignment, isNull);
+    final nulled = Game.fromJson({
+      'id': 'g9b',
+      'cover_alignment': null,
+      'background_alignment': null,
+    });
+    expect(nulled.coverAlignment, isNull);
+    expect(nulled.backgroundAlignment, isNull);
+    final json =
+        jsonDecode(jsonEncode(Game(id: 'g9c').toJson())) as Map<String, Object?>;
+    expect(json.containsKey('cover_alignment'), isFalse);
+    expect(json.containsKey('background_alignment'), isFalse);
+  });
+
+  test('positions read ints, clamp range, and reject malformed values', () {
+    final ints = Game.fromJson({
+      'id': 'g9d',
+      'cover_alignment': [0, -1],
+      'background_alignment': [1, 0],
+    });
+    expect(ints.coverAlignment, const Alignment(0, -1));
+    expect(ints.backgroundAlignment, const Alignment(1, 0));
+    final clamped = Game.fromJson({
+      'id': 'g9e',
+      'cover_alignment': [2, -5],
+    });
+    expect(clamped.coverAlignment, const Alignment(1, -1));
+    for (final bad in [
+      'left',
+      [0],
+      [0, 1, 2],
+      ['a', 'b'],
+      [null, 0],
+    ]) {
+      expect(
+        Game.fromJson({'id': 'g9f', 'cover_alignment': bad}).coverAlignment,
+        isNull,
+        reason: '$bad',
+      );
+    }
   });
 
   test('isAdult takes the override, then VNDB, then false', () {

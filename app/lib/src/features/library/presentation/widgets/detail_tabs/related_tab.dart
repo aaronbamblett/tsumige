@@ -220,6 +220,7 @@ class _OwnedCover extends ConsumerWidget {
     return Image(
       image: artFileImage(File(source.path), version: version(source.path)),
       fit: BoxFit.cover,
+      alignment: game.coverAlignment ?? kLibraryCoverAlignment,
       gaplessPlayback: true,
       errorBuilder: (_, _, _) => const _NoCover(),
     );

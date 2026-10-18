@@ -4,6 +4,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import 'package:flutter/widgets.dart';
+
 import 'json_read.dart';
 
 const int schemaVersion = 1;
@@ -53,6 +55,8 @@ class Game {
   String? background;
   String? coverSource;
   String? backgroundSource;
+  Alignment? coverAlignment;
+  Alignment? backgroundAlignment;
   LaunchOverrides launch;
   List<PlaySession> playSessions;
   String? vndbOriginalTitle;
@@ -85,6 +89,8 @@ class Game {
     this.background,
     this.coverSource,
     this.backgroundSource,
+    this.coverAlignment,
+    this.backgroundAlignment,
     LaunchOverrides? launch,
     List<PlaySession>? playSessions,
     this.vndbOriginalTitle,
@@ -124,6 +130,8 @@ class Game {
         background: readStringOrNull(m, 'background'),
         coverSource: readStringOrNull(m, 'cover_source'),
         backgroundSource: readStringOrNull(m, 'background_source'),
+        coverAlignment: readAlignmentOrNull(m, 'cover_alignment'),
+        backgroundAlignment: readAlignmentOrNull(m, 'background_alignment'),
         launch: m['launch'] is Map
             ? LaunchOverrides.fromJson(m['launch'] as Map)
             : LaunchOverrides(),
@@ -160,6 +168,13 @@ class Game {
         'background': background,
         'cover_source': coverSource,
         'background_source': backgroundSource,
+        if (coverAlignment != null)
+          'cover_alignment': [coverAlignment!.x, coverAlignment!.y],
+        if (backgroundAlignment != null)
+          'background_alignment': [
+            backgroundAlignment!.x,
+            backgroundAlignment!.y,
+          ],
         'launch': launch.toJson(),
         'play_sessions': [for (final s in playSessions) s.toJson()],
         'original_title': vndbOriginalTitle,
@@ -191,6 +206,23 @@ class Game {
 bool? _boolOrNull(Map m, String k) {
   final v = m[k];
   return v is bool ? v : null;
+}
+
+/// Reads an [Alignment] from a two-number `[x, y]` list. Absent, null or
+/// malformed values mean no saved position. Components are clamped to -1..1.
+Alignment? readAlignmentOrNull(Map m, String k) {
+  final v = m[k];
+  if (v == null) return null;
+  if (v is! List || v.length != 2) return null;
+  double? component(Object? e) => switch (e) {
+    double d => d,
+    int i => i.toDouble(),
+    _ => null,
+  };
+  final x = component(v[0]);
+  final y = component(v[1]);
+  if (x == null || y == null) return null;
+  return Alignment(x.clamp(-1, 1), y.clamp(-1, 1));
 }
 
 class Developer {
