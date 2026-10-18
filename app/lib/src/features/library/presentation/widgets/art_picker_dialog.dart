@@ -84,6 +84,10 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
   var _saving = false;
   final _scroll = ScrollController();
 
+  /// SteamGridDB Steam IDs, name-search results and the picked search game,
+  /// shared by the Cover and Background tabs so one dialog looks them up once.
+  late final _sgdb = _SgdbShared();
+
   @override
   void initState() {
     super.initState();
@@ -92,6 +96,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
 
   @override
   void dispose() {
+    _sgdb.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -266,15 +271,15 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
   }
 
   Widget _body() {
-    if (_tab == _ArtTab.background && widget.game.vndbId == null) {
-      return _note('No VNDB id, so pick a file.');
-    }
-    if (_tab == _ArtTab.cover && widget.game.vndbId == null) {
+    if (widget.game.vndbId == null) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _note('No VNDB id, so pick a file.'),
-          _steamGridDbSection(),
+          if (_tab == _ArtTab.cover)
+            _steamGridDbSection()
+          else
+            _steamGridDbHeroesSection(),
         ],
       );
     }
@@ -286,7 +291,12 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
           snapshot,
           background: _tab == _ArtTab.background,
         );
-        if (_tab == _ArtTab.background) return vndb;
+        if (_tab == _ArtTab.background) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [vndb, _steamGridDbHeroesSection()],
+          );
+        }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [vndb, _steamGridDbSection()],
@@ -296,12 +306,27 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
   }
 
   Widget _steamGridDbSection() => _SteamGridDbSection(
+    key: const ValueKey('sgdb-grids'),
     game: widget.game,
+    kind: _SgdbKind.grids,
+    shared: _sgdb,
     selectedUrl: _coverPick is _RemotePick
         ? (_coverPick as _RemotePick).art.url
         : null,
     isCurrent: _isCurrentCover,
     onPick: (art) => setState(() => _coverPick = _RemotePick(art)),
+  );
+
+  Widget _steamGridDbHeroesSection() => _SteamGridDbSection(
+    key: const ValueKey('sgdb-heroes'),
+    game: widget.game,
+    kind: _SgdbKind.heroes,
+    shared: _sgdb,
+    selectedUrl: _backgroundPick is _RemotePick
+        ? (_backgroundPick as _RemotePick).art.url
+        : null,
+    isCurrent: _isCurrentBackground,
+    onPick: (art) => setState(() => _backgroundPick = _RemotePick(art)),
   );
 
   Widget _vndbSnapshot(
@@ -704,17 +729,348 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
   }
 }
 
-/// SteamGridDB covers on the Cover tab. Loads independently of VNDB so one
-/// source never blocks the other.
+/// Which SteamGridDB art a section shows: covers on the Cover tab, heroes
+/// (wide banners) on the Background tab.
+enum _SgdbKind {
+  grids,
+  heroes;
+
+  String get noKeyMessage => switch (this) {
+    grids =>
+      'Covers from SteamGridDB need your own free API key. '
+      'Get one in your SteamGridDB preferences.',
+    heroes =>
+      'Backgrounds from SteamGridDB need your own free API key. '
+      'Get one in your SteamGridDB preferences.',
+  };
+
+  String get emptyMessage => switch (this) {
+    grids => 'No SteamGridDB covers for this game.',
+    heroes => 'No SteamGridDB backgrounds for this game.',
+  };
+
+  int get columns => switch (this) {
+    grids => 5,
+    heroes => 3,
+  };
+
+  double get aspectRatio => switch (this) {
+    grids => 2 / 3,
+    heroes => 440 / 340,
+  };
+
+  Future<List<ArtCandidate>> fetchSteam(
+    SteamGridDbClient client,
+    int appId,
+  ) => switch (this) {
+    grids => client.gridsForSteamApp(appId),
+    heroes => client.heroesForSteamApp(appId),
+  };
+
+  Future<List<ArtCandidate>> fetchGame(
+    SteamGridDbClient client,
+    int gameId,
+  ) => switch (this) {
+    grids => client.gridsForGame(gameId),
+    heroes => client.heroesForGame(gameId),
+  };
+}
+
+/// SteamGridDB lookup shared by the Cover and Background tabs. The Steam IDs,
+/// the name-search results and the picked search game are resolved once per
+/// dialog; each kind of art (covers, heroes) is then fetched once for that
+/// lookup. One [_generation] guard covers every pending response, so a stale
+/// response for one tab or game never lands in the other.
+class _SgdbShared extends ChangeNotifier {
+  List<int>? steamIds;
+  List<SteamGridDbGame>? search;
+  int? selectedSearchId;
+  var grids = const <ArtCandidate>[];
+  var heroes = const <ArtCandidate>[];
+  var gridsLoading = false;
+  var heroesLoading = false;
+  String? gridsError;
+  String? heroesError;
+
+  /// Which game plus key the lookup above was resolved for.
+  var lookupFor = '';
+
+  /// Which lookup plus search selection each kind of art was loaded for.
+  var gridsFor = '';
+  var heroesFor = '';
+
+  var _generation = 0;
+  var _disposed = false;
+
+  static String fingerprint(Game game, String key) =>
+      '${game.id}|${key.trim()}';
+
+  List<ArtCandidate> artFor(_SgdbKind kind) =>
+      kind == _SgdbKind.grids ? grids : heroes;
+
+  bool loadingFor(_SgdbKind kind) =>
+      kind == _SgdbKind.grids ? gridsLoading : heroesLoading;
+
+  String? errorFor(_SgdbKind kind) =>
+      kind == _SgdbKind.grids ? gridsError : heroesError;
+
+  String loadedFor(_SgdbKind kind) =>
+      kind == _SgdbKind.grids ? gridsFor : heroesFor;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  bool _stale(int generation) => _disposed || generation != _generation;
+
+  void reset() {
+    _generation++;
+    steamIds = null;
+    search = null;
+    selectedSearchId = null;
+    grids = const [];
+    heroes = const [];
+    gridsLoading = false;
+    heroesLoading = false;
+    gridsError = null;
+    heroesError = null;
+    lookupFor = '';
+    gridsFor = '';
+    heroesFor = '';
+    _notify();
+  }
+
+  void _setLoading(_SgdbKind kind, bool value) {
+    if (kind == _SgdbKind.grids) {
+      gridsLoading = value;
+    } else {
+      heroesLoading = value;
+    }
+  }
+
+  void _setError(_SgdbKind kind, String? value) {
+    if (kind == _SgdbKind.grids) {
+      gridsError = value;
+    } else {
+      heroesError = value;
+    }
+  }
+
+  void _setArt(_SgdbKind kind, List<ArtCandidate> value) {
+    if (kind == _SgdbKind.grids) {
+      grids = value;
+    } else {
+      heroes = value;
+    }
+  }
+
+  void _setLoadedFor(_SgdbKind kind, String value) {
+    if (kind == _SgdbKind.grids) {
+      gridsFor = value;
+    } else {
+      heroesFor = value;
+    }
+  }
+
+  /// Which lookup plus search selection a kind's art belongs to. Steam-ID art
+  /// does not depend on the search selection; search art does.
+  String _artKey(String print) {
+    final ids = steamIds;
+    if (ids != null && ids.isNotEmpty) return '$print|steam';
+    return '$print|search:$selectedSearchId';
+  }
+
+  /// Loads [kind] unless it is already loaded for this lookup and selection.
+  /// The Steam IDs and the name search come from the shared lookup, so a tab
+  /// switch never repeats them.
+  Future<void> ensureKind(
+    _SgdbKind kind, {
+    required Game game,
+    required String key,
+    required SteamGridDbClient? client,
+    required VndbClient vndb,
+  }) async {
+    final print = fingerprint(game, key);
+    if (lookupFor != print) {
+      await _lookup(kind, game: game, client: client, vndb: vndb, print: print);
+      return;
+    }
+    if (client == null) return;
+    if (loadedFor(kind) == _artKey(print)) return;
+    final generation = ++_generation;
+    _setLoading(kind, true);
+    _setError(kind, null);
+    _notify();
+    await _fetchKindArt(kind, client, print, generation);
+  }
+
+  Future<void> _lookup(
+    _SgdbKind kind, {
+    required Game game,
+    required SteamGridDbClient? client,
+    required VndbClient vndb,
+    required String print,
+  }) async {
+    if (client == null) return;
+    final generation = ++_generation;
+    _setLoading(kind, true);
+    _setError(kind, null);
+    _notify();
+    try {
+      List<int> ids = const [];
+      if (game.launch.steamAppId != null) {
+        ids = [game.launch.steamAppId!];
+      } else if (game.vndbId != null) {
+        try {
+          ids = await vndb.fetchSteamAppIds(game.vndbId!);
+        } catch (_) {
+          ids = const [];
+        }
+      }
+      if (_stale(generation)) return;
+      if (ids.isNotEmpty) {
+        steamIds = ids;
+        search = null;
+        lookupFor = print;
+        _notify();
+        await _fetchKindArt(kind, client, print, generation);
+        return;
+      }
+      final results = await client.searchGames(game.title);
+      if (_stale(generation)) return;
+      final folded = normalizeGridTitle(game.title);
+      int? selected;
+      for (final result in results) {
+        if (normalizeGridTitle(result.name) == folded) {
+          selected = result.id;
+          break;
+        }
+      }
+      steamIds = const [];
+      search = results;
+      selectedSearchId = selected;
+      lookupFor = print;
+      if (selected == null) {
+        _setArt(kind, const []);
+        _setLoadedFor(kind, _artKey(print));
+        _setLoading(kind, false);
+        _notify();
+        return;
+      }
+      _notify();
+      await _fetchKindArt(kind, client, print, generation);
+    } on SteamGridDbBadKeyException {
+      if (_stale(generation)) return;
+      _setLoading(kind, false);
+      _setError(kind, 'badKey');
+      _notify();
+    } catch (_) {
+      if (_stale(generation)) return;
+      _setLoading(kind, false);
+      _setError(kind, 'network');
+      _notify();
+    }
+  }
+
+  Future<void> _fetchKindArt(
+    _SgdbKind kind,
+    SteamGridDbClient client,
+    String print,
+    int generation,
+  ) async {
+    try {
+      final ids = steamIds;
+      if (ids == null || ids.isEmpty) {
+        final selected = selectedSearchId;
+        if (selected == null) {
+          _setArt(kind, const []);
+          _setLoadedFor(kind, _artKey(print));
+          _setLoading(kind, false);
+          _notify();
+          return;
+        }
+        final arts = await kind.fetchGame(client, selected);
+        if (_stale(generation)) return;
+        _setArt(kind, _dedupe(arts));
+        _setLoadedFor(kind, _artKey(print));
+        _setLoading(kind, false);
+        _notify();
+        return;
+      }
+      final merged = <ArtCandidate>[];
+      final seen = <String>{};
+      for (final id in ids) {
+        final arts = await kind.fetchSteam(client, id);
+        if (_stale(generation)) return;
+        for (final art in arts) {
+          if (seen.add(art.url)) merged.add(art);
+        }
+      }
+      if (_stale(generation)) return;
+      _setArt(kind, merged);
+      _setLoadedFor(kind, _artKey(print));
+      _setLoading(kind, false);
+      _notify();
+    } on SteamGridDbBadKeyException {
+      if (_stale(generation)) return;
+      _setLoading(kind, false);
+      _setError(kind, 'badKey');
+      _notify();
+    } catch (_) {
+      if (_stale(generation)) return;
+      _setLoading(kind, false);
+      _setError(kind, 'network');
+      _notify();
+    }
+  }
+
+  /// The user picked a search result: remember it for both tabs and load this
+  /// tab's art for it. The other tab follows on its next build.
+  Future<void> selectSearch(
+    _SgdbKind kind,
+    int id, {
+    required Game game,
+    required String key,
+    required SteamGridDbClient? client,
+  }) async {
+    if (client == null) return;
+    final generation = ++_generation;
+    selectedSearchId = id;
+    _setLoading(kind, true);
+    _setError(kind, null);
+    _notify();
+    await _fetchKindArt(kind, client, fingerprint(game, key), generation);
+  }
+
+  List<ArtCandidate> _dedupe(List<ArtCandidate> arts) {
+    final seen = <String>{};
+    return [for (final art in arts) if (seen.add(art.url)) art];
+  }
+}
+
+/// SteamGridDB art below the VNDB art: covers on the Cover tab, heroes on the
+/// Background tab. Loads independently of VNDB so one source never blocks the
+/// other. The lookup is shared between the tabs; only the key form is local.
 class _SteamGridDbSection extends ConsumerStatefulWidget {
   const _SteamGridDbSection({
+    super.key,
     required this.game,
+    required this.kind,
+    required this.shared,
     required this.selectedUrl,
     required this.isCurrent,
     required this.onPick,
   });
 
   final Game game;
+  final _SgdbKind kind;
+  final _SgdbShared shared;
   final String? selectedUrl;
   final bool Function(ArtCandidate) isCurrent;
   final void Function(ArtCandidate) onPick;
@@ -727,21 +1083,17 @@ class _SteamGridDbSection extends ConsumerStatefulWidget {
 class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
   var _editingKey = false;
   late final TextEditingController _keyController;
-  var _loading = false;
-  String? _error;
-  List<int>? _steamIds;
-  List<SteamGridDbGame>? _search;
-  int? _selectedSearchId;
-  var _grids = const <ArtCandidate>[];
-  var _loadedFor = '';
-  var _generation = 0;
   late final ProviderSubscription<String> _keySub;
+
+  _SgdbShared get _shared => widget.shared;
+  _SgdbKind get _kind => widget.kind;
 
   @override
   void initState() {
     super.initState();
     _keyController = TextEditingController();
     _keyController.addListener(() => setState(() {}));
+    _shared.addListener(_onShared);
     _keySub = ref.listenManual<String>(steamGridDbKeyProvider, (
       previous,
       next,
@@ -750,170 +1102,64 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
       final wasEmpty = (previous ?? '').trim().isEmpty;
       final isEmpty = next.trim().isEmpty;
       if (wasEmpty && isEmpty) return;
-      if (isEmpty) {
-        setState(_reset);
-      } else if (!_editingKey) {
-        setState(() => _loadedFor = '${widget.game.id}|${next.trim()}');
+      // A key saved from either tab resets the shared lookup and loads this
+      // tab's art; the other tab follows from the shared lookup.
+      _shared.reset();
+      if (!isEmpty && !_editingKey) {
         unawaited(_load());
       }
     });
     if (ref.read(steamGridDbKeyProvider).trim().isNotEmpty) {
-      _loadedFor =
-          '${widget.game.id}|${ref.read(steamGridDbKeyProvider).trim()}';
       Future.microtask(_load);
     }
   }
 
   @override
   void dispose() {
+    _shared.removeListener(_onShared);
     _keySub.close();
     _keyController.dispose();
     super.dispose();
+  }
+
+  void _onShared() {
+    if (mounted) setState(() {});
   }
 
   @override
   void didUpdateWidget(_SteamGridDbSection oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.game.id != widget.game.id) {
-      _reset();
+      _shared.reset();
       if (ref.read(steamGridDbKeyProvider).trim().isNotEmpty) {
-        _loadedFor =
-            '${widget.game.id}|${ref.read(steamGridDbKeyProvider).trim()}';
         Future.microtask(_load);
       }
     }
   }
 
-  void _reset() {
-    _generation++;
-    _editingKey = false;
-    _loading = false;
-    _error = null;
-    _steamIds = null;
-    _search = null;
-    _selectedSearchId = null;
-    _grids = const [];
-    _loadedFor = '';
-  }
+  Future<void> _load() => _shared.ensureKind(
+    _kind,
+    game: widget.game,
+    key: ref.read(steamGridDbKeyProvider),
+    client: ref.read(steamGridDbClientProvider),
+    vndb: ref.read(vndbSearchClientProvider),
+  );
 
-  Future<void> _load() async {
-    final client = ref.read(steamGridDbClientProvider);
-    if (client == null) return;
-    final generation = ++_generation;
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final game = widget.game;
-      List<int> ids = const [];
-      if (game.launch.steamAppId != null) {
-        ids = [game.launch.steamAppId!];
-      } else if (game.vndbId != null) {
-        try {
-          ids = await ref
-              .read(vndbSearchClientProvider)
-              .fetchSteamAppIds(game.vndbId!);
-        } catch (_) {
-          ids = const [];
-        }
-      }
-      if (!mounted || generation != _generation) return;
-      if (ids.isNotEmpty) {
-        final merged = <ArtCandidate>[];
-        final seen = <String>{};
-        for (final id in ids) {
-          final arts = await client.gridsForSteamApp(id);
-          if (!mounted || generation != _generation) return;
-          for (final art in arts) {
-            if (seen.add(art.url)) merged.add(art);
-          }
-        }
-        if (!mounted || generation != _generation) return;
-        setState(() {
-          _loading = false;
-          _steamIds = ids;
-          _search = null;
-          _grids = merged;
-        });
-      } else {
-        final results = await client.searchGames(game.title);
-        if (!mounted || generation != _generation) return;
-        final folded = normalizeGridTitle(game.title);
-        int? selected;
-        for (final result in results) {
-          if (normalizeGridTitle(result.name) == folded) {
-            selected = result.id;
-            break;
-          }
-        }
-        setState(() {
-          _steamIds = const [];
-          _search = results;
-          _selectedSearchId = selected;
-        });
-        if (selected != null) {
-          await _loadSearchGrids(client, selected);
-        } else {
-          if (!mounted || generation != _generation) return;
-          setState(() {
-            _loading = false;
-            _grids = const [];
-          });
-        }
-      }
-    } on SteamGridDbBadKeyException {
-      if (!mounted || generation != _generation) return;
-      setState(() {
-        _loading = false;
-        _error = 'badKey';
-      });
-    } catch (_) {
-      if (!mounted || generation != _generation) return;
-      setState(() {
-        _loading = false;
-        _error = 'network';
-      });
-    }
-  }
-
-  Future<void> _loadSearchGrids(SteamGridDbClient client, int gameId) async {
-    final generation = ++_generation;
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final grids = await client.gridsForGame(gameId);
-      if (!mounted || generation != _generation) return;
-      final seen = <String>{};
-      setState(() {
-        _loading = false;
-        _grids = [
-          for (final art in grids)
-            if (seen.add(art.url)) art,
-        ];
-      });
-    } on SteamGridDbBadKeyException {
-      if (!mounted || generation != _generation) return;
-      setState(() {
-        _loading = false;
-        _error = 'badKey';
-      });
-    } catch (_) {
-      if (!mounted || generation != _generation) return;
-      setState(() {
-        _loading = false;
-        _error = 'network';
-      });
-    }
+  Future<void> _retry() {
+    _shared.reset();
+    return _load();
   }
 
   void _selectSearch(int id) {
-    final client = ref.read(steamGridDbClientProvider);
-    if (client == null) return;
-    setState(() => _selectedSearchId = id);
-    unawaited(_loadSearchGrids(client, id));
+    unawaited(
+      _shared.selectSearch(
+        _kind,
+        id,
+        game: widget.game,
+        key: ref.read(steamGridDbKeyProvider),
+        client: ref.read(steamGridDbClientProvider),
+      ),
+    );
   }
 
   void _saveKey() {
@@ -925,9 +1171,7 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
     setState(() => _editingKey = false);
     ref.read(steamGridDbKeyProvider.notifier).set(next);
     if (unchanged) {
-      setState(
-        () => _loadedFor = '${widget.game.id}|${next.trim()}',
-      );
+      _shared.reset();
       unawaited(_load());
     }
   }
@@ -936,8 +1180,8 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
     _keyController.clear();
     setState(() => _editingKey = false);
     final key = ref.read(steamGridDbKeyProvider).trim();
-    if (key.isNotEmpty && _loadedFor != '${widget.game.id}|$key') {
-      setState(() => _loadedFor = '${widget.game.id}|$key');
+    if (key.isNotEmpty &&
+        _shared.lookupFor != _SgdbShared.fingerprint(widget.game, key)) {
       unawaited(_load());
     }
   }
@@ -963,9 +1207,9 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
                   ),
                 ),
               ),
-              if (_gridCount() != null)
+              if (_artCount() != null)
                 Text(
-                  '${_gridCount()}',
+                  '${_artCount()}',
                   style: TextStyle(
                     fontSize: 12.5,
                     color: scheme.onSurfaceVariant,
@@ -981,10 +1225,14 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
     );
   }
 
-  int? _gridCount() {
-    if (_error != null || _steamIds == null && _search == null) return null;
-    if (_search != null && _selectedSearchId == null) return null;
-    return _grids.length;
+  int? _artCount() {
+    final shared = _shared;
+    if (shared.errorFor(_kind) != null ||
+        shared.steamIds == null && shared.search == null) {
+      return null;
+    }
+    if (shared.search != null && shared.selectedSearchId == null) return null;
+    return shared.artFor(_kind).length;
   }
 
   Widget _noKeyNote(ColorScheme scheme) {
@@ -995,8 +1243,7 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Covers from SteamGridDB need your own free API key. '
-              'Get one in your SteamGridDB preferences.',
+              _kind.noKeyMessage,
               style: TextStyle(color: scheme.onSurfaceVariant),
             ),
             const SizedBox(height: 12),
@@ -1071,7 +1318,12 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
   }
 
   List<Widget> _keyedBody(ColorScheme scheme) {
-    if (_error == 'badKey') {
+    final shared = _shared;
+    final arts = shared.artFor(_kind);
+    final loading = shared.loadingFor(_kind);
+    final selectedSearchId = shared.selectedSearchId;
+    final emptyMessage = _kind.emptyMessage;
+    if (shared.errorFor(_kind) == 'badKey') {
       return [
         const Text("SteamGridDB didn't accept the key."),
         const SizedBox(height: 12),
@@ -1087,7 +1339,7 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
         ),
       ];
     }
-    if (_error != null) {
+    if (shared.errorFor(_kind) != null) {
       return [
         const Text("Couldn't reach SteamGridDB."),
         const SizedBox(height: 12),
@@ -1097,32 +1349,23 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
             key: const Key('sgdb-retry'),
             height: 40,
             expand: false,
-            onPressed: _load,
+            onPressed: _retry,
             label: const Text('Try again'),
           ),
         ),
       ];
     }
-    if (_steamIds == null && _search == null) {
-      return const [
-        Padding(
-          padding: EdgeInsets.only(top: 8),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: TsumigeLogoShimmer(size: 32),
-          ),
-        ),
-      ];
+    if (shared.steamIds == null && shared.search == null) {
+      return const [_SgdbPending()];
     }
-    if (_steamIds != null && _steamIds!.isNotEmpty) {
-      if (!_loading && _grids.isEmpty) {
-        return const [Text('No SteamGridDB covers for this game.')];
-      }
-      return [_grid(scheme)];
+    if (shared.steamIds != null && shared.steamIds!.isNotEmpty) {
+      if (arts.isNotEmpty) return [_grid(scheme, arts)];
+      if (loading) return const [_SgdbPending()];
+      return [Text(emptyMessage)];
     }
-    final search = _search ?? const <SteamGridDbGame>[];
+    final search = shared.search ?? const <SteamGridDbGame>[];
     if (search.isEmpty) {
-      return const [Text('No SteamGridDB covers for this game.')];
+      return [Text(emptyMessage)];
     }
     return [
       Wrap(
@@ -1133,25 +1376,19 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
         ],
       ),
       const SizedBox(height: 10),
-      if (_selectedSearchId == null)
+      if (selectedSearchId == null)
         const Text('Pick the matching game.')
-      else if (!_loading && _grids.isEmpty)
-        const Text('No SteamGridDB covers for this game.')
+      else if (!loading && arts.isEmpty)
+        Text(emptyMessage)
       else
-        _grid(scheme),
-      if (_loading && _selectedSearchId != null && _grids.isEmpty)
-        const Padding(
-          padding: EdgeInsets.only(top: 8),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: TsumigeLogoShimmer(size: 32),
-          ),
-        ),
+        _grid(scheme, arts),
+      if (loading && selectedSearchId != null && arts.isEmpty)
+        const _SgdbPending(),
     ];
   }
 
   Widget _chip(ColorScheme scheme, SteamGridDbGame result) {
-    final selected = result.id == _selectedSearchId;
+    final selected = result.id == _shared.selectedSearchId;
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: () => _selectSearch(result.id),
@@ -1176,16 +1413,16 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
     );
   }
 
-  Widget _grid(ColorScheme scheme) {
+  Widget _grid(ColorScheme scheme, List<ArtCandidate> arts) {
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 5,
+      crossAxisCount: _kind.columns,
       crossAxisSpacing: 14,
       mainAxisSpacing: 14,
-      childAspectRatio: 2 / 3,
+      childAspectRatio: _kind.aspectRatio,
       children: [
-        for (final art in _grids)
+        for (final art in arts)
           _ArtTile(
             key: ValueKey('art-${art.url}'),
             art: art,
@@ -1194,6 +1431,22 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
             onTap: () => widget.onPick(art),
           ),
       ],
+    );
+  }
+}
+
+/// Small loading mark while a SteamGridDB lookup or art fetch is pending.
+class _SgdbPending extends StatelessWidget {
+  const _SgdbPending();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.only(top: 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: TsumigeLogoShimmer(size: 32),
+      ),
     );
   }
 }

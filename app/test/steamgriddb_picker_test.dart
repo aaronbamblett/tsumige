@@ -30,6 +30,7 @@ import 'package:tsumige/src/utils/theme/brand.dart';
 import 'package:tsumige/src/widgets/tsumige_logo.dart';
 
 const _sgdbCover = 'https://example.com/sgdb-cover.jpg';
+const _sgdbHero = 'https://example.com/sgdb-hero.jpg';
 
 String _gridsBody(List<String> urls) => jsonEncode({
   'success': true,
@@ -45,26 +46,50 @@ String _gridsBody(List<String> urls) => jsonEncode({
   ],
 });
 
+String _heroesBody(List<String> urls) => jsonEncode({
+  'success': true,
+  'data': [
+    for (var i = 0; i < urls.length; i++)
+      {
+        'id': i + 1,
+        'width': 1920,
+        'height': 620,
+        'url': urls[i],
+        'thumb': '${urls[i]}-thumb',
+      },
+  ],
+});
+
 class _SgdbConfig {
   _SgdbConfig({
     this.gridsStatus = 200,
     this.gridsUrls = const [_sgdbCover],
+    this.heroesStatus = 200,
+    this.heroesUrls = const [_sgdbHero],
     this.searchNames = const <String>[],
     this.hangGrids = false,
+    this.hangHeroes = false,
     this.vndbExtlinks = const <Map<String, Object?>>[],
     this.sgdbRequests,
+    this.vndbReleaseBodies,
     this.vndbReleaseStatus = 200,
     this.gridGates = const {},
+    this.heroGates = const {},
   });
 
   int gridsStatus;
   List<String> gridsUrls;
+  int heroesStatus;
+  List<String> heroesUrls;
   List<String> searchNames;
   bool hangGrids;
+  bool hangHeroes;
   List<Map<String, Object?>> vndbExtlinks;
   List<Uri>? sgdbRequests;
+  List<String>? vndbReleaseBodies;
   int vndbReleaseStatus;
   Map<int, Completer<http.Response>> gridGates;
+  Map<int, Completer<http.Response>> heroGates;
 }
 
 http.Client _fakeSgdbHttp(_SgdbConfig config, List<String> downloads) {
@@ -89,6 +114,22 @@ http.Client _fakeSgdbHttp(_SgdbConfig config, List<String> downloads) {
             ],
           }),
           200,
+        );
+      }
+      if (url.path.contains('/heroes/')) {
+        if (config.hangHeroes) {
+          await Completer<http.Response>().future;
+          throw StateError('unreachable');
+        }
+        final gate = int.tryParse(url.pathSegments.last) != null
+            ? config.heroGates[int.parse(url.pathSegments.last)]
+            : null;
+        if (gate != null) return gate.future;
+        return http.Response(
+          config.heroesStatus == 200
+              ? _heroesBody(config.heroesUrls)
+              : 'error',
+          config.heroesStatus,
         );
       }
       if (url.path.contains('/grids/')) {
@@ -128,6 +169,7 @@ http.Client _fakeSgdbHttp(_SgdbConfig config, List<String> downloads) {
         if (config.vndbReleaseStatus != 200) {
           return http.Response('error', config.vndbReleaseStatus);
         }
+        config.vndbReleaseBodies?.add(request.body);
         return http.Response(
           jsonEncode({
             'results': [
@@ -615,5 +657,251 @@ void main() {
       tester.element(find.byType(ArtPickerDialog)),
     );
     expect(container.read(steamGridDbKeyProvider), 'fake-test-key');
+  });
+
+  testWidgets('Background tab shows heroes and Save stores the background', (
+    tester,
+  ) async {
+    final downloads = <String>[];
+    final loaded = await _pumpSgdbDialog(
+      tester,
+      prefsKey: 'fake-test-key',
+      downloads: downloads,
+      config: _SgdbConfig(
+        vndbExtlinks: [
+          {'name': 'steam', 'id': '123'},
+        ],
+      ),
+    );
+    final game = loaded.library.games.single;
+    expect(find.byKey(ValueKey('art-$_sgdbCover')), findsOneWidget);
+    await tester.tap(find.text('Background'));
+    await tester.pump();
+    await _settle(tester);
+    expect(find.text('SteamGridDB'), findsOneWidget);
+    expect(find.byKey(ValueKey('art-$_sgdbHero')), findsOneWidget);
+    expect(find.byKey(ValueKey('art-$_sgdbCover')), findsNothing);
+    await tester.tap(find.byKey(ValueKey('art-$_sgdbHero')));
+    await tester.pump();
+    await tester.runAsync(() async {
+      await tester.tap(find.widgetWithText(BrandButton, 'Save'));
+      await tester.pump();
+      for (var i = 0; i < 200 && game.background == null; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 25));
+      }
+    });
+    expect(game.background, 'g1.png');
+    expect(game.backgroundSource, _sgdbHero);
+    expect(downloads, contains(_sgdbHero));
+  });
+
+  testWidgets('Cover, Background, Cover fetches each source once', (
+    tester,
+  ) async {
+    final sgdb = <Uri>[];
+    final releaseBodies = <String>[];
+    await _pumpSgdbDialog(
+      tester,
+      prefsKey: 'fake-test-key',
+      config: _SgdbConfig(
+        sgdbRequests: sgdb,
+        vndbReleaseBodies: releaseBodies,
+        vndbExtlinks: [
+          {'name': 'steam', 'id': '123'},
+        ],
+      ),
+    );
+    expect(find.byKey(ValueKey('art-$_sgdbCover')), findsOneWidget);
+    await tester.tap(find.text('Background'));
+    await tester.pump();
+    await _settle(tester);
+    expect(find.byKey(ValueKey('art-$_sgdbHero')), findsOneWidget);
+    await tester.tap(find.text('Cover'));
+    await tester.pump();
+    await _settle(tester);
+    expect(find.byKey(ValueKey('art-$_sgdbCover')), findsOneWidget);
+    expect(
+      releaseBodies.where((b) => b.contains('"extlink"')),
+      hasLength(1),
+    );
+    expect(
+      sgdb.where((u) => u.path == '/api/v2/grids/steam/123'),
+      hasLength(1),
+    );
+    expect(
+      sgdb.where((u) => u.path == '/api/v2/heroes/steam/123'),
+      hasLength(1),
+    );
+    expect(
+      sgdb.where((u) => u.path.contains('/search/autocomplete/')),
+      isEmpty,
+    );
+  });
+
+  testWidgets('a search chip picked on Cover is shared with Background', (
+    tester,
+  ) async {
+    final sgdb = <Uri>[];
+    await _pumpSgdbDialog(
+      tester,
+      prefsKey: 'fake-test-key',
+      config: _SgdbConfig(
+        sgdbRequests: sgdb,
+        searchNames: ['Something Else', 'Divi Dead 2'],
+      ),
+    );
+    expect(find.text('Pick the matching game.'), findsOneWidget);
+    await tester.tap(find.text('Divi Dead 2'));
+    await tester.pump();
+    await _settle(tester);
+    expect(find.text('Pick the matching game.'), findsNothing);
+    expect(find.byKey(ValueKey('art-$_sgdbCover')), findsOneWidget);
+    await tester.tap(find.text('Background'));
+    await tester.pump();
+    await _settle(tester);
+    expect(
+      tester.widget<Text>(find.text('Divi Dead 2')).style?.fontWeight,
+      FontWeight.w600,
+    );
+    expect(find.text('Pick the matching game.'), findsNothing);
+    expect(find.byKey(ValueKey('art-$_sgdbHero')), findsOneWidget);
+    expect(
+      sgdb.where((u) => u.path.contains('/search/autocomplete/')),
+      hasLength(1),
+    );
+    expect(
+      sgdb.where((u) => u.path == '/api/v2/grids/game/11'),
+      hasLength(1),
+    );
+    expect(
+      sgdb.where((u) => u.path == '/api/v2/heroes/game/11'),
+      hasLength(1),
+    );
+  });
+
+  testWidgets('Background without a key shows the background wording', (
+    tester,
+  ) async {
+    await _pumpSgdbDialog(tester);
+    await tester.tap(find.text('Background'));
+    await tester.pump();
+    await _settle(tester);
+    expect(
+      find.text(
+        'Backgrounds from SteamGridDB need your own free API key. '
+        'Get one in your SteamGridDB preferences.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('sgdb-set-key')), findsOneWidget);
+  });
+
+  testWidgets('empty heroes show the background empty message', (
+    tester,
+  ) async {
+    await _pumpSgdbDialog(
+      tester,
+      prefsKey: 'fake-test-key',
+      config: _SgdbConfig(
+        vndbExtlinks: [
+          {'name': 'steam', 'id': '123'},
+        ],
+        heroesUrls: const [],
+      ),
+    );
+    await tester.tap(find.text('Background'));
+    await tester.pump();
+    await _settle(tester);
+    expect(
+      find.text('No SteamGridDB backgrounds for this game.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a heroes error shows Try again and recovers', (tester) async {
+    final config = _SgdbConfig(
+      heroesStatus: 500,
+      vndbExtlinks: [
+        {'name': 'steam', 'id': '123'},
+      ],
+    );
+    await _pumpSgdbDialog(tester, prefsKey: 'fake-test-key', config: config);
+    await tester.tap(find.text('Background'));
+    await tester.pump();
+    await _settle(tester);
+    expect(find.text("Couldn't reach SteamGridDB."), findsOneWidget);
+    config.heroesStatus = 200;
+    await tester.tap(find.byKey(const Key('sgdb-retry')));
+    await tester.pump();
+    await _settle(tester);
+    expect(find.text("Couldn't reach SteamGridDB."), findsNothing);
+    expect(find.byKey(ValueKey('art-$_sgdbHero')), findsOneWidget);
+  });
+
+  testWidgets('VNDB artwork renders while heroes are still pending', (
+    tester,
+  ) async {
+    await _pumpSgdbDialog(
+      tester,
+      prefsKey: 'fake-test-key',
+      config: _SgdbConfig(
+        hangHeroes: true,
+        vndbExtlinks: [
+          {'name': 'steam', 'id': '123'},
+        ],
+      ),
+    );
+    await tester.tap(find.text('Background'));
+    await tester.pump();
+    await _settle(tester);
+    expect(
+      find.byKey(const ValueKey('art-https://t.vndb.org/cv/16/98416.jpg')),
+      findsOneWidget,
+    );
+    expect(
+      tester.getSize(find.byType(TsumigeLogoShimmer)),
+      const Size(32, 32),
+    );
+  });
+
+  testWidgets('a late first hero response does not clobber the second', (
+    tester,
+  ) async {
+    const aTile = 'https://example.com/sgdb-hero-a.jpg';
+    const bTile = 'https://example.com/sgdb-hero-b.jpg';
+    final aGate = Completer<http.Response>();
+    final bGate = Completer<http.Response>();
+    await _pumpSgdbDialog(
+      tester,
+      game: core.Game(id: 'g1', title: 'DiviDead'),
+      prefsKey: 'fake-test-key',
+      config: _SgdbConfig(
+        searchNames: ['Alpha Game', 'Beta Game'],
+        heroGates: {10: aGate, 11: bGate},
+      ),
+    );
+    await tester.tap(find.text('Background'));
+    await tester.pump();
+    await _settle(tester);
+    expect(find.text('Pick the matching game.'), findsOneWidget);
+    await tester.tap(find.text('Alpha Game'));
+    await tester.pump();
+    await tester.tap(find.text('Beta Game'));
+    await tester.pump();
+    bGate.complete(http.Response(_heroesBody([bTile]), 200));
+    await tester.pump();
+    await tester.pump();
+    aGate.complete(http.Response(_heroesBody([aTile]), 200));
+    await _settle(tester);
+    expect(find.byKey(ValueKey('art-$bTile')), findsOneWidget);
+    expect(find.byKey(ValueKey('art-$aTile')), findsNothing);
+    expect(
+      tester.widget<Text>(find.text('Beta Game')).style?.fontWeight,
+      FontWeight.w600,
+    );
+    expect(
+      tester.widget<Text>(find.text('Alpha Game')).style?.fontWeight,
+      FontWeight.w400,
+    );
   });
 }

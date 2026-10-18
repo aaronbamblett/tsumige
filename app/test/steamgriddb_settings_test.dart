@@ -99,7 +99,7 @@ void main() {
     expect(find.text('SteamGridDB'), findsOneWidget);
     expect(
       find.text(
-        'Optional. Adds covers from steamgriddb.com to Change art. '
+        'Optional. Adds covers and backgrounds from steamgriddb.com to Change art. '
         'Uses your own API key, stored on this computer.',
       ),
       findsOneWidget,

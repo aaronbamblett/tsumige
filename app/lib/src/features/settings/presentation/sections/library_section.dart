@@ -130,7 +130,7 @@ class _LibrarySectionState extends ConsumerState<LibrarySection> {
           rowKey: const Key('settings-row-steamgriddb'),
           title: 'SteamGridDB',
           subtitle:
-              'Optional. Adds covers from steamgriddb.com to Change art. Uses your own API key, stored on this computer.',
+              'Optional. Adds covers and backgrounds from steamgriddb.com to Change art. Uses your own API key, stored on this computer.',
           control: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.end,
