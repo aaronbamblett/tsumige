@@ -254,6 +254,7 @@ Future<_Harness> _pumpDialog(
   String? backgroundSource,
   bool Function()? vndbFails,
   Future<String?> Function()? picker,
+  void Function(core.DataDir)? seed,
 }) async {
   final temp = Directory.systemTemp.createTempSync('tsumige_art_picker_');
   addTearDown(() => temp.deleteSync(recursive: true));
@@ -270,12 +271,65 @@ Future<_Harness> _pumpDialog(
       );
   final loaded = core.LoadedLibrary(library: core.Library(games: [g]));
   final harness = _Harness(tester, temp, loaded);
+  seed?.call(harness.dir);
   await harness.open(
     game: g,
     http: _fakeHttp(vndbFails: vndbFails ?? () => false),
     picker: picker,
   );
   await settleVndb(tester);
+  return harness;
+}
+
+/// Writes [bytes] as a stored cover or background so the dialog previews it.
+void _seedStored(core.DataDir dir, {Uint8List? cover, Uint8List? background}) {
+  if (cover != null) {
+    dir.coversOriginal.createSync(recursive: true);
+    File(p.join(dir.coversOriginal.path, 'g1.png')).writeAsBytesSync(cover);
+  }
+  if (background != null) {
+    dir.coversBackground.createSync(recursive: true);
+    File(p.join(dir.coversBackground.path, 'g1.png'))
+        .writeAsBytesSync(background);
+  }
+}
+
+Uint8List _tallPng() =>
+    Uint8List.fromList(img.encodePng(img.Image(width: 16, height: 64)));
+
+BrandButton _saveButton(WidgetTester tester) =>
+    tester.widget<BrandButton>(find.widgetWithText(BrandButton, 'Save'));
+
+/// Opens the dialog with real async work running, so file-backed preview
+/// images decode. File reads stall in the fake-async zone, and a resolve
+/// that stalls parks a pending entry in the image cache that later retries
+/// reuse, so the first build of each preview must happen inside `runAsync`.
+Future<_Harness> _pumpDialogReal(
+  WidgetTester tester, {
+  core.Game? game,
+  String? background,
+  String? cover,
+  String? backgroundSource,
+  void Function(core.DataDir)? seed,
+  bool backgroundTab = false,
+}) async {
+  late _Harness harness;
+  await tester.runAsync(() async {
+    harness = await _pumpDialog(
+      tester,
+      game: game,
+      background: background,
+      cover: cover,
+      backgroundSource: backgroundSource,
+      seed: seed,
+    );
+    if (backgroundTab) {
+      await tester.tap(find.text('Background'));
+      await tester.pump();
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+  });
+  await tester.pump();
   return harness;
 }
 
@@ -693,12 +747,12 @@ void main() {
       expect(size.width / size.height, closeTo(2 / 3, 0.01));
     });
 
-    testWidgets('the cover hint names the 2:3 crop', (tester) async {
+    testWidgets('both previews hint at dragging to reposition', (tester) async {
       await _pumpDialog(tester);
-      expect(
-        find.text('Covers are cropped to 2:3 in the grid.'),
-        findsOneWidget,
-      );
+      expect(find.text('Drag to reposition.'), findsOneWidget);
+      await tester.tap(find.text('Background'));
+      await tester.pump();
+      expect(find.text('Drag to reposition.'), findsOneWidget);
     });
 
     testWidgets('the size caption sits below the image inside the tile', (
@@ -726,6 +780,125 @@ void main() {
       expect(textRect.right, lessThanOrEqualTo(tileRect.right + 0.5));
       expect(textRect.top, greaterThanOrEqualTo(tileRect.top - 0.5));
       expect(textRect.bottom, lessThanOrEqualTo(tileRect.bottom + 0.5));
+    });
+  });
+
+  group('reposition previews', () {
+    testWidgets(
+      'dragging the Background preview vertically moves y, not x',
+      (tester) async {
+        final harness = await _pumpDialogReal(
+          tester,
+          cover: 'g1.png',
+          background: 'g1.png',
+          backgroundSource: _shotOne['url'] as String,
+          seed: (dir) => _seedStored(dir, background: _tallPng()),
+          backgroundTab: true,
+        );
+        final preview = find.byKey(const ValueKey('background-reposition'));
+        expect(preview, findsOneWidget);
+        await tester.drag(preview, const Offset(0, -60));
+        await tester.pump();
+        await tester.tap(find.text('Save'));
+        await tester.pumpAndSettle();
+        expect(find.byType(ArtPickerDialog), findsNothing);
+        final alignment = harness.game.backgroundAlignment;
+        expect(alignment, isNotNull);
+        expect(alignment!.x, 0);
+        expect(alignment.y, greaterThan(-1));
+        expect(harness.game.background, 'g1.png');
+      },
+    );
+
+    testWidgets('Save is disabled on open, enabled after a drag with no pick',
+        (tester) async {
+      final harness = await _pumpDialogReal(
+        tester,
+        cover: 'g1.png',
+        seed: (dir) => _seedStored(dir, cover: _tallPng()),
+      );
+      expect(_saveButton(tester).onPressed, isNull);
+      final preview = find.byKey(const ValueKey('cover-reposition'));
+      expect(preview, findsOneWidget);
+      await tester.drag(preview, const Offset(0, -50));
+      await tester.pump();
+      expect(_saveButton(tester).onPressed, isNotNull);
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ArtPickerDialog), findsNothing);
+      final alignment = harness.game.coverAlignment;
+      expect(alignment, isNotNull);
+      expect(alignment!.x, 0);
+      expect(alignment.y, greaterThan(0));
+      expect(harness.game.cover, 'g1.png');
+    });
+
+    testWidgets('picking a new cover then saving clears the position',
+        (tester) async {
+      final harness = await _pumpDialog(
+        tester,
+        game: core.Game(
+          id: 'g1',
+          title: 'Sample Game',
+          vndbId: 'v900016',
+          cover: 'old.png',
+          coverSource: _portrait['url'] as String,
+          coverAlignment: const Alignment(0.3, 0.3),
+        ),
+      );
+      expect(harness.game.coverAlignment, const Alignment(0.3, 0.3));
+      await tester.tap(_tile(_main['url'] as String));
+      await tester.pump();
+      final thumb = core.thumbPath(harness.dir, 'g1', 512);
+      await runRealFlow(
+        tester,
+        () async {
+          await tester.tap(find.text('Save'));
+          await tester.pump();
+        },
+        () =>
+            harness.game.coverSource == _main['url'] &&
+            harness.game.coverAlignment == null &&
+            File(thumb).existsSync(),
+      );
+      expect(harness.game.cover, 'g1.png');
+      expect(find.byType(ArtPickerDialog), findsNothing);
+    });
+
+    testWidgets('switching tabs keeps each working position', (tester) async {
+      final harness = await _pumpDialogReal(
+        tester,
+        cover: 'g1.png',
+        background: 'g1.png',
+        seed: (dir) => _seedStored(
+          dir,
+          cover: _tallPng(),
+          background: _tallPng(),
+        ),
+        backgroundTab: true,
+      );
+      await tester.tap(find.text('Cover'));
+      await tester.pump();
+      await tester.drag(
+        find.byKey(const ValueKey('cover-reposition')),
+        const Offset(0, -50),
+      );
+      await tester.pump();
+      await tester.tap(find.text('Background'));
+      await tester.pump();
+      await tester.drag(
+        find.byKey(const ValueKey('background-reposition')),
+        const Offset(0, -30),
+      );
+      await tester.pump();
+      await tester.tap(find.text('Cover'));
+      await tester.pump();
+      expect(_saveButton(tester).onPressed, isNotNull);
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ArtPickerDialog), findsNothing);
+      expect(harness.game.coverAlignment?.y, greaterThan(0));
+      expect(harness.game.backgroundAlignment?.y, greaterThan(-1));
     });
   });
 }

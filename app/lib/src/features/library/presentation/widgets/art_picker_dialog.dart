@@ -5,8 +5,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'dart:async';
-
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -80,6 +80,8 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
   var _tab = _ArtTab.cover;
   _Pick? _coverPick;
   _Pick? _backgroundPick;
+  late Alignment _coverAlignment;
+  late Alignment _backgroundAlignment;
   ArtCandidates? _candidates;
   Future<ArtCandidates>? _art;
   var _saving = false;
@@ -92,6 +94,10 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
   @override
   void initState() {
     super.initState();
+    _coverAlignment =
+        widget.game.coverAlignment ?? kLibraryCoverAlignment;
+    _backgroundAlignment =
+        widget.game.backgroundAlignment ?? kDetailPaneArtAlignment;
     if (widget.game.vndbId != null) _load();
   }
 
@@ -121,10 +127,34 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
   void _setActivePick(_Pick pick) => setState(() {
     if (_tab == _ArtTab.cover) {
       _coverPick = pick;
+      // A new image starts at the default position.
+      _coverAlignment = kLibraryCoverAlignment;
     } else {
       _backgroundPick = pick;
+      if (pick is! _ClearPick) {
+        _backgroundAlignment = kDetailPaneArtAlignment;
+      }
     }
   });
+
+  /// Null when the working position matches the library default, so saving a
+  /// repositioned-then-centred image writes no key.
+  static Alignment? _storedOrNull(Alignment working, Alignment def) =>
+      working == def ? null : working;
+
+  bool get _coverMoved =>
+      _coverAlignment !=
+      (widget.game.coverAlignment ?? kLibraryCoverAlignment);
+
+  bool get _backgroundMoved =>
+      _backgroundAlignment !=
+      (widget.game.backgroundAlignment ?? kDetailPaneArtAlignment);
+
+  bool get _canSave =>
+      _coverPick != null ||
+      _backgroundPick != null ||
+      _coverMoved ||
+      _backgroundMoved;
 
   void _close() => Navigator.of(context).pop();
 
@@ -168,7 +198,9 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
     final cover = _coverPick;
     final background = _backgroundPick;
     final game = widget.game;
-    if (cover == null && background == null) {
+    final coverMoved = _coverMoved;
+    final backgroundMoved = _backgroundMoved;
+    if (cover == null && background == null && !coverMoved && !backgroundMoved) {
       _close();
       return;
     }
@@ -180,9 +212,28 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
           : await _bytesFor(background);
       if (!mounted) return;
       if (cover != null && coverBytes != null) {
-        await storeCoverBytes(context, ref, game, coverBytes, _sourceOf(cover));
+        await storeCoverBytes(
+          context,
+          ref,
+          game,
+          coverBytes,
+          _sourceOf(cover),
+          _storedOrNull(_coverAlignment, kLibraryCoverAlignment),
+        );
         if (!mounted) return;
         setState(() => _coverPick = null);
+      } else if (coverMoved) {
+        await ref
+            .read(gameEditorProvider)
+            .update(
+              game.id,
+              (g) =>
+                  g.coverAlignment = _storedOrNull(
+                    _coverAlignment,
+                    kLibraryCoverAlignment,
+                  ),
+              context: context,
+            );
       }
       if (!mounted) return;
       if (background is _ClearPick) {
@@ -194,7 +245,20 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
           game,
           backgroundBytes,
           _sourceOf(background),
+          _storedOrNull(_backgroundAlignment, kDetailPaneArtAlignment),
         );
+      } else if (backgroundMoved) {
+        await ref
+            .read(gameEditorProvider)
+            .update(
+              game.id,
+              (g) =>
+                  g.backgroundAlignment = _storedOrNull(
+                    _backgroundAlignment,
+                    kDetailPaneArtAlignment,
+                  ),
+              context: context,
+            );
       }
       if (mounted) _close();
     } catch (e) {
@@ -510,17 +574,29 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
     );
   }
 
+  double _candidateAspect(ArtCandidate art) =>
+      art.width > 0 && art.height > 0 ? art.width / art.height : 0;
+
+  ImageProvider _fileProvider(String path) => artFileImage(
+    File(path),
+    version: ref.watch(artVersionProvider)(path),
+  );
+
   Widget _coverPreview(BuildContext context, DataDir dir) {
     final scheme = Theme.of(context).colorScheme;
     final pick = _coverPick;
     final cover = widget.game.cover;
-    final Widget image;
-    if (pick != null) {
-      image = _pickImage(pick);
+    final ImageProvider? provider;
+    var aspect = 0.0;
+    if (pick is _RemotePick) {
+      provider = NetworkImage(pick.art.thumbnail);
+      aspect = _candidateAspect(pick.art);
+    } else if (pick is _FilePick) {
+      provider = _fileProvider(pick.path);
     } else if (cover != null && cover.isNotEmpty) {
-      image = _storedImage(p.join(dir.coversOriginal.path, cover));
+      provider = _fileProvider(p.join(dir.coversOriginal.path, cover));
     } else {
-      image = ColoredBox(color: scheme.surface);
+      provider = null;
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -536,7 +612,17 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
             aspectRatio: kGameCoverAspectRatio,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
-              child: image,
+              child:
+                  provider == null
+                      ? ColoredBox(color: scheme.surface)
+                      : _RepositionableArt(
+                        key: const ValueKey('cover-reposition'),
+                        provider: provider,
+                        aspect: aspect,
+                        alignment: _coverAlignment,
+                        onAlignment: (a) =>
+                            setState(() => _coverAlignment = a),
+                      ),
             ),
           ),
         ),
@@ -547,7 +633,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
         ),
         const SizedBox(height: 10),
         Text(
-          'Covers are cropped to 2:3 in the grid.',
+          'Drag to reposition.',
           style: TextStyle(fontSize: 12, color: scheme.outline),
         ),
       ],
@@ -558,15 +644,26 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
     final scheme = Theme.of(context).colorScheme;
     final game = widget.game;
     final pick = _backgroundPick;
-    final Widget image;
-    if (pick != null && pick is! _ClearPick) {
-      image = _pickImage(pick);
+    final ImageProvider? provider;
+    var aspect = 0.0;
+    // Without a background the pane falls back to the cover, so the preview
+    // repositions the cover there too.
+    var showingBackground = true;
+    if (pick is _RemotePick) {
+      provider = NetworkImage(pick.art.thumbnail);
+      aspect = _candidateAspect(pick.art);
+    } else if (pick is _FilePick) {
+      provider = _fileProvider(pick.path);
     } else if (pick == null && _hasBackground) {
-      image = _storedImage(p.join(dir.coversBackground.path, game.background!));
+      provider = _fileProvider(
+        p.join(dir.coversBackground.path, game.background!),
+      );
     } else if (game.cover != null && game.cover!.isNotEmpty) {
-      image = _storedImage(p.join(dir.coversOriginal.path, game.cover!));
+      provider = _fileProvider(p.join(dir.coversOriginal.path, game.cover!));
+      showingBackground = false;
     } else {
-      image = ColoredBox(color: scheme.surface);
+      provider = null;
+      showingBackground = false;
     }
     final picked =
         (pick != null && pick is! _ClearPick) ||
@@ -591,63 +688,92 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              image,
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      scheme.surfaceContainer.withValues(alpha: 0),
-                      scheme.surfaceContainer.withValues(alpha: 0.55),
-                      scheme.surfaceContainer,
-                    ],
-                    stops: const [0.35, 0.62, 1.0],
-                  ),
+              if (provider == null)
+                ColoredBox(color: scheme.surface)
+              else
+                _RepositionableArt(
+                  key: const ValueKey('background-reposition'),
+                  provider: provider,
+                  aspect: aspect,
+                  alignment: showingBackground
+                      ? _backgroundAlignment
+                      : _coverAlignment,
+                  onAlignment: (a) => setState(() {
+                    if (showingBackground) {
+                      _backgroundAlignment = a;
+                    } else {
+                      _coverAlignment = a;
+                    }
+                  }),
                 ),
-              ),
-              Positioned(
-                left: 12,
-                right: 12,
-                bottom: 10,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
+              IgnorePointer(
+                child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    Text(
-                      game.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: OnImage.text,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        shadows: [
-                          Shadow(
-                            offset: Offset(0, 2),
-                            blurRadius: 10,
-                            color: Color(0xB3000000),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            scheme.surfaceContainer.withValues(alpha: 0),
+                            scheme.surfaceContainer.withValues(alpha: 0.55),
+                            scheme.surfaceContainer,
+                          ],
+                          stops: const [0.35, 0.62, 1.0],
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 12,
+                      right: 12,
+                      bottom: 10,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            game.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: OnImage.text,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              shadows: [
+                                Shadow(
+                                  offset: Offset(0, 2),
+                                  blurRadius: 10,
+                                  color: Color(0xB3000000),
+                                ),
+                              ],
+                            ),
                           ),
+                          if (original != null &&
+                              original.isNotEmpty &&
+                              original != game.title)
+                            Text(
+                              original,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
                         ],
                       ),
                     ),
-                    if (original != null &&
-                        original.isNotEmpty &&
-                        original != game.title)
-                      Text(
-                        original,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
                   ],
                 ),
               ),
             ],
           ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Drag to reposition.',
+          style: TextStyle(fontSize: 12, color: scheme.outline),
         ),
         if (!picked) ...[
           const SizedBox(height: 10),
@@ -659,28 +785,6 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
       ],
     );
   }
-
-  Widget _pickImage(_Pick pick) => switch (pick) {
-    _RemotePick(:final art) => Image.network(
-      art.thumbnail,
-      fit: BoxFit.cover,
-      alignment: Alignment.topCenter,
-      errorBuilder: (_, _, _) => const SizedBox.shrink(),
-    ),
-    _FilePick(:final path) => _storedImage(path),
-    _ClearPick() => const SizedBox.shrink(),
-  };
-
-  Widget _storedImage(String path) => Image(
-    image: artFileImage(
-      File(path),
-      version: ref.watch(artVersionProvider)(path),
-    ),
-    fit: BoxFit.cover,
-    alignment: Alignment.topCenter,
-    gaplessPlayback: true,
-    errorBuilder: (_, _, _) => const SizedBox.shrink(),
-  );
 
   Widget _footer() {
     final candidates = _candidates;
@@ -734,11 +838,152 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
             height: 40,
             expand: false,
             loading: _saving,
-            onPressed: _save,
+            onPressed: _canSave ? _save : null,
             label: const Text('Save'),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The library crop for the active image: it draws with [BoxFit.cover] at the
+/// working alignment, and dragging moves the image under the crop window.
+/// Only the axis with overflow follows the pointer, and the alignment stays
+/// in -1..1, so [BoxFit.cover] never leaves gaps at the edges.
+class _RepositionableArt extends StatefulWidget {
+  const _RepositionableArt({
+    super.key,
+    required this.provider,
+    required this.aspect,
+    required this.alignment,
+    required this.onAlignment,
+  });
+
+  /// The image to draw.
+  final ImageProvider provider;
+
+  /// Image width over height when the candidate reports it, else 0, in which
+  /// case the intrinsic size is read from the image stream.
+  final double aspect;
+
+  final Alignment alignment;
+  final ValueChanged<Alignment> onAlignment;
+
+  @override
+  State<_RepositionableArt> createState() => _RepositionableArtState();
+}
+
+class _RepositionableArtState extends State<_RepositionableArt> {
+  ImageStream? _stream;
+  ImageStreamListener? _listener;
+  Size? _intrinsic;
+  var _dragging = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.aspect <= 0) _listen();
+  }
+
+  @override
+  void didUpdateWidget(covariant _RepositionableArt old) {
+    super.didUpdateWidget(old);
+    if (old.provider != widget.provider) {
+      _unlisten();
+      _intrinsic = null;
+      if (widget.aspect <= 0) _listen();
+    }
+  }
+
+  @override
+  void dispose() {
+    _unlisten();
+    super.dispose();
+  }
+
+  void _listen() {
+    final stream = widget.provider.resolve(ImageConfiguration.empty);
+    _listener = ImageStreamListener(
+      (info, _) {
+        if (!mounted) return;
+        setState(() {
+          _intrinsic = Size(
+            info.image.width.toDouble(),
+            info.image.height.toDouble(),
+          );
+        });
+      },
+      onError: (_, _) {},
+    );
+    _stream = stream..addListener(_listener!);
+  }
+
+  void _unlisten() {
+    if (_stream != null && _listener != null) {
+      _stream!.removeListener(_listener!);
+    }
+    _stream = null;
+    _listener = null;
+  }
+
+  double get _aspect {
+    if (widget.aspect > 0) return widget.aspect;
+    final size = _intrinsic;
+    if (size == null || size.height <= 0) return 0;
+    return size.width / size.height;
+  }
+
+  void _move(DragUpdateDetails details, Size box) {
+    final aspect = _aspect;
+    if (aspect <= 0 || box.isEmpty) return;
+    // Cover scale for an aspect-wide, 1-tall image in this box.
+    final scale = max(box.width / aspect, box.height);
+    final overflowX = aspect * scale - box.width;
+    final overflowY = scale - box.height;
+    final dx = details.delta.dx;
+    final dy = details.delta.dy;
+    var next = widget.alignment;
+    // The image follows the pointer: dragging right reveals the left side.
+    if (overflowX > 0.5 && dx != 0) {
+      next = Alignment(
+        (next.x - dx / (overflowX / 2)).clamp(-1.0, 1.0),
+        next.y,
+      );
+    }
+    if (overflowY > 0.5 && dy != 0) {
+      next = Alignment(
+        next.x,
+        (next.y - dy / (overflowY / 2)).clamp(-1.0, 1.0),
+      );
+    }
+    if (next != widget.alignment) widget.onAlignment(next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final box = Size(constraints.maxWidth, constraints.maxHeight);
+        return MouseRegion(
+          cursor: _dragging
+              ? SystemMouseCursors.grabbing
+              : SystemMouseCursors.grab,
+          child: GestureDetector(
+            onPanStart: (_) => setState(() => _dragging = true),
+            onPanEnd: (_) => setState(() => _dragging = false),
+            onPanCancel: () => setState(() => _dragging = false),
+            onPanUpdate: (details) => _move(details, box),
+            child: Image(
+              image: widget.provider,
+              fit: BoxFit.cover,
+              alignment: widget.alignment,
+              gaplessPlayback: true,
+              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+            ),
+          ),
+        );
+      },
     );
   }
 }
