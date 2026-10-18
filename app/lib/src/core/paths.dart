@@ -28,8 +28,12 @@ class DataDir {
       case HostOs.linux:
         return DataDir(p.join(xdgDataHome(env), 'tsumige'));
       case HostOs.macos:
-        return DataDir(
-            p.join(env['HOME'] ?? '', 'Library', 'Application Support', 'Tsumige'));
+        return DataDir(p.join(
+          env['HOME'] ?? '',
+          'Library',
+          'Application Support',
+          'Tsumige',
+        ));
       case HostOs.windows:
         return DataDir(p.windows.join(env['APPDATA'] ?? '', 'Tsumige'));
     }

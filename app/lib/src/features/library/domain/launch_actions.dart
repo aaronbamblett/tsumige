@@ -138,6 +138,9 @@ class LaunchActions {
         _ref.invalidate(libraryProvider);
       }
       if (!context.mounted) return;
+      if (result.startedInSteam) {
+        Toast(context).show(steamUntrackedOnMacOSMessage);
+      }
       if (result.quickFailure) {
         Toast(context).showError(
           '${game.title} exited right away. Log: ${result.logFile.path}',

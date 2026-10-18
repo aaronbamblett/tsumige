@@ -180,12 +180,19 @@ LaunchCommand buildLaunchCommand(
     if (appId == null) {
       throw const LaunchConfigError('Steam App ID is not set');
     }
-    command = LaunchCommand(
-      executable: 'steam',
-      args: ['-applaunch', '$appId'],
-      env: extraEnv,
-      workingDirectory: null,
-    );
+    command = host.isMacOS
+        ? LaunchCommand(
+            executable: 'open',
+            args: ['steam://rungameid/$appId'],
+            env: extraEnv,
+            workingDirectory: null,
+          )
+        : LaunchCommand(
+            executable: 'steam',
+            args: ['-applaunch', '$appId'],
+            env: extraEnv,
+            workingDirectory: null,
+          );
   } else {
     if (overrideExe != null && mode == LaunchMode.native) {
       throw const LaunchConfigError(
@@ -200,11 +207,14 @@ LaunchCommand buildLaunchCommand(
     final workingDirectory = _parentDir(exe);
     switch (mode) {
       case LaunchMode.native:
+        final isAppBundle = host.isMacOS && exe.endsWith('.app');
         command = LaunchCommand(
-          executable: exe,
-          args: extraArgs,
+          executable: isAppBundle ? 'open' : exe,
+          args: isAppBundle
+              ? ['-W', '-n', exe, '--args', ...extraArgs]
+              : extraArgs,
           env: extraEnv,
-          workingDirectory: workingDirectory,
+          workingDirectory: isAppBundle ? null : workingDirectory,
         );
       case LaunchMode.wine:
         final runner = expandTilde(

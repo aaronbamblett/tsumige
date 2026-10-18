@@ -15,6 +15,9 @@ import 'log_files.dart';
 import 'process_table.dart';
 import 'session_recorder.dart';
 
+const steamUntrackedOnMacOSMessage =
+    "Started in Steam. Playtime isn't tracked for Steam games on macOS.";
+
 /// A started game process. `exitCode` completes as soon as the OS process
 /// exits. `logClosed` completes when the output streams have drained and the
 /// log sink is closed, or 5 s after exit, whichever comes first, so awaiting
@@ -112,12 +115,14 @@ class LaunchResult {
     required this.exitCode,
     required this.quickFailure,
     this.sessionSeconds,
+    this.startedInSteam = false,
   });
 
   final File logFile;
   final int exitCode;
   final bool quickFailure;
   final int? sessionSeconds;
+  final bool startedInSteam;
 }
 
 class _SteamSession {
@@ -192,6 +197,18 @@ class GameRunner {
     try {
       emit(LaunchPhase.starting);
       final process = await starter.start(command, logFile);
+      if (platform.isMacOS &&
+          (game.launch.mode ?? defaults.mode) == LaunchMode.steam) {
+        // macOS can't tell which Steam game is running, so no session is kept.
+        await process.logClosed;
+        await updateLatestLog(dir, logFile);
+        return LaunchResult(
+          logFile: logFile,
+          exitCode: 0,
+          quickFailure: false,
+          startedInSteam: true,
+        );
+      }
       // Native, Wine and Proton run the game in the spawned process itself,
       // so it is visible as soon as `Process.start` returns. Steam reports
       // `running` later, when the game process first appears (see below).
