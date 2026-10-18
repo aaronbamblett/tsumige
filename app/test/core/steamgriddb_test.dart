@@ -138,6 +138,75 @@ void main() {
     expect(seen!.url.query, contains('dimensions='));
   });
 
+  test('heroesForSteamApp sends the right URL and query', () async {
+    http.Request? seen;
+    final client = _client((request) async {
+      seen = request;
+      return http.Response(_gridsBody(['https://example.com/h.jpg']), 200);
+    });
+    final heroes = await client.heroesForSteamApp(123);
+    expect(heroes, hasLength(1));
+    expect(heroes.single.url, 'https://example.com/h.jpg');
+    expect(heroes.single.thumbnail, 'https://example.com/h.jpg-thumb');
+    expect(heroes.single.type, 'steamgriddb');
+    final uri = seen!.url;
+    expect(uri.host, 'www.steamgriddb.com');
+    expect(uri.path, '/api/v2/heroes/steam/123');
+    expect(uri.query, contains('dimensions=1920x620,3840x1240,1600x650'));
+    expect(uri.query, contains('types=static'));
+    expect(uri.query, contains('nsfw=false'));
+    expect(uri.query, contains('humor=false'));
+    expect(seen!.headers['Authorization'], 'Bearer $_key');
+    expect(seen!.headers['User-Agent'], 'tsumige/$appVersion');
+  });
+
+  test('heroesForGame hits the game endpoint', () async {
+    http.Request? seen;
+    final client = _client((request) async {
+      seen = request;
+      return http.Response(_gridsBody(['https://example.com/hg.jpg']), 200);
+    });
+    final heroes = await client.heroesForGame(42);
+    expect(heroes.single.url, 'https://example.com/hg.jpg');
+    expect(seen!.url.path, '/api/v2/heroes/game/42');
+    expect(seen!.url.query, contains('dimensions=1920x620'));
+  });
+
+  test('heroes 404 means empty', () async {
+    final client = _client((_) async => http.Response('nope', 404));
+    expect(await client.heroesForSteamApp(999), isEmpty);
+    expect(await client.heroesForGame(999), isEmpty);
+  });
+
+  test('heroes 401 and 403 mean a bad key', () async {
+    for (final status in [401, 403]) {
+      final client = _client((_) async => http.Response('denied', status));
+      expect(
+        client.heroesForSteamApp(123),
+        throwsA(isA<SteamGridDbBadKeyException>()),
+      );
+      expect(
+        client.heroesForGame(7),
+        throwsA(isA<SteamGridDbBadKeyException>()),
+      );
+    }
+  });
+
+  test('a hero network failure keeps the key out of the error', () async {
+    final client = _client((_) async => throw TimeoutException('down'));
+    for (final future in [
+      client.heroesForSteamApp(123),
+      client.heroesForGame(7),
+    ]) {
+      try {
+        await future;
+        fail('expected an error');
+      } catch (e) {
+        expect('$e', isNot(contains(_key)));
+      }
+    }
+  });
+
   test('normalizeGridTitle matches DiviDead to Divi-Dead', () {
     expect(normalizeGridTitle('DiviDead'), normalizeGridTitle('Divi-Dead'));
     expect(normalizeGridTitle('White Album 2'), 'whitealbum2');
