@@ -40,9 +40,11 @@ void main() {
         '"AppState"\n{\n\t"appid"\t\t"1234"\n\t"installdir"\t\t"CafeStella"\n}'
             .codeUnits,
       );
-      _file(at('steamapps/appmanifest_999.acf'),
-          '"AppState"\n{\n\t"appid"\t\t"999"\n\t"installdir"\t\t"Other"\n}'
-              .codeUnits);
+      _file(
+        at('steamapps/appmanifest_999.acf'),
+        '"AppState"\n{\n\t"appid"\t\t"999"\n\t"installdir"\t\t"Other"\n}'
+            .codeUnits,
+      );
       final exe = at('steamapps/common/CafeStella/CafeStella.exe');
       for (final platform in [_linux, _macos, _windows]) {
         final result = await detectLaunchMode(exe, platform);
@@ -86,16 +88,19 @@ void main() {
       );
     });
 
-    test('a .app bundle is Native on macOS and the default elsewhere', () async {
-      expect(
-        (await detectLaunchMode('/games/Game.app', _macos)).mode,
-        LaunchMode.native,
-      );
-      expect(
-        (await detectLaunchMode('/games/Game.app', _linux)).mode,
-        LaunchMode.proton,
-      );
-    });
+    test(
+      'a .app bundle is Native on macOS and the default elsewhere',
+      () async {
+        expect(
+          (await detectLaunchMode('/games/Game.app', _macos)).mode,
+          LaunchMode.native,
+        );
+        expect(
+          (await detectLaunchMode('/games/Game.app', _linux)).mode,
+          LaunchMode.proton,
+        );
+      },
+    );
 
     test('an ELF binary on Linux is Native, found by magic bytes', () async {
       _file(at('Game/game'), [0x7f, 0x45, 0x4c, 0x46, 2, 1]);
@@ -117,20 +122,23 @@ void main() {
       );
     });
 
-    test('a .sh on Linux, a .AppImage on Linux and a .command on macOS are Native', () async {
-      expect(
-        (await detectLaunchMode('/g/run.sh', _linux)).mode,
-        LaunchMode.native,
-      );
-      expect(
-        (await detectLaunchMode('/g/Game.AppImage', _linux)).mode,
-        LaunchMode.native,
-      );
-      expect(
-        (await detectLaunchMode('/g/Game.command', _macos)).mode,
-        LaunchMode.native,
-      );
-    });
+    test(
+      'a .sh on Linux, a .AppImage on Linux and a .command on macOS are Native',
+      () async {
+        expect(
+          (await detectLaunchMode('/g/run.sh', _linux)).mode,
+          LaunchMode.native,
+        );
+        expect(
+          (await detectLaunchMode('/g/Game.AppImage', _linux)).mode,
+          LaunchMode.native,
+        );
+        expect(
+          (await detectLaunchMode('/g/Game.command', _macos)).mode,
+          LaunchMode.native,
+        );
+      },
+    );
 
     test('anything else gets the platform default', () async {
       _file(at('Game/readme.txt'), 'notes'.codeUnits);

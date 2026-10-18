@@ -6,6 +6,7 @@
 
 import 'dart:io';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -21,6 +22,7 @@ import '../data/library_repository.dart';
 import '../domain/cover_source.dart';
 import '../domain/launch_actions.dart';
 import '../domain/selection.dart';
+import 'add_game/add_game_dialog.dart';
 import 'widgets/game_detail_pane.dart';
 import 'widgets/library_grid.dart';
 import 'widgets/library_toolbar.dart';
@@ -98,66 +100,73 @@ class LibraryScreen extends HookConsumerWidget {
     final umuMissing = ref.watch(umuRunPathProvider) == null;
     final libraryGames = libraryAsync.value?.library.games ?? const [];
     final usesProton = libraryGames.any(
-      (game) =>
-          effectiveLaunchMode(game, platform) == core.LaunchMode.proton,
+      (game) => effectiveLaunchMode(game, platform) == core.LaunchMode.proton,
     );
     return Scaffold(
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final gridWidth =
-                constraints.maxWidth - (selected == null ? 0 : _kPaneSlotWidth);
-            return Column(
-              children: [
-                LibraryToolbar(
-                  gridRight: gridWidth - LibraryGrid.horizontalPadding,
-                ),
-                SkippedBanner(skipped: libraryAsync.value?.skipped ?? const []),
-                if (onLinux && umuMissing && usesProton) const _UmuBanner(),
-                Expanded(
-                  child: Focus(
-                    autofocus: true,
-                    onKeyEvent: (node, event) {
-                      if (event is KeyDownEvent &&
-                          event.logicalKey == LogicalKeyboardKey.escape) {
-                        ref.read(selectedGameIdProvider.notifier).clear();
-                        return KeyEventResult.handled;
-                      }
-                      return KeyEventResult.ignored;
-                    },
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(child: LibraryGrid(games: games)),
-                        if (selected != null)
-                          Container(
-                            width: _kPaneWidth,
-                            margin: const EdgeInsets.all(_kPaneMargin),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .surfaceContainer,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
+      body: DropTarget(
+        onDragDone: (details) => dropOntoLibrary(context, [
+          for (final file in details.files) file.path,
+        ]),
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final gridWidth =
+                  constraints.maxWidth -
+                  (selected == null ? 0 : _kPaneSlotWidth);
+              return Column(
+                children: [
+                  LibraryToolbar(
+                    gridRight: gridWidth - LibraryGrid.horizontalPadding,
+                  ),
+                  SkippedBanner(
+                    skipped: libraryAsync.value?.skipped ?? const [],
+                  ),
+                  if (onLinux && umuMissing && usesProton) const _UmuBanner(),
+                  Expanded(
+                    child: Focus(
+                      autofocus: true,
+                      onKeyEvent: (node, event) {
+                        if (event is KeyDownEvent &&
+                            event.logicalKey == LogicalKeyboardKey.escape) {
+                          ref.read(selectedGameIdProvider.notifier).clear();
+                          return KeyEventResult.handled;
+                        }
+                        return KeyEventResult.ignored;
+                      },
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(child: LibraryGrid(games: games)),
+                          if (selected != null)
+                            Container(
+                              width: _kPaneWidth,
+                              margin: const EdgeInsets.all(_kPaneMargin),
+                              decoration: BoxDecoration(
                                 color: Theme.of(context)
                                     .colorScheme
-                                    .outlineVariant,
-                                width: 1,
+                                    .surfaceContainer,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .outlineVariant,
+                                  width: 1,
+                                ),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: GameDetailPane(
+                                key: ValueKey(selected.id),
+                                game: selected,
                               ),
                             ),
-                            clipBehavior: Clip.antiAlias,
-                            child: GameDetailPane(
-                              key: ValueKey(selected.id),
-                              game: selected,
-                            ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
-            );
-          },
+                ],
+              );
+            },
+          ),
         ),
       ),
     );

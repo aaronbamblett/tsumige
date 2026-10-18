@@ -5,7 +5,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'dart:async';
+import 'dart:io';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -21,6 +23,7 @@ import '../../../settings/presentation/sections/settings_widgets.dart';
 import '../../data/library_repository.dart';
 import '../../domain/add_game.dart';
 import '../../domain/folder_import.dart';
+import '../../domain/drop_routing.dart';
 import '../../domain/game_editor.dart';
 import '../../domain/launch_detection.dart';
 import '../../domain/runner_detection.dart';
@@ -32,18 +35,44 @@ import '../widgets/library_toolbar.dart';
 import 'import_folder_dialog.dart';
 import 'vn_result_widgets.dart';
 
-Future<void> showAddGameDialog(BuildContext context) {
+Future<void> showAddGameDialog(
+  BuildContext context, {
+  String? folder,
+  String? file,
+}) {
   return showDialog<void>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.5),
-    builder: (context) => const AddGameDialog(),
+    builder: (context) => AddGameDialog(folder: folder, file: file),
   );
+}
+
+/// Starts adding the items dropped on the library window. Ignored while a
+/// dialog is open over it.
+Future<void> dropOntoLibrary(BuildContext context, List<String> paths) async {
+  if (ModalRoute.of(context)?.isCurrent == false) return;
+  if (paths.any(isPortalPath)) {
+    Toast(context).show(portalPathMessage);
+    return;
+  }
+  final route = routeDrop(paths, isDirectory: FileSystemEntity.isDirectorySync);
+  switch (route) {
+    case DropMatch(:final folder, :final file):
+      await showAddGameDialog(context, folder: folder, file: file);
+    case DropImport(:final roots):
+      await showImportFolderDialog(context, roots: roots);
+    case null:
+  }
 }
 
 enum _AddStep { start, match, setup }
 
 class AddGameDialog extends ConsumerStatefulWidget {
-  const AddGameDialog({super.key});
+  const AddGameDialog({super.key, this.folder, this.file});
+
+  /// A folder, or a game file in it, to match straight away.
+  final String? folder;
+  final String? file;
 
   @override
   ConsumerState<AddGameDialog> createState() => _AddGameDialogState();
@@ -90,6 +119,12 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     _steamAppId = TextEditingController();
     _tagFocus = FocusNode();
     _mode = defaultLaunchMode(ref.read(hostPlatformProvider));
+    final folder = widget.folder;
+    if (folder != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _enterMatch(folder, file: widget.file);
+      });
+    }
   }
 
   @override
@@ -157,11 +192,12 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     if (!mounted || token != _searchToken) return;
     final best = folderSearch ? matchFolder(query, results) : null;
     final owned = {
-      for (final game in ref.read(libraryProvider).value?.library.games ?? const <Game>[])
+      for (final game
+          in ref.read(libraryProvider).value?.library.games ?? const <Game>[])
         if (game.vndbId != null) game.vndbId!,
     };
-    final bestVn = best?.state == ImportMatchState.matched &&
-            !owned.contains(best!.vn?.id)
+    final bestVn =
+        best?.state == ImportMatchState.matched && !owned.contains(best!.vn?.id)
         ? best.vn
         : null;
     setState(() {
@@ -341,10 +377,28 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     _exe.text = picked;
   }
 
-  Future<void> _importFolder() async {
-    final result = await showImportFolderDialog(context);
+  Future<void> _openImport({List<String> roots = const []}) async {
+    final result = await showImportFolderDialog(context, roots: roots);
     if (!mounted || result == null || result == ImportFolderResult.back) return;
     Navigator.of(context).pop();
+  }
+
+  Future<void> _dropped(List<String> paths) async {
+    if (paths.any(isPortalPath)) {
+      Toast(context).show(portalPathMessage);
+      return;
+    }
+    final route = routeDrop(
+      paths,
+      isDirectory: FileSystemEntity.isDirectorySync,
+    );
+    switch (route) {
+      case DropMatch(:final folder, :final file):
+        await _enterMatch(folder, file: file);
+      case DropImport(:final roots):
+        await _openImport(roots: roots);
+      case null:
+    }
   }
 
   Future<void> _add() async {
@@ -456,52 +510,56 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            key: const Key('add-game-drop'),
-            height: 220,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: scheme.outlineVariant),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.folder_outlined,
-                  size: 44,
-                  color: scheme.onSurfaceVariant,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Drop a game folder or game file here',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+          DropTarget(
+            onDragDone: (details) =>
+                _dropped([for (final file in details.files) file.path]),
+            child: Container(
+              key: const Key('add-game-drop'),
+              height: 220,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: scheme.outlineVariant),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.folder_outlined,
+                    size: 44,
+                    color: scheme.onSurfaceVariant,
                   ),
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    BrandGlassButton(
-                      key: const Key('add-game-choose-folder'),
-                      height: 40,
-                      expand: false,
-                      onPressed: _chooseFolder,
-                      icon: const Icon(Icons.folder_outlined),
-                      label: const Text('Choose folder…'),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Drop a game folder or game file here',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
                     ),
-                    const SizedBox(width: 10),
-                    BrandGlassButton(
-                      key: const Key('add-game-choose-file'),
-                      height: 40,
-                      expand: false,
-                      onPressed: _chooseGameFile,
-                      label: const Text('Choose game file…'),
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      BrandGlassButton(
+                        key: const Key('add-game-choose-folder'),
+                        height: 40,
+                        expand: false,
+                        onPressed: _chooseFolder,
+                        icon: const Icon(Icons.folder_outlined),
+                        label: const Text('Choose folder…'),
+                      ),
+                      const SizedBox(width: 10),
+                      BrandGlassButton(
+                        key: const Key('add-game-choose-file'),
+                        height: 40,
+                        expand: false,
+                        onPressed: _chooseGameFile,
+                        label: const Text('Choose game file…'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -525,7 +583,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   icon: Icons.folder_copy_outlined,
                   title: 'Import a folder',
                   subtitle: 'Add every game in a folder',
-                  onTap: _importFolder,
+                  onTap: () => _openImport(),
                 ),
               ),
             ],
@@ -713,7 +771,10 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
             for (final candidate in _candidates)
               DropdownMenuItem(
                 value: candidate.path,
-                child: Text(candidate.relative, overflow: TextOverflow.ellipsis),
+                child: Text(
+                  candidate.relative,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             if (exe.isNotEmpty && !_candidates.any((c) => c.path == exe))
               DropdownMenuItem(

@@ -8,6 +8,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -846,6 +847,63 @@ void main() {
     expect(find.text('Selected'), findsOneWidget);
     expect(find.text('Sample Studio'), findsWidgets);
   });
+
+  testWidgets('a dropped folder on the start step opens the match step',
+      (tester) async {
+    await _pump(tester, openMatch: false);
+    _dropOn(tester, [DropItemDirectory(_tempFolder(), const [])]);
+    await _untilShown(tester, 'Match on VNDB');
+    expect(find.text('Match on VNDB'), findsOneWidget);
+  });
+
+  testWidgets('dropped several folders open the import dialog',
+      (tester) async {
+    await _pump(tester, openMatch: false);
+    _dropOn(tester, [
+      DropItemDirectory(_tempFolder(), const []),
+      DropItemDirectory(_tempFolder(), const []),
+    ]);
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const Key('import-close')), findsOneWidget);
+  });
+
+  testWidgets('a drop on the library opens the match step for that folder',
+      (tester) async {
+    await _pump(tester, openMatch: false);
+    await tester.tap(find.byKey(const Key('add-game-close')));
+    await tester.pumpAndSettle();
+    final context = tester.element(find.text('open'));
+    unawaited(dropOntoLibrary(context, [_tempFolder()]));
+    await _untilShown(tester, 'Match on VNDB');
+    expect(find.text('Match on VNDB'), findsOneWidget);
+    expect(find.text('DEMO.exe'), findsWidgets);
+  });
+}
+
+/// A throwaway folder holding DEMO.exe, deleted with the test directory.
+String _tempFolder() {
+  final folder = Directory.systemTemp.createTempSync('tsumige_drop_test_');
+  File(p.join(folder.path, 'DEMO.exe')).writeAsBytesSync([0, 1, 2]);
+  return folder.path;
+}
+
+void _dropOn(WidgetTester tester, List<DropItem> items) {
+  final target = tester.widget<DropTarget>(find.byType(DropTarget).first);
+  target.onDragDone!(DropDoneDetails(
+    files: items,
+    localPosition: Offset.zero,
+    globalPosition: Offset.zero,
+  ));
+}
+
+Future<void> _untilShown(WidgetTester tester, String text) async {
+  for (var i = 0; i < 100 && find.text(text).evaluate().isEmpty; i++) {
+    await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)));
+    await tester.pump();
+  }
+  await tester.pumpAndSettle();
 }
 
 Future<void> _fillManual(WidgetTester tester) async {
