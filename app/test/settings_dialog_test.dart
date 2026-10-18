@@ -336,6 +336,17 @@ void main() {
     );
   });
 
+  testWidgets('detail field rows match the radio row density',
+      (tester) async {
+    await pumpSettings(tester, SettingsFakeRepository());
+    for (final id in ['description', 'tags', 'vndbTags', 'notes']) {
+      final row = find.byKey(Key('settings-detail-field-$id'));
+      await tester.ensureVisible(row);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(row).height, lessThan(40), reason: id);
+    }
+  });
+
   testWidgets('unticking VNDB tags updates the pref', (tester) async {
     final container = await pumpSettings(tester, SettingsFakeRepository());
     await tester.ensureVisible(

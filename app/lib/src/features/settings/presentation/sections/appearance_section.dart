@@ -139,22 +139,28 @@ class _DetailFieldRow extends ConsumerWidget {
       borderRadius: BorderRadius.circular(8),
       onTap: () => toggle(field.id),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ExcludeFocus(
-              child: Checkbox(
-                value: selected,
-                onChanged: (_) => toggle(field.id),
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: ExcludeFocus(
+                child: Checkbox(
+                  value: selected,
+                  onChanged: (_) => toggle(field.id),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
               ),
             ),
+            const SizedBox(width: 6),
             Text(
               field.label,
-              style: TextStyle(
-                fontSize: 13,
-                color: scheme.onSurfaceVariant,
-              ),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurface,
+                  ),
             ),
           ],
         ),
