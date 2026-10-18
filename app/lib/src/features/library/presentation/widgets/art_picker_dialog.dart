@@ -1706,8 +1706,8 @@ class _ArtTileState extends State<_ArtTile> {
                   children: [
                     Image.network(
                       art.thumbnail,
-                      fit: BoxFit.cover,
-                      alignment: Alignment.topCenter,
+                      fit: BoxFit.contain,
+                      alignment: Alignment.center,
                       loadingBuilder: (context, child, progress) =>
                           progress == null
                           ? child

@@ -659,6 +659,18 @@ void main() {
     });
   });
 
+  group('whole-image tiles', () {
+    testWidgets("a tile's image uses BoxFit.contain", (tester) async {
+      await _pumpDialog(tester);
+      final tile = _tile(_main['url'] as String);
+      expect(tile, findsOneWidget);
+      final image = tester.widget<Image>(
+        find.descendant(of: tile, matching: find.byType(Image)),
+      );
+      expect(image.fit, BoxFit.contain);
+    });
+  });
+
   group('2:3 cover crop', () {
     testWidgets('VNDB cover tiles use the 2:3 library ratio', (tester) async {
       await _pumpDialog(tester);
