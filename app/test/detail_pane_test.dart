@@ -24,6 +24,7 @@ import 'package:tsumige/src/core/vndb.dart' as core;
 import 'package:tsumige/src/features/library/data/library_repository.dart';
 import 'package:tsumige/src/features/library/domain/cover_source.dart';
 import 'package:tsumige/src/features/library/domain/game_editor.dart';
+import 'package:tsumige/src/features/library/domain/launch_actions.dart';
 import 'package:tsumige/src/features/library/domain/running_games.dart';
 import 'package:tsumige/src/features/library/domain/selection.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/detail_tabs/related_tab.dart';
@@ -88,6 +89,7 @@ Future<void> pumpLibrary(WidgetTester tester, List<core.Game> games,
       libraryRepositoryProvider
           .overrideWithValue(DetailFakeRepository(games)),
       coverExistsProvider.overrideWithValue(exists ?? (_) => false),
+      umuRunPathProvider.overrideWithValue('/usr/bin/umu-run'),
       if (coverPicker != null)
         coverPickerProvider.overrideWithValue(coverPicker),
       if (urlOpener != null)
