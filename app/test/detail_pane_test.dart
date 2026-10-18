@@ -554,8 +554,8 @@ void main() {
     expect(paneText(tester, 'Technical'), findsNothing);
     expect(paneText(tester, 'Sexual'), findsNothing);
     final wrap = tester.renderObject<RenderClampedWrap>(
-      find.descendant(
-        of: find.byType(GameDetailPane),
+      find.ancestor(
+        of: paneText(tester, 'VNDB tag 0'),
         matching: find.byType(ClampedWrap),
       ),
     );
@@ -901,6 +901,71 @@ void main() {
     await tester.pumpAndSettle();
     expect(paneText(tester, 'Cozy'), findsOneWidget);
     expect(games.single.tags, ['Cozy']);
+  });
+
+  testWidgets('unticking a detail field hides its Info section',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        description: 'A story',
+        notes: 'Some notes',
+        tags: ['Cozy'],
+        vndbTags: const [
+          core.VndbTag(
+              name: 'Romance', rating: 2.5, spoiler: 0, category: 'cont'),
+        ],
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(paneText(tester, 'VNDB tags'), findsOneWidget);
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+        find.byKey(const Key('settings-detail-field-vndbTags')));
+    await tester.tap(
+        find.byKey(const Key('settings-detail-field-vndbTags')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('settings-close')));
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'VNDB tags'), findsNothing);
+    expect(paneText(tester, 'Description'), findsOneWidget);
+    expect(paneText(tester, 'Tags'), findsOneWidget);
+    expect(paneText(tester, 'Notes'), findsOneWidget);
+  });
+
+  testWidgets('hiding every detail field leaves only the facts row',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        description: 'A story',
+        notes: 'Some notes',
+        tags: ['Cozy'],
+        vndbTags: const [
+          core.VndbTag(
+              name: 'Romance', rating: 2.5, spoiler: 0, category: 'cont'),
+        ],
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    for (final id in ['description', 'tags', 'vndbTags', 'notes']) {
+      await tester.ensureVisible(find.byKey(Key('settings-detail-field-$id')));
+      await tester.tap(find.byKey(Key('settings-detail-field-$id')));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('settings-close')));
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Description'), findsNothing);
+    expect(paneText(tester, 'Tags'), findsNothing);
+    expect(paneText(tester, 'VNDB tags'), findsNothing);
+    expect(paneText(tester, 'Notes'), findsNothing);
+    expect(paneText(tester, 'Played'), findsOneWidget);
   });
 
   testWidgets('removing a tag through its close saves', (tester) async {

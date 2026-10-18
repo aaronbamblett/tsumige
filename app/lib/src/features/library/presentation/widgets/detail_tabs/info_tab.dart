@@ -8,9 +8,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../../../constants/pref_keys.dart' as keys;
 import '../../../../../core/format.dart';
 import '../../../../../core/model.dart';
-import '../../../../../utils/prefs/app_prefs.dart' show tagFilterProvider;
+import '../../../../../utils/prefs/app_prefs.dart'
+    show detailFieldsProvider, tagFilterProvider;
 import '../../../../../utils/theme/brand.dart';
 import '../../../../../widgets/clamped_wrap.dart';
 import '../../../domain/cover_source.dart';
@@ -80,29 +82,37 @@ class InfoTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final fields = ref.watch(detailFieldsProvider);
     final blocks = <Widget>[];
     blocks.add(_facts(context, ref));
-    blocks.add(_MarkupSection(
-      game: game,
-      label: 'Description',
-      emptyHint: 'No description',
-      editTooltip: 'Edit description',
-      getValue: (g) => g.description,
-      setValue: (g, v) => g.description = v,
-    ));
-    blocks.add(_TagsSection(key: ValueKey('tags-${game.id}'), game: game));
-    if (game.vndbTags.isNotEmpty) {
+    if (fields.contains(keys.detailFieldDescription)) {
+      blocks.add(_MarkupSection(
+        game: game,
+        label: 'Description',
+        emptyHint: 'No description',
+        editTooltip: 'Edit description',
+        getValue: (g) => g.description,
+        setValue: (g, v) => g.description = v,
+      ));
+    }
+    if (fields.contains(keys.detailFieldTags)) {
+      blocks.add(_TagsSection(key: ValueKey('tags-${game.id}'), game: game));
+    }
+    if (fields.contains(keys.detailFieldVndbTags) &&
+        game.vndbTags.isNotEmpty) {
       blocks.add(
           _VndbTagsSection(key: ValueKey('vndb-tags-${game.id}'), game: game));
     }
-    blocks.add(_MarkupSection(
-      game: game,
-      label: 'Notes',
-      emptyHint: 'No notes',
-      editTooltip: 'Edit notes',
-      getValue: (g) => g.notes,
-      setValue: (g, v) => g.notes = v,
-    ));
+    if (fields.contains(keys.detailFieldNotes)) {
+      blocks.add(_MarkupSection(
+        game: game,
+        label: 'Notes',
+        emptyHint: 'No notes',
+        editTooltip: 'Edit notes',
+        getValue: (g) => g.notes,
+        setValue: (g, v) => g.notes = v,
+      ));
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(

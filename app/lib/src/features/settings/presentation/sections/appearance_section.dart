@@ -62,7 +62,6 @@ class AppearanceSection extends ConsumerWidget {
         SettingsGroup(
           title: 'Cover size',
           subtitle: 'Width of covers in the library grid.',
-          divider: false,
           control: Row(
             children: [
               Expanded(
@@ -92,7 +91,74 @@ class AppearanceSection extends ConsumerWidget {
             ],
           ),
         ),
+        SettingsGroup(
+          title: 'Game fields to be displayed on details panel:',
+          divider: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            spacing: 4,
+            children: [
+              for (final field in _detailFields)
+                _DetailFieldRow(field: field),
+            ],
+          ),
+        ),
       ],
+    );
+  }
+}
+
+/// An Info tab section with its settings checkbox label, in display order.
+class _DetailField {
+  const _DetailField(this.id, this.label);
+
+  final String id;
+  final String label;
+}
+
+const List<_DetailField> _detailFields = [
+  _DetailField(keys.detailFieldDescription, 'Description'),
+  _DetailField(keys.detailFieldTags, 'Tags'),
+  _DetailField(keys.detailFieldVndbTags, 'VNDB tags'),
+  _DetailField(keys.detailFieldNotes, 'Notes'),
+];
+
+class _DetailFieldRow extends ConsumerWidget {
+  const _DetailFieldRow({required this.field});
+
+  final _DetailField field;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    final selected =
+        ref.watch(detailFieldsProvider).contains(field.id);
+    return InkWell(
+      key: Key('settings-detail-field-${field.id}'),
+      borderRadius: BorderRadius.circular(8),
+      onTap: () =>
+          ref.read(detailFieldsProvider.notifier).toggle(field.id),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IgnorePointer(
+              child: Checkbox(
+                value: selected,
+                onChanged: (_) {},
+              ),
+            ),
+            Text(
+              field.label,
+              style: TextStyle(
+                fontSize: 13,
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

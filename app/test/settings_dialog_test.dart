@@ -17,6 +17,7 @@ import 'package:tsumige/src/core/covers.dart' as core;
 import 'package:tsumige/src/core/launch/detect.dart' as detect;
 import 'package:tsumige/src/core/model.dart' as core;
 import 'package:tsumige/src/core/paths.dart' as core;
+import 'package:tsumige/src/constants/pref_keys.dart' as keys;
 import 'package:tsumige/src/core/store.dart' as core;
 import 'package:tsumige/src/core/vndb.dart' as core;
 import 'package:tsumige/src/features/library/data/library_repository.dart';
@@ -266,6 +267,52 @@ void main() {
     await tester.tap(find.byKey(const Key('settings-theme-mode-dark')));
     await tester.pump();
     expect(container.read(appThemeModeProvider), ThemeMode.dark);
+  });
+
+  testWidgets('details panel fields list four checked boxes', (tester) async {
+    final container = await pumpSettings(tester, SettingsFakeRepository());
+    expect(
+      find.text('Game fields to be displayed on details panel:'),
+      findsOneWidget,
+    );
+    const labels = ['Description', 'Tags', 'VNDB tags', 'Notes'];
+    for (final label in labels) {
+      expect(find.text(label), findsOneWidget);
+    }
+    expect(
+      container.read(detailFieldsProvider),
+      keys.detailFieldsAll,
+    );
+    for (final id in ['description', 'tags', 'vndbTags', 'notes']) {
+      final checkbox = find.descendant(
+        of: find.byKey(Key('settings-detail-field-$id')),
+        matching: find.byType(Checkbox),
+      );
+      expect(checkbox, findsOneWidget);
+      expect(tester.widget<Checkbox>(checkbox).value, isTrue);
+    }
+  });
+
+  testWidgets('unticking VNDB tags updates the pref', (tester) async {
+    final container = await pumpSettings(tester, SettingsFakeRepository());
+    await tester.ensureVisible(
+        find.byKey(const Key('settings-detail-field-vndbTags')));
+    await tester.tap(
+        find.byKey(const Key('settings-detail-field-vndbTags')));
+    await tester.pump();
+    expect(
+      container.read(detailFieldsProvider),
+      {keys.detailFieldDescription, keys.detailFieldTags, keys.detailFieldNotes},
+    );
+    final checkbox = find.descendant(
+      of: find.byKey(const Key('settings-detail-field-vndbTags')),
+      matching: find.byType(Checkbox),
+    );
+    expect(tester.widget<Checkbox>(checkbox).value, isFalse);
+    await tester.tap(
+        find.byKey(const Key('settings-detail-field-vndbTags')));
+    await tester.pump();
+    expect(container.read(detailFieldsProvider), keys.detailFieldsAll);
   });
 
   testWidgets('cover slider writes the pref', (tester) async {
