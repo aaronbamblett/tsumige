@@ -333,8 +333,12 @@ void main() {
       final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
       return (image, data!);
     }) as (ui.Image, ByteData);
-    final top = (pane.top - LibraryGrid.topInset).round();
-    final bottom = pane.top.round() - 1;
+    // The band is the documented 12 px above the viewport, whose top is the
+    // clip line: measuring from the pane top leaks the viewport's first row
+    // into the band once covers grow past it.
+    final viewportTop = gridViewportRect(tester).top;
+    final top = (viewportTop - LibraryGrid.topInset).round();
+    final bottom = viewportTop.round() - 1;
     final left = grid.left.round();
     final right = track.left.round();
     expect(bottom - top, greaterThanOrEqualTo(8));

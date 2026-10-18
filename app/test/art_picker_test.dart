@@ -688,5 +688,32 @@ void main() {
         findsOneWidget,
       );
     });
+
+    testWidgets('the size caption sits below the image inside the tile', (
+      tester,
+    ) async {
+      await _pumpDialog(tester);
+      final tile = _tile(_main['url'] as String);
+      expect(tile, findsOneWidget);
+      expect(find.text('411×560'), findsOneWidget);
+      final tileRect = tester.getRect(tile);
+      final imageRect = tester.getRect(
+        find.descendant(of: tile, matching: find.byType(AspectRatio)),
+      );
+      final textRect = tester.getRect(
+        find.descendant(
+          of: tile,
+          matching: find.byWidgetPredicate(
+            (w) => w is RichText && w.text.toPlainText() == '411×560',
+          ),
+        ),
+      );
+      expect(imageRect.width / imageRect.height, closeTo(2 / 3, 0.01));
+      expect(textRect.top, greaterThanOrEqualTo(imageRect.bottom - 0.5));
+      expect(textRect.left, greaterThanOrEqualTo(tileRect.left - 0.5));
+      expect(textRect.right, lessThanOrEqualTo(tileRect.right + 0.5));
+      expect(textRect.top, greaterThanOrEqualTo(tileRect.top - 0.5));
+      expect(textRect.bottom, lessThanOrEqualTo(tileRect.bottom + 0.5));
+    });
   });
 }

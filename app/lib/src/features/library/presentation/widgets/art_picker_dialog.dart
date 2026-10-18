@@ -458,23 +458,36 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
             ],
           ),
         ),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: columns,
-          crossAxisSpacing: 14,
-          mainAxisSpacing: 14,
-          childAspectRatio: aspectRatio,
-          children: [
-            for (final art in items)
-              _ArtTile(
-                key: ValueKey('art-${art.url}'),
-                art: art,
-                selected: active is _RemotePick && active.art.url == art.url,
-                current: isCurrent(art),
-                onTap: () => _setActivePick(_RemotePick(art)),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const spacing = 14.0;
+            final columnWidth =
+                (constraints.maxWidth - spacing * (columns - 1)) / columns;
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columns,
+                crossAxisSpacing: spacing,
+                mainAxisSpacing: spacing,
+                mainAxisExtent:
+                    columnWidth / aspectRatio + _kArtCaptionExtent,
               ),
-          ],
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                final art = items[index];
+                return _ArtTile(
+                  key: ValueKey('art-${art.url}'),
+                  art: art,
+                  aspectRatio: aspectRatio,
+                  selected:
+                      active is _RemotePick && active.art.url == art.url,
+                  current: isCurrent(art),
+                  onTap: () => _setActivePick(_RemotePick(art)),
+                );
+              },
+            );
+          },
         ),
       ],
     );
@@ -1529,23 +1542,36 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
   }
 
   Widget _grid(ColorScheme scheme, List<ArtCandidate> arts) {
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: _kind.columns,
-      crossAxisSpacing: 14,
-      mainAxisSpacing: 14,
-      childAspectRatio: _kind.aspectRatio,
-      children: [
-        for (final art in arts)
-          _ArtTile(
-            key: ValueKey('art-${art.url}'),
-            art: art,
-            selected: widget.selectedUrl == art.url,
-            current: widget.isCurrent(art),
-            onTap: () => widget.onPick(art),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 14.0;
+        final columnWidth =
+            (constraints.maxWidth - spacing * (_kind.columns - 1)) /
+            _kind.columns;
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: _kind.columns,
+            crossAxisSpacing: spacing,
+            mainAxisSpacing: spacing,
+            mainAxisExtent:
+                columnWidth / _kind.aspectRatio + _kArtCaptionExtent,
           ),
-      ],
+          itemCount: arts.length,
+          itemBuilder: (context, index) {
+            final art = arts[index];
+            return _ArtTile(
+              key: ValueKey('art-${art.url}'),
+              art: art,
+              aspectRatio: _kind.aspectRatio,
+              selected: widget.selectedUrl == art.url,
+              current: widget.isCurrent(art),
+              onTap: () => widget.onPick(art),
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -1616,17 +1642,22 @@ class _DashPainter extends CustomPainter {
   bool shouldRepaint(covariant _DashPainter old) => old.color != color;
 }
 
-/// One VNDB image in a picker grid, with the grid ring and a size badge.
+/// Room under each picker image for its size caption: the gap plus one line.
+const double _kArtCaptionExtent = 18;
+
+/// One VNDB image in a picker grid, with the grid ring and its size below.
 class _ArtTile extends StatefulWidget {
   const _ArtTile({
     super.key,
     required this.art,
+    required this.aspectRatio,
     required this.selected,
     required this.current,
     required this.onTap,
   });
 
   final ArtCandidate art;
+  final double aspectRatio;
   final bool selected;
   final bool current;
   final VoidCallback onTap;
@@ -1650,82 +1681,86 @@ class _ArtTileState extends State<_ArtTile> {
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         onTap: widget.onTap,
-        child: Container(
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: scheme.surface,
-            borderRadius: radius,
-          ),
-          foregroundDecoration: BoxDecoration(
-            borderRadius: radius,
-            border: Border.all(
-              color: lit
-                  ? scheme.primary
-                  : scheme.onSurface.withValues(alpha: 0.06),
-              width: widget.selected ? 3 : (_hovered ? 2 : 1),
-            ),
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Image.network(
-                art.thumbnail,
-                fit: BoxFit.cover,
-                alignment: Alignment.topCenter,
-                loadingBuilder: (context, child, progress) =>
-                    progress == null ? child : const SizedBox.shrink(),
-                errorBuilder: (_, _, _) => Center(
-                  child: Icon(
-                    Icons.broken_image_outlined,
-                    color: scheme.onSurfaceVariant,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AspectRatio(
+              aspectRatio: widget.aspectRatio,
+              child: Container(
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: scheme.surface,
+                  borderRadius: radius,
+                ),
+                foregroundDecoration: BoxDecoration(
+                  borderRadius: radius,
+                  border: Border.all(
+                    color: lit
+                        ? scheme.primary
+                        : scheme.onSurface.withValues(alpha: 0.06),
+                    width: widget.selected ? 3 : (_hovered ? 2 : 1),
                   ),
                 ),
-              ),
-              if (widget.current)
-                Positioned(
-                  left: 6,
-                  top: 6,
-                  child: Container(
-                    height: 22,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: ArtOverlay.button,
-                      borderRadius: BorderRadius.circular(11),
-                      border: Border.all(color: ArtOverlay.buttonRing),
-                    ),
-                    child: const Text(
-                      'Current',
-                      style: TextStyle(fontSize: 11, color: OnImage.text),
-                    ),
-                  ),
-                ),
-              if (art.width > 0 && art.height > 0)
-                Positioned(
-                  right: 6,
-                  bottom: 6,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: ArtOverlay.badge,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 1,
-                      ),
-                      child: Text(
-                        '${art.width}×${art.height}',
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          color: OnImage.text,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.network(
+                      art.thumbnail,
+                      fit: BoxFit.cover,
+                      alignment: Alignment.topCenter,
+                      loadingBuilder: (context, child, progress) =>
+                          progress == null
+                          ? child
+                          : const SizedBox.shrink(),
+                      errorBuilder: (_, _, _) => Center(
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
                     ),
-                  ),
+                    if (widget.current)
+                      Positioned(
+                        left: 6,
+                        top: 6,
+                        child: Container(
+                          height: 22,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: ArtOverlay.button,
+                            borderRadius: BorderRadius.circular(11),
+                            border: Border.all(color: ArtOverlay.buttonRing),
+                          ),
+                          child: const Text(
+                            'Current',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: OnImage.text,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-            ],
-          ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            SizedBox(
+              height: 14,
+              child: Text(
+                art.width > 0 && art.height > 0
+                    ? '${art.width}×${art.height}'
+                    : '',
+                maxLines: 1,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
