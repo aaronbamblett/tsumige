@@ -67,8 +67,11 @@ class _SgdbConfig {
     this.heroesStatus = 200,
     this.heroesUrls = const [_sgdbHero],
     this.searchNames = const <String>[],
+    this.searchStatus = 200,
     this.hangGrids = false,
     this.hangHeroes = false,
+    this.releaseGate,
+    this.searchGate,
     this.vndbExtlinks = const <Map<String, Object?>>[],
     this.sgdbRequests,
     this.vndbReleaseBodies,
@@ -82,8 +85,11 @@ class _SgdbConfig {
   int heroesStatus;
   List<String> heroesUrls;
   List<String> searchNames;
+  int searchStatus;
   bool hangGrids;
   bool hangHeroes;
+  Completer<void>? releaseGate;
+  Completer<void>? searchGate;
   List<Map<String, Object?>> vndbExtlinks;
   List<Uri>? sgdbRequests;
   List<String>? vndbReleaseBodies;
@@ -105,6 +111,10 @@ http.Client _fakeSgdbHttp(_SgdbConfig config, List<String> downloads) {
         throw StateError('unreachable');
       }
       if (url.path.contains('/search/autocomplete/')) {
+        if (config.searchGate != null) await config.searchGate!.future;
+        if (config.searchStatus != 200) {
+          return http.Response('error', config.searchStatus);
+        }
         final names = config.searchNames;
         return http.Response(
           jsonEncode({
@@ -166,10 +176,11 @@ http.Client _fakeSgdbHttp(_SgdbConfig config, List<String> downloads) {
         );
       }
       if (url.path.endsWith('/release')) {
+        config.vndbReleaseBodies?.add(request.body);
+        if (config.releaseGate != null) await config.releaseGate!.future;
         if (config.vndbReleaseStatus != 200) {
           return http.Response('error', config.vndbReleaseStatus);
         }
-        config.vndbReleaseBodies?.add(request.body);
         return http.Response(
           jsonEncode({
             'results': [
@@ -903,5 +914,226 @@ void main() {
       tester.widget<Text>(find.text('Alpha Game')).style?.fontWeight,
       FontWeight.w400,
     );
+  });
+
+  testWidgets('switching tabs during the Steam ID lookup runs it once', (
+    tester,
+  ) async {
+    final releaseGate = Completer<void>();
+    final sgdb = <Uri>[];
+    final releaseBodies = <String>[];
+    await _pumpSgdbDialog(
+      tester,
+      prefsKey: 'fake-test-key',
+      config: _SgdbConfig(
+        sgdbRequests: sgdb,
+        vndbReleaseBodies: releaseBodies,
+        vndbExtlinks: [
+          {'name': 'steam', 'id': '123'},
+        ],
+        releaseGate: releaseGate,
+      ),
+    );
+    expect(find.byKey(ValueKey('art-$_sgdbCover')), findsNothing);
+    await tester.tap(find.text('Background'));
+    await tester.pump();
+    await tester.pump();
+    expect(
+      releaseBodies.where((b) => b.contains('"extlink"')),
+      hasLength(1),
+    );
+    releaseGate.complete();
+    await _settle(tester);
+    expect(find.byKey(ValueKey('art-$_sgdbHero')), findsOneWidget);
+    await tester.tap(find.text('Cover'));
+    await tester.pump();
+    await _settle(tester);
+    expect(find.byKey(ValueKey('art-$_sgdbCover')), findsOneWidget);
+    expect(
+      releaseBodies.where((b) => b.contains('"extlink"')),
+      hasLength(1),
+    );
+    expect(
+      sgdb.where((u) => u.path == '/api/v2/grids/steam/123'),
+      hasLength(1),
+    );
+    expect(
+      sgdb.where((u) => u.path == '/api/v2/heroes/steam/123'),
+      hasLength(1),
+    );
+  });
+
+  testWidgets('switching tabs during the name search runs it once', (
+    tester,
+  ) async {
+    final searchGate = Completer<void>();
+    final sgdb = <Uri>[];
+    await _pumpSgdbDialog(
+      tester,
+      prefsKey: 'fake-test-key',
+      config: _SgdbConfig(
+        sgdbRequests: sgdb,
+        searchNames: ['Divi-Dead'],
+        searchGate: searchGate,
+      ),
+    );
+    expect(find.byKey(ValueKey('art-$_sgdbCover')), findsNothing);
+    await tester.tap(find.text('Background'));
+    await tester.pump();
+    await tester.pump();
+    expect(
+      sgdb.where((u) => u.path.contains('/search/autocomplete/')),
+      hasLength(1),
+    );
+    searchGate.complete();
+    await _settle(tester);
+    expect(find.byKey(ValueKey('art-$_sgdbHero')), findsOneWidget);
+    await tester.tap(find.text('Cover'));
+    await tester.pump();
+    await _settle(tester);
+    expect(find.byKey(ValueKey('art-$_sgdbCover')), findsOneWidget);
+    expect(
+      sgdb.where((u) => u.path.contains('/search/autocomplete/')),
+      hasLength(1),
+    );
+    expect(
+      sgdb.where((u) => u.path == '/api/v2/grids/game/10'),
+      hasLength(1),
+    );
+    expect(
+      sgdb.where((u) => u.path == '/api/v2/heroes/game/10'),
+      hasLength(1),
+    );
+  });
+
+  testWidgets('switching tabs during a grids fetch joins it', (tester) async {
+    final gridsGate = Completer<http.Response>();
+    final sgdb = <Uri>[];
+    await _pumpSgdbDialog(
+      tester,
+      prefsKey: 'fake-test-key',
+      config: _SgdbConfig(
+        sgdbRequests: sgdb,
+        vndbExtlinks: [
+          {'name': 'steam', 'id': '123'},
+        ],
+        gridGates: {123: gridsGate},
+      ),
+    );
+    expect(find.byKey(ValueKey('art-$_sgdbCover')), findsNothing);
+    await tester.tap(find.text('Background'));
+    await tester.pump();
+    await _settle(tester);
+    expect(find.byKey(ValueKey('art-$_sgdbHero')), findsOneWidget);
+    await tester.tap(find.text('Cover'));
+    await tester.pump();
+    await tester.pump();
+    expect(
+      sgdb.where((u) => u.path == '/api/v2/grids/steam/123'),
+      hasLength(1),
+    );
+    expect(
+      sgdb.where((u) => u.path == '/api/v2/heroes/steam/123'),
+      hasLength(1),
+    );
+    gridsGate.complete(http.Response(_gridsBody([_sgdbCover]), 200));
+    await _settle(tester);
+    expect(find.byKey(ValueKey('art-$_sgdbCover')), findsOneWidget);
+    await tester.tap(find.text('Background'));
+    await tester.pump();
+    await _settle(tester);
+    expect(find.byKey(ValueKey('art-$_sgdbHero')), findsOneWidget);
+  });
+
+  testWidgets('Try again after an art error keeps the picked game', (
+    tester,
+  ) async {
+    final sgdb = <Uri>[];
+    final config = _SgdbConfig(
+      sgdbRequests: sgdb,
+      gridsStatus: 500,
+      searchNames: ['Something Else', 'Divi Dead 2'],
+    );
+    await _pumpSgdbDialog(tester, prefsKey: 'fake-test-key', config: config);
+    expect(find.text('Pick the matching game.'), findsOneWidget);
+    await tester.tap(find.text('Divi Dead 2'));
+    await tester.pump();
+    await _settle(tester);
+    expect(find.text("Couldn't reach SteamGridDB."), findsOneWidget);
+    config.gridsStatus = 200;
+    await tester.tap(find.byKey(const Key('sgdb-retry')));
+    await tester.pump();
+    await _settle(tester);
+    expect(find.text("Couldn't reach SteamGridDB."), findsNothing);
+    expect(find.byKey(ValueKey('art-$_sgdbCover')), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.text('Divi Dead 2')).style?.fontWeight,
+      FontWeight.w600,
+    );
+    expect(
+      sgdb.where((u) => u.path.contains('/search/autocomplete/')),
+      hasLength(1),
+    );
+    expect(
+      sgdb.where((u) => u.path == '/api/v2/grids/game/11'),
+      hasLength(2),
+    );
+  });
+
+  testWidgets('canceling the key form then switching tabs runs one lookup', (
+    tester,
+  ) async {
+    final searchGate = Completer<void>();
+    final sgdb = <Uri>[];
+    final releaseBodies = <String>[];
+    final config = _SgdbConfig(
+      sgdbRequests: sgdb,
+      vndbReleaseBodies: releaseBodies,
+      searchNames: ['Divi-Dead'],
+      searchStatus: 401,
+    );
+    await _pumpSgdbDialog(tester, prefsKey: 'fake-test-key', config: config);
+    expect(
+      find.text("SteamGridDB didn't accept the key."),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('sgdb-set-key')));
+    await tester.pump();
+    expect(find.byKey(const Key('sgdb-key-field')), findsOneWidget);
+    config.searchGate = searchGate;
+    config.searchStatus = 200;
+    await tester.tap(find.byKey(const Key('sgdb-key-cancel')));
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.text('Background'));
+    await tester.pump();
+    await tester.pump();
+    expect(
+      releaseBodies.where((b) => b.contains('"extlink"')),
+      hasLength(2),
+    );
+    expect(
+      sgdb.where((u) => u.path.contains('/search/autocomplete/')),
+      hasLength(2),
+    );
+    searchGate.complete();
+    await _settle(tester);
+    expect(find.byKey(ValueKey('art-$_sgdbHero')), findsOneWidget);
+    await tester.tap(find.text('Cover'));
+    await tester.pump();
+    await _settle(tester);
+    expect(find.byKey(ValueKey('art-$_sgdbCover')), findsOneWidget);
+    expect(
+      releaseBodies.where((b) => b.contains('"extlink"')),
+      hasLength(2),
+    );
+    expect(
+      sgdb.where((u) => u.path.contains('/search/autocomplete/')),
+      hasLength(2),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ArtPickerDialog)),
+    );
+    expect(container.read(steamGridDbKeyProvider), 'fake-test-key');
   });
 }

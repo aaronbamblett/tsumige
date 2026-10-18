@@ -779,8 +779,11 @@ enum _SgdbKind {
 /// SteamGridDB lookup shared by the Cover and Background tabs. The Steam IDs,
 /// the name-search results and the picked search game are resolved once per
 /// dialog; each kind of art (covers, heroes) is then fetched once for that
-/// lookup. One [_generation] guard covers every pending response, so a stale
-/// response for one tab or game never lands in the other.
+/// lookup. The in-flight lookup is shared by both tabs, with one in-flight
+/// fetch per kind, so a tab switch joins pending work instead of repeating
+/// it. A lookup generation plus one generation per kind keeps a stale
+/// response from landing: the lookup never invalidates a kind fetch, and a
+/// kind fetch never invalidates the lookup or the other kind.
 class _SgdbShared extends ChangeNotifier {
   List<int>? steamIds;
   List<SteamGridDbGame>? search;
@@ -799,7 +802,17 @@ class _SgdbShared extends ChangeNotifier {
   var gridsFor = '';
   var heroesFor = '';
 
-  var _generation = 0;
+  var _lookupGeneration = 0;
+  var _gridsGeneration = 0;
+  var _heroesGeneration = 0;
+  Future<void>? _lookupFuture;
+  var _lookupPrint = '';
+  Future<void>? _gridsFuture;
+  Future<void>? _heroesFuture;
+
+  /// Why the shared lookup failed: 'badKey' or 'network'.
+  String? _lookupError;
+
   var _disposed = false;
 
   static String fingerprint(Game game, String key) =>
@@ -817,6 +830,9 @@ class _SgdbShared extends ChangeNotifier {
   String loadedFor(_SgdbKind kind) =>
       kind == _SgdbKind.grids ? gridsFor : heroesFor;
 
+  /// True while the shared Steam ID / name-search lookup is running.
+  bool get lookupPending => _lookupFuture != null;
+
   @override
   void dispose() {
     _disposed = true;
@@ -827,10 +843,32 @@ class _SgdbShared extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  bool _stale(int generation) => _disposed || generation != _generation;
+  int _kindGeneration(_SgdbKind kind) =>
+      kind == _SgdbKind.grids ? _gridsGeneration : _heroesGeneration;
+
+  Future<void>? _kindFuture(_SgdbKind kind) =>
+      kind == _SgdbKind.grids ? _gridsFuture : _heroesFuture;
+
+  void _setKindFuture(_SgdbKind kind, Future<void>? future) {
+    if (kind == _SgdbKind.grids) {
+      _gridsFuture = future;
+    } else {
+      _heroesFuture = future;
+    }
+  }
+
+  bool _fetchStale(_SgdbKind kind, int generation) =>
+      _disposed || generation != _kindGeneration(kind);
 
   void reset() {
-    _generation++;
+    _lookupGeneration++;
+    _gridsGeneration++;
+    _heroesGeneration++;
+    _lookupFuture = null;
+    _lookupPrint = '';
+    _lookupError = null;
+    _gridsFuture = null;
+    _heroesFuture = null;
     steamIds = null;
     search = null;
     selectedSearchId = null;
@@ -887,8 +925,10 @@ class _SgdbShared extends ChangeNotifier {
   }
 
   /// Loads [kind] unless it is already loaded for this lookup and selection.
-  /// The Steam IDs and the name search come from the shared lookup, so a tab
-  /// switch never repeats them.
+  /// The Steam IDs and the name search come from the shared lookup: while the
+  /// lookup is in flight a second caller joins it, and while this kind's
+  /// fetch is in flight a second caller for this kind joins that instead, so
+  /// a tab switch never repeats them.
   Future<void> ensureKind(
     _SgdbKind kind, {
     required Game game,
@@ -897,31 +937,90 @@ class _SgdbShared extends ChangeNotifier {
     required VndbClient vndb,
   }) async {
     final print = fingerprint(game, key);
-    if (lookupFor != print) {
-      await _lookup(kind, game: game, client: client, vndb: vndb, print: print);
+    if (client == null) return;
+    final generation = _kindGeneration(kind);
+    if (lookupFor == print && loadedFor(kind) == _artKey(print)) return;
+    final joined = _kindFuture(kind);
+    if (joined != null) {
+      await joined;
       return;
     }
-    if (client == null) return;
-    if (loadedFor(kind) == _artKey(print)) return;
-    final generation = ++_generation;
+    if (lookupFor != print) {
+      _setLoading(kind, true);
+      _setError(kind, null);
+      _notify();
+      await _joinLookup(game: game, client: client, vndb: vndb, print: print);
+      if (_fetchStale(kind, generation)) return;
+      if (lookupFor != print) {
+        _setLoading(kind, false);
+        _setError(kind, _lookupError ?? 'network');
+        _notify();
+        return;
+      }
+    }
+    if (loadedFor(kind) == _artKey(print)) {
+      _setLoading(kind, false);
+      _notify();
+      return;
+    }
+    final pending = _kindFuture(kind);
+    if (pending != null) {
+      await pending;
+      return;
+    }
+    if (_fetchStale(kind, generation)) return;
     _setLoading(kind, true);
     _setError(kind, null);
     _notify();
-    await _fetchKindArt(kind, client, print, generation);
+    final future = _fetchKindArt(kind, client, print, generation);
+    _setKindFuture(kind, future);
+    unawaited(
+      future.whenComplete(() {
+        if (identical(_kindFuture(kind), future)) _setKindFuture(kind, null);
+      }),
+    );
+    await future;
   }
 
-  Future<void> _lookup(
-    _SgdbKind kind, {
+  /// Starts the shared lookup for [print], or joins it when one is already
+  /// running for the same game and key.
+  Future<void> _joinLookup({
     required Game game,
-    required SteamGridDbClient? client,
+    required SteamGridDbClient client,
     required VndbClient vndb,
     required String print,
+  }) {
+    if (_lookupFuture != null && _lookupPrint == print) return _lookupFuture!;
+    final generation = ++_lookupGeneration;
+    _lookupError = null;
+    final future = _runLookup(
+      game: game,
+      client: client,
+      vndb: vndb,
+      print: print,
+      generation: generation,
+    );
+    _lookupFuture = future;
+    _lookupPrint = print;
+    unawaited(
+      future.whenComplete(() {
+        if (identical(_lookupFuture, future)) {
+          _lookupFuture = null;
+          _lookupPrint = '';
+        }
+      }),
+    );
+    return future;
+  }
+
+  Future<void> _runLookup({
+    required Game game,
+    required SteamGridDbClient client,
+    required VndbClient vndb,
+    required String print,
+    required int generation,
   }) async {
-    if (client == null) return;
-    final generation = ++_generation;
-    _setLoading(kind, true);
-    _setError(kind, null);
-    _notify();
+    bool stale() => _disposed || generation != _lookupGeneration;
     try {
       List<int> ids = const [];
       if (game.launch.steamAppId != null) {
@@ -933,17 +1032,16 @@ class _SgdbShared extends ChangeNotifier {
           ids = const [];
         }
       }
-      if (_stale(generation)) return;
+      if (stale()) return;
       if (ids.isNotEmpty) {
         steamIds = ids;
         search = null;
         lookupFor = print;
         _notify();
-        await _fetchKindArt(kind, client, print, generation);
         return;
       }
       final results = await client.searchGames(game.title);
-      if (_stale(generation)) return;
+      if (stale()) return;
       final folded = normalizeGridTitle(game.title);
       int? selected;
       for (final result in results) {
@@ -956,24 +1054,14 @@ class _SgdbShared extends ChangeNotifier {
       search = results;
       selectedSearchId = selected;
       lookupFor = print;
-      if (selected == null) {
-        _setArt(kind, const []);
-        _setLoadedFor(kind, _artKey(print));
-        _setLoading(kind, false);
-        _notify();
-        return;
-      }
       _notify();
-      await _fetchKindArt(kind, client, print, generation);
     } on SteamGridDbBadKeyException {
-      if (_stale(generation)) return;
-      _setLoading(kind, false);
-      _setError(kind, 'badKey');
+      if (stale()) return;
+      _lookupError = 'badKey';
       _notify();
     } catch (_) {
-      if (_stale(generation)) return;
-      _setLoading(kind, false);
-      _setError(kind, 'network');
+      if (stale()) return;
+      _lookupError = 'network';
       _notify();
     }
   }
@@ -984,6 +1072,7 @@ class _SgdbShared extends ChangeNotifier {
     String print,
     int generation,
   ) async {
+    bool stale() => _fetchStale(kind, generation);
     try {
       final ids = steamIds;
       if (ids == null || ids.isEmpty) {
@@ -996,7 +1085,7 @@ class _SgdbShared extends ChangeNotifier {
           return;
         }
         final arts = await kind.fetchGame(client, selected);
-        if (_stale(generation)) return;
+        if (stale()) return;
         _setArt(kind, _dedupe(arts));
         _setLoadedFor(kind, _artKey(print));
         _setLoading(kind, false);
@@ -1007,23 +1096,23 @@ class _SgdbShared extends ChangeNotifier {
       final seen = <String>{};
       for (final id in ids) {
         final arts = await kind.fetchSteam(client, id);
-        if (_stale(generation)) return;
+        if (stale()) return;
         for (final art in arts) {
           if (seen.add(art.url)) merged.add(art);
         }
       }
-      if (_stale(generation)) return;
+      if (stale()) return;
       _setArt(kind, merged);
       _setLoadedFor(kind, _artKey(print));
       _setLoading(kind, false);
       _notify();
     } on SteamGridDbBadKeyException {
-      if (_stale(generation)) return;
+      if (stale()) return;
       _setLoading(kind, false);
       _setError(kind, 'badKey');
       _notify();
     } catch (_) {
-      if (_stale(generation)) return;
+      if (stale()) return;
       _setLoading(kind, false);
       _setError(kind, 'network');
       _notify();
@@ -1031,7 +1120,9 @@ class _SgdbShared extends ChangeNotifier {
   }
 
   /// The user picked a search result: remember it for both tabs and load this
-  /// tab's art for it. The other tab follows on its next build.
+  /// tab's art for it. Only this kind's fetch is invalidated; the shared
+  /// lookup and the other kind's fetch stand. The other tab follows on its
+  /// next build.
   Future<void> selectSearch(
     _SgdbKind kind,
     int id, {
@@ -1040,12 +1131,26 @@ class _SgdbShared extends ChangeNotifier {
     required SteamGridDbClient? client,
   }) async {
     if (client == null) return;
-    final generation = ++_generation;
+    final generation = kind == _SgdbKind.grids
+        ? ++_gridsGeneration
+        : ++_heroesGeneration;
     selectedSearchId = id;
     _setLoading(kind, true);
     _setError(kind, null);
     _notify();
-    await _fetchKindArt(kind, client, fingerprint(game, key), generation);
+    final future = _fetchKindArt(
+      kind,
+      client,
+      fingerprint(game, key),
+      generation,
+    );
+    _setKindFuture(kind, future);
+    unawaited(
+      future.whenComplete(() {
+        if (identical(_kindFuture(kind), future)) _setKindFuture(kind, null);
+      }),
+    );
+    await future;
   }
 
   List<ArtCandidate> _dedupe(List<ArtCandidate> arts) {
@@ -1099,13 +1204,11 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
       next,
     ) {
       if (!mounted) return;
-      final wasEmpty = (previous ?? '').trim().isEmpty;
-      final isEmpty = next.trim().isEmpty;
-      if (wasEmpty && isEmpty) return;
+      if ((previous ?? '').trim() == next.trim()) return;
       // A key saved from either tab resets the shared lookup and loads this
       // tab's art; the other tab follows from the shared lookup.
       _shared.reset();
-      if (!isEmpty && !_editingKey) {
+      if (next.trim().isNotEmpty && !_editingKey) {
         unawaited(_load());
       }
     });
@@ -1145,7 +1248,15 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
     vndb: ref.read(vndbSearchClientProvider),
   );
 
+  /// Retries the failed load. An art-fetch error retries only this kind's
+  /// fetch, keeping the lookup, the search and the picked chip. A lookup
+  /// error or a bad key redoes the lookup.
   Future<void> _retry() {
+    final key = ref.read(steamGridDbKeyProvider);
+    if (_shared.errorFor(_kind) != 'badKey' &&
+        _shared.lookupFor == _SgdbShared.fingerprint(widget.game, key)) {
+      return _load();
+    }
     _shared.reset();
     return _load();
   }
@@ -1171,7 +1282,9 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
     setState(() => _editingKey = false);
     ref.read(steamGridDbKeyProvider.notifier).set(next);
     if (unchanged) {
-      _shared.reset();
+      // Same key: the lookup still stands, so just reload this tab, which
+      // retries a failed fetch or no-ops when it already loaded, instead of
+      // repeating the lookup and dropping the picked search game.
       unawaited(_load());
     }
   }
@@ -1181,7 +1294,8 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
     setState(() => _editingKey = false);
     final key = ref.read(steamGridDbKeyProvider).trim();
     if (key.isNotEmpty &&
-        _shared.lookupFor != _SgdbShared.fingerprint(widget.game, key)) {
+        _shared.lookupFor != _SgdbShared.fingerprint(widget.game, key) &&
+        !_shared.lookupPending) {
       unawaited(_load());
     }
   }
