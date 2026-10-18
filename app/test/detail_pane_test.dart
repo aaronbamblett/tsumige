@@ -674,7 +674,7 @@ void main() {
     ]);
     await openPane(tester, 'Alpha');
     await openTab(tester, 'Launch');
-    expect(find.text('Steam app id'), findsOneWidget);
+    expect(find.text('Steam app ID'), findsOneWidget);
     final appIdField = find.descendant(
       of: find.byKey(const Key('launch-steam-app-id')),
       matching: find.byType(TextField),
