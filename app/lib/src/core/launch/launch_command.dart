@@ -90,6 +90,57 @@ bool _mapsEqual(Map<String, String> a, Map<String, String> b) {
   return true;
 }
 
+const _appImageVars = ['APPIMAGE', 'APPDIR', 'ARGV0', 'OWD'];
+
+const _appDirPathVars = [
+  'LD_LIBRARY_PATH',
+  'LD_PRELOAD',
+  'PATH',
+  'XDG_DATA_DIRS',
+  'GSETTINGS_SCHEMA_DIR',
+  'QT_PLUGIN_PATH',
+  'GDK_PIXBUF_MODULE_FILE',
+  'PYTHONPATH',
+];
+
+/// The environment a launched game gets: the host's, minus the AppImage's own
+/// variables when running from one, then the game's own variables.
+Map<String, String> gameEnvironment(
+  Map<String, String> hostEnv,
+  Map<String, String> gameEnv, {
+  required HostPlatform platform,
+}) {
+  final base = platform.inAppImage ? cleanAppImageEnv(hostEnv) : hostEnv;
+  return {...base, ...gameEnv};
+}
+
+/// Drops the AppImage's variables and every path entry inside `$APPDIR`. A
+/// path variable left with no entries is removed.
+Map<String, String> cleanAppImageEnv(Map<String, String> hostEnv) {
+  final cleaned = {...hostEnv}
+    ..removeWhere((key, _) => _appImageVars.contains(key));
+  final appDir = hostEnv['APPDIR'];
+  if (appDir == null || appDir.isEmpty) return cleaned;
+  final root = appDir.endsWith('/')
+      ? appDir.substring(0, appDir.length - 1)
+      : appDir;
+  if (root.isEmpty) return cleaned;
+  bool inside(String entry) => entry == root || entry.startsWith('$root/');
+  for (final key in _appDirPathVars) {
+    final value = cleaned[key];
+    if (value == null) continue;
+    final entries = value.split(':');
+    final kept = entries.where((entry) => !inside(entry)).toList();
+    if (kept.length == entries.length) continue;
+    if (kept.isEmpty) {
+      cleaned.remove(key);
+    } else {
+      cleaned[key] = kept.join(':');
+    }
+  }
+  return cleaned;
+}
+
 String? _parentDir(String exe) {
   final dir = p.dirname(exe);
   if (dir == '.' || dir.isEmpty) return null;

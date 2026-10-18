@@ -58,7 +58,7 @@ class IoProcessStarter implements ProcessStarter {
       command.executable,
       command.args,
       workingDirectory: command.workingDirectory,
-      environment: {...hostEnv, ...command.env},
+      environment: gameEnvironment(hostEnv, command.env, platform: platform),
       includeParentEnvironment: false,
       mode: ProcessStartMode.normal,
     );
