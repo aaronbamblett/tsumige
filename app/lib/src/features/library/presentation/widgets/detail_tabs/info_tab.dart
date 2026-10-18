@@ -4,6 +4,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -104,14 +106,7 @@ class InfoTab extends ConsumerWidget {
           _VndbTagsSection(key: ValueKey('vndb-tags-${game.id}'), game: game));
     }
     if (fields.contains(keys.detailFieldNotes)) {
-      blocks.add(_MarkupSection(
-        game: game,
-        label: 'Notes',
-        emptyHint: 'No notes',
-        editTooltip: 'Edit notes',
-        getValue: (g) => g.notes,
-        setValue: (g, v) => g.notes = v,
-      ));
+      blocks.add(_NotesSection(game: game));
     }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -617,6 +612,137 @@ class TagChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Notes is always a text box. It saves 1 s after typing stops and on blur,
+/// with no Save button.
+class _NotesSection extends ConsumerStatefulWidget {
+  const _NotesSection({required this.game});
+
+  final Game game;
+
+  @override
+  ConsumerState<_NotesSection> createState() => _NotesSectionState();
+}
+
+class _NotesSectionState extends ConsumerState<_NotesSection> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+  late String _gameId;
+  late String _stored;
+  Timer? _debounce;
+  GameEditor? _editor;
+  String? _pendingId;
+  bool _syncing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _gameId = widget.game.id;
+    _stored = widget.game.notes;
+    _controller = TextEditingController(text: _stored);
+    _focusNode = FocusNode();
+    _focusNode.addListener(_onFocus);
+  }
+
+  @override
+  void didUpdateWidget(_NotesSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.game.id != _gameId) {
+      // A game switch unmounts this section while the field still holds
+      // text; the edit was typed for the original game, so save it there.
+      _flush();
+      _gameId = widget.game.id;
+      _stored = widget.game.notes;
+      _setText(_stored);
+      return;
+    }
+    if (widget.game.notes != _stored) {
+      _stored = widget.game.notes;
+      // Never overwrite text while the user is typing.
+      if (!_focusNode.hasFocus) {
+        _debounce?.cancel();
+        _debounce = null;
+        _pendingId = null;
+        _setText(_stored);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    // A game switch unmounts this section while the field still holds text;
+    // the edit was captured for the original game, so save it there.
+    _flush();
+    _debounce?.cancel();
+    _focusNode.removeListener(_onFocus);
+    _focusNode.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _setText(String text) {
+    if (_controller.text == text) return;
+    _syncing = true;
+    _controller.text = text;
+    _syncing = false;
+  }
+
+  void _onFocus() {
+    if (!_focusNode.hasFocus) _flush();
+  }
+
+  void _onChanged(String text) {
+    if (_syncing) return;
+    _editor = ref.read(gameEditorProvider);
+    _pendingId = _gameId;
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(seconds: 1), _flush);
+  }
+
+  void _flush() {
+    final id = _pendingId;
+    final editor = _editor;
+    _debounce?.cancel();
+    _debounce = null;
+    _pendingId = null;
+    if (id == null || editor == null) return;
+    final text = _controller.text;
+    if (text == _stored && id == _gameId) return;
+    _stored = id == _gameId ? text : _stored;
+    editor.update(id, (g) => g.notes = text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DetailSection(
+      label: 'Notes',
+      // A focused TextField lets Escape through to the library, which would
+      // close the pane. Swallow it here: no cancel, no shortcut, the text
+      // stays and still saves on blur or after 1 s.
+      child: Focus(
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.escape) {
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: TextField(
+          key: const ValueKey('notes-field'),
+          controller: _controller,
+          focusNode: _focusNode,
+          maxLines: null,
+          minLines: 2,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            hintText: 'No notes',
+          ),
+          onChanged: _onChanged,
+        ),
       ),
     );
   }
