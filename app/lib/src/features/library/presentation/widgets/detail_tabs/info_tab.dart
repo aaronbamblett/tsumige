@@ -81,12 +81,6 @@ class InfoTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final blocks = <Widget>[];
     blocks.add(_facts(context, ref));
-    if (game.tags.isNotEmpty) {
-      blocks.add(_TagsSection(game: game));
-    }
-    if (game.vndbTags.isNotEmpty) {
-      blocks.add(_VndbTagsSection(key: ValueKey(game.id), game: game));
-    }
     blocks.add(_MarkupSection(
       game: game,
       label: 'Description',
@@ -95,6 +89,13 @@ class InfoTab extends ConsumerWidget {
       getValue: (g) => g.description,
       setValue: (g, v) => g.description = v,
     ));
+    if (game.tags.isNotEmpty) {
+      blocks.add(_TagsSection(key: ValueKey('tags-${game.id}'), game: game));
+    }
+    if (game.vndbTags.isNotEmpty) {
+      blocks.add(
+          _VndbTagsSection(key: ValueKey('vndb-tags-${game.id}'), game: game));
+    }
     blocks.add(_MarkupSection(
       game: game,
       label: 'Notes',
@@ -368,7 +369,7 @@ class _VndbTagChip extends ConsumerWidget {
 }
 
 class _TagsSection extends ConsumerStatefulWidget {
-  const _TagsSection({required this.game});
+  const _TagsSection({super.key, required this.game});
 
   final Game game;
 

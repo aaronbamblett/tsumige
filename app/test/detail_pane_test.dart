@@ -437,6 +437,31 @@ void main() {
         findsOneWidget);
   });
 
+  testWidgets('info tab orders Description, Tags, VNDB tags, Notes',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        description: 'A story',
+        notes: 'Some notes',
+        tags: ['Cozy'],
+        vndbTags: const [
+          core.VndbTag(
+              name: 'Romance', rating: 2.5, spoiler: 0, category: 'cont'),
+        ],
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    final descriptionY = tester.getTopLeft(paneText(tester, 'Description')).dy;
+    final tagsY = tester.getTopLeft(paneText(tester, 'Tags')).dy;
+    final vndbTagsY = tester.getTopLeft(paneText(tester, 'VNDB tags')).dy;
+    final notesY = tester.getTopLeft(paneText(tester, 'Notes')).dy;
+    expect(descriptionY, lessThan(tagsY));
+    expect(tagsY, lessThan(vndbTagsY));
+    expect(vndbTagsY, lessThan(notesY));
+  });
+
   testWidgets('changing the game resets the tab to Info', (tester) async {
     await pumpLibrary(tester, [
       core.Game(id: 'g1', title: 'Alpha', description: 'Alpha story'),
