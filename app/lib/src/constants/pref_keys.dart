@@ -50,7 +50,8 @@ enum PrefKey {
   windowMaximized('window.maximized', false),
   appTheme('appearance.appTheme', null),
   themeMode('appearance.themeMode', null),
-  customThemeColor('appearance.customColor', null);
+  customThemeColor('appearance.customColor', null),
+  steamGridDbKey('artSources.steamGridDbKey', '');
 
   const PrefKey(this.key, this.defaultValue);
 
