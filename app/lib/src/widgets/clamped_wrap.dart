@@ -204,6 +204,7 @@ class RenderClampedWrap extends RenderBox
     assert(value == null || value > 0);
     if (value == _maxRows) return;
     _maxRows = value;
+    _maxRowsChanged = true;
     markNeedsLayout();
   }
 
@@ -244,6 +245,7 @@ class RenderClampedWrap extends RenderBox
   bool _notified = false;
   int _notifiedVisible = -1;
   bool _hasNotified = false;
+  bool _maxRowsChanged = false;
   bool _notifyScheduled = false;
 
   @override
@@ -383,6 +385,7 @@ class RenderClampedWrap extends RenderBox
 
     if (!_notifyScheduled &&
         (!_hasNotified ||
+            _maxRowsChanged ||
             _overflow != _notified ||
             _visibleLeading != _notifiedVisible)) {
       _notifyScheduled = true;
@@ -390,6 +393,7 @@ class RenderClampedWrap extends RenderBox
         _notifyScheduled = false;
         if (!attached) return;
         _hasNotified = true;
+        _maxRowsChanged = false;
         _notified = _overflow;
         _notifiedVisible = _visibleLeading;
         onOverflowChanged?.call(_overflow);

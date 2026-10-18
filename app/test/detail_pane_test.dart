@@ -635,6 +635,81 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('collapsing after removing tags clears the fold action',
+      (tester) async {
+    final games = [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        tags: [
+          for (var i = 0; i < 20; i++) 'Extremely long tag number $i',
+        ],
+      ),
+    ];
+    await pumpLibrary(tester, games);
+    await openPane(tester, 'Alpha');
+    await tester.ensureVisible(paneText(tester, 'Show all 20'));
+    await tester.tap(paneText(tester, 'Show all 20'));
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Extremely long tag number 19'), findsOneWidget);
+    for (var i = 19; i >= 1; i--) {
+      final remove =
+          find.byTooltip('Remove Extremely long tag number $i');
+      await tester.ensureVisible(remove);
+      await tester.tap(remove);
+      await tester.pump();
+    }
+    expect(games.single.tags, hasLength(1));
+    await tester.ensureVisible(paneText(tester, 'Show fewer'));
+    await tester.tap(paneText(tester, 'Show fewer'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Show all'), findsNothing);
+    expect(find.textContaining('Show fewer'), findsNothing);
+  });
+
+  testWidgets('VNDB collapse after hiding spoilers clears the fold action',
+      (tester) async {
+    const categories = ['cont', 'tech', 'ero'];
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        vndbTags: [
+          const core.VndbTag(
+              name: 'Cozy', rating: 3.0, spoiler: 0, category: 'cont'),
+          const core.VndbTag(
+              name: 'Short', rating: 2.5, spoiler: 0, category: 'tech'),
+          for (var i = 0; i < 40; i++)
+            core.VndbTag(
+              name: 'Secret twist $i',
+              rating: 3.9 - i * 0.05,
+              spoiler: 2,
+              category: categories[i % 3],
+            ),
+        ],
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Show all'), findsNothing);
+    await tester.ensureVisible(paneText(tester, 'Show spoilers'));
+    await tester.tap(paneText(tester, 'Show spoilers'));
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Show all 2'), findsOneWidget);
+    await tester.ensureVisible(paneText(tester, 'Show all 2'));
+    await tester.tap(paneText(tester, 'Show all 2'));
+    await tester.pumpAndSettle();
+    expect(paneText(tester, 'Content'), findsOneWidget);
+    await tester.ensureVisible(paneText(tester, 'Hide spoilers'));
+    await tester.tap(paneText(tester, 'Hide spoilers'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(paneText(tester, 'Show fewer'));
+    await tester.tap(paneText(tester, 'Show fewer'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Show all'), findsNothing);
+    expect(find.textContaining('Show fewer'), findsNothing);
+  });
+
   testWidgets('two short tags show no fold action', (tester) async {
     await pumpLibrary(tester, [
       core.Game(id: 'g1', title: 'Alpha', tags: ['Cozy', 'Short']),
