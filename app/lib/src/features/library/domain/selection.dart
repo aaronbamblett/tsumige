@@ -9,6 +9,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../core/groups.dart';
 import '../../../core/model.dart';
 import '../data/library_repository.dart';
+import 'cover_source.dart';
 
 part 'selection.g.dart';
 
@@ -59,7 +60,22 @@ class MultiSelection extends _$MultiSelection {
   String? _anchor;
 
   @override
-  List<String> build() => const [];
+  List<String> build() {
+    ref.listen(visibleTilesProvider, (_, next) {
+      if (state.isEmpty) return;
+      final visible = {for (final tile in next) tile.key};
+      final kept = [for (final id in state) if (visible.contains(id)) id];
+      if (kept.length == state.length) return;
+      _anchor = null;
+      if (kept.length == 1) {
+        state = const [];
+        ref.read(selectedGameIdProvider.notifier).select(kept.single);
+      } else {
+        state = kept;
+      }
+    });
+    return const [];
+  }
 
   /// A plain click collapses back to one tile: no multi-selection.
   void showSingle(String id) {
