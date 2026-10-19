@@ -588,6 +588,44 @@ void main() {
     );
   });
 
+  testWidgets('one suggestion sizes the Review dialog to its content',
+      (tester) async {
+    await pumpGroups(tester, suggestionLibrary(beta: false));
+    await tester.tap(find.text('Review'));
+    await tester.pumpAndSettle();
+    final frame = find.byKey(const ValueKey('group-suggestions-frame'));
+    expect(frame, findsOneWidget);
+    // The shell maximum for this window is 720 high; one card is far shorter.
+    expect(tester.getSize(frame).height, lessThan(700));
+  });
+
+  testWidgets('Group and Not a series share one width, no cover is an icon',
+      (tester) async {
+    await pumpGroups(tester, suggestionLibrary(beta: false));
+    await tester.tap(find.text('Review'));
+    await tester.pumpAndSettle();
+    final frame = find.byKey(const ValueKey('group-suggestions-frame'));
+    final groupWidth =
+        tester.getSize(find.byKey(const Key('suggest-group:a1,a2'))).width;
+    final dismissWidth =
+        tester.getSize(find.byKey(const Key('suggest-dismiss:a1,a2'))).width;
+    expect(groupWidth, dismissWidth);
+    expect(
+      find.descendant(
+        of: frame,
+        matching: find.byIcon(Icons.image_not_supported_outlined),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: frame,
+        matching: find.text('No cover'),
+      ),
+      findsNothing,
+    );
+  });
+
   testWidgets('Group creates the group and its tile', (tester) async {
     final fake = await pumpGroups(tester, suggestionLibrary());
     await tester.tap(find.text('Review'));
