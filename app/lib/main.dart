@@ -20,6 +20,7 @@ import 'src/l10n/generated/app_localizations.dart';
 import 'src/routes/router.dart';
 import 'src/utils/app_scroll_behavior.dart';
 import 'src/utils/desktop/desktop_window.dart';
+import 'src/utils/font_licenses.dart';
 import 'src/utils/prefs/prefs_mixin.dart';
 import 'src/utils/startup_time.dart';
 import 'src/utils/theme/app_theme_builder.dart';
@@ -41,6 +42,7 @@ Future<void> main() async {
   final prefs = await SharedPreferences.getInstance();
   await migrateLaunchPrefix(prefs, env);
   await initDesktopWindow(prefs);
+  registerFontLicenses();
   runApp(
     ProviderScope(
       overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],

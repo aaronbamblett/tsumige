@@ -59,6 +59,9 @@ ThemeData buildAppTheme({
 
   return ThemeData(
     useMaterial3: true,
+    // Bundled Inter covers Latin text; glyphs it lacks fall back to the
+    // platform fonts, which keeps every other script on its system font.
+    fontFamily: 'Inter',
     colorScheme: scheme,
     extensions: [brandColors],
     scaffoldBackgroundColor: scheme.surface,
