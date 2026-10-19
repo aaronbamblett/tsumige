@@ -67,12 +67,20 @@ class MultiSelection extends _$MultiSelection {
     state = const [];
   }
 
-  /// Ctrl+click toggles a tile in or out, in click order.
+  /// Ctrl+click toggles a tile in or out, in click order. The first one
+  /// seeds the selection with the open tile, so it stays selected too.
   void toggle(String id) {
     _anchor = id;
     if (state.contains(id)) {
       state = [for (final other in state) if (other != id) other];
     } else {
+      if (state.isEmpty) {
+        final open = ref.read(selectedGameIdProvider);
+        if (open != null && open != id) {
+          state = [open, id];
+          return;
+        }
+      }
       state = [...state, id];
     }
   }
