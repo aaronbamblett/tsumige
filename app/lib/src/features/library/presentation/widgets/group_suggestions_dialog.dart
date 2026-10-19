@@ -29,15 +29,6 @@ Future<void> showGroupSuggestionsDialog(BuildContext context) {
   );
 }
 
-String _reasonLine(String reason) => switch (reason) {
-      'sharedVndb' =>
-        'They share a VNDB entry, and each title names a part.',
-      'sequelChain' =>
-        'VNDB lists them as a sequel chain, and each title names a part.',
-      _ => 'They share VNDB entries and form a sequel chain, '
-          'and each title names a part.',
-    };
-
 /// The Review list in the app's dialog shell. Each card Groups through the
 /// same path as Combine, or dismisses the suggestion as "Not a series". When
 /// the last card is gone the dialog closes by itself.
@@ -98,7 +89,6 @@ class _SuggestionCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final scheme = Theme.of(context).colorScheme;
     final members = [
       for (final id in suggestion.memberIds)
         if (byId[id] != null) byId[id]!,
@@ -132,14 +122,6 @@ class _SuggestionCard extends ConsumerWidget {
                   Text(
                     shorts.join(', '),
                     style: const TextStyle(fontSize: 13.5),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _reasonLine(suggestion.reason),
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: scheme.onSurfaceVariant,
-                    ),
                   ),
                 ],
               ),

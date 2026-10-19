@@ -579,12 +579,17 @@ void main() {
     expect(find.text('Episode 1, Episode 2'), findsNWidgets(2));
     expect(
       find.text('They share a VNDB entry, and each title names a part.'),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.text(
           'VNDB lists them as a sequel chain, and each title names a part.'),
-      findsOneWidget,
+      findsNothing,
+    );
+    expect(
+      find.text('They share VNDB entries and form a sequel chain, '
+          'and each title names a part.'),
+      findsNothing,
     );
   });
 
