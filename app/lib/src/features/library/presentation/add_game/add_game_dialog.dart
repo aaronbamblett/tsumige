@@ -418,20 +418,10 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     });
   }
 
-  void _startSteam() {
-    _title.text = '';
-    _description.text = '';
-    _exe.text = '';
-    _steamAppId.text = '';
-    setState(() {
-      _tagList = [];
-      _picked = null;
-      _manual = true;
-      _mode = LaunchMode.steam;
-      _formError = null;
-      _setupBack = _AddStep.start;
-      _step = _AddStep.setup;
-    });
+  Future<void> _openSteam() async {
+    final result = await showSteamGamesDialog(context);
+    if (!mounted || result == null || result == ImportFolderResult.back) return;
+    Navigator.of(context).pop();
   }
 
   void _findOnVndb() {
@@ -708,9 +698,9 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   context,
                   key: const Key('add-game-steam'),
                   icon: Icons.sports_esports_outlined,
-                  title: 'Steam game',
-                  subtitle: 'By App ID',
-                  onTap: _checkingFolder ? null : _startSteam,
+                  title: 'Steam games',
+                  subtitle: 'Installed on this computer',
+                  onTap: _checkingFolder ? null : _openSteam,
                 ),
               ),
               const SizedBox(width: 12),
