@@ -557,6 +557,134 @@ void main() {
     });
   });
 
+  group('query variants', () {
+    test('a CamelCase name splits at lower-to-Upper boundaries', () {
+      expect(splitCamelQuery('MakingLovers'), 'Making Lovers');
+      expect(splitCamelQuery('PhantomENG'), 'Phantom ENG');
+    });
+
+    test('an all-caps name stays whole', () {
+      expect(splitCamelQuery('KANADE'), isNull);
+      expect(splitCamelQuery('Making Lovers'), isNull);
+    });
+
+    test('a trailing language tag is dropped', () {
+      expect(stripLanguageTag('PhantomENG'), 'Phantom');
+      expect(stripLanguageTag('Game ENG'), 'Game');
+      expect(stripLanguageTag('Game Japanese'), 'Game');
+      expect(stripLanguageTag('GameJp'), 'Game');
+      expect(stripLanguageTag('GameEnglish'), 'Game');
+    });
+
+    test('names without a tag stay whole', () {
+      expect(stripLanguageTag('KANADE'), isNull);
+      expect(stripLanguageTag('OPEN'), isNull);
+      expect(stripLanguageTag('Making Lovers'), isNull);
+    });
+
+    test('variants run cleaned, split, then untagged', () {
+      expect(folderQueryVariants('MakingLovers'), [
+        'MakingLovers',
+        'Making Lovers',
+      ]);
+      expect(folderQueryVariants('PhantomENG'), [
+        'PhantomENG',
+        'Phantom ENG',
+        'Phantom',
+      ]);
+      expect(folderQueryVariants('KANADE'), ['KANADE']);
+    });
+
+    test('parent folders run nearest first', () {
+      final exeDir = p.join(
+        'Lib',
+        'Phantom of Inferno Nitro Archive',
+        'PhantomENG',
+      );
+      expect(
+        parentFolderQueries(exeDir: exeDir, root: 'Lib'),
+        ['Phantom of Inferno Nitro Archive'],
+      );
+      expect(parentFolderQueries(exeDir: exeDir, root: null), isEmpty);
+    });
+  });
+
+  group('lookupFolderMatch', () {
+    test('a split name finds what the glued name misses', () async {
+      final asked = <String>[];
+      final match = await lookupFolderMatch(
+        query: 'MakingLovers',
+        parentQueries: const [],
+        search: (query) async {
+          asked.add(query);
+          return query == 'Making Lovers' ? [_vn('v21552', 'Making Lovers')] : const [];
+        },
+      );
+      expect(asked, ['MakingLovers', 'Making Lovers']);
+      expect(match.state, ImportMatchState.matched);
+      expect(match.vn!.id, 'v21552');
+    });
+
+    test('a parent folder finds what the exe folder misses', () async {
+      final asked = <String>[];
+      final match = await lookupFolderMatch(
+        query: 'PhantomENG',
+        parentQueries: ['Phantom of Inferno Nitro Archive'],
+        search: (query) async {
+          asked.add(query);
+          if (query == 'Phantom of Inferno Nitro Archive') {
+            return [_vn('v45', 'Phantom of Inferno')];
+          }
+          return const <VnSearchResult>[];
+        },
+      );
+      expect(asked.last, 'Phantom of Inferno Nitro Archive');
+      expect(match.state, ImportMatchState.matched);
+      expect(match.vn!.id, 'v45');
+    });
+
+    test('stops at the first matched', () async {
+      final asked = <String>[];
+      final match = await lookupFolderMatch(
+        query: 'DEMO',
+        parentQueries: ['Parent'],
+        search: (query) async {
+          asked.add(query);
+          return [_vn('v1', 'DEMO')];
+        },
+      );
+      expect(asked, ['DEMO']);
+      expect(match.state, ImportMatchState.matched);
+    });
+
+    test('otherwise keeps the first check', () async {
+      final match = await lookupFolderMatch(
+        query: 'Solo Quest',
+        parentQueries: const [],
+        search: (query) async => [
+          _vn('v7', 'Solo Quest Remake'),
+          _vn('v8', 'Solo Quest Remaster'),
+        ],
+      );
+      expect(match.state, ImportMatchState.check);
+      expect(match.vn!.id, 'v7');
+    });
+
+    test('each variant keeps its shortened retry', () async {
+      final asked = <String>[];
+      final match = await lookupFolderMatch(
+        query: 'Game Title - Subtitle Here',
+        parentQueries: const [],
+        search: (query) async {
+          asked.add(query);
+          return query == 'Game Title' ? [_vn('v1', 'Game Title')] : const [];
+        },
+      );
+      expect(asked, ['Game Title - Subtitle Here', 'Game Title']);
+      expect(match.state, ImportMatchState.matched);
+    });
+  });
+
   group('shortenedQuery and lookupFolder', () {
     test('drops a subtitle after " - " or a colon', () {
       expect(shortenedQuery('Game Title - Subtitle Here'), 'Game Title');

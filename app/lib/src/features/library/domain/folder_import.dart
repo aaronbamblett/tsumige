@@ -675,3 +675,116 @@ Future<List<VnSearchResult>> lookupFolder(
   final shortened = shortenedQuery(folder);
   return shortened == null ? results : search(shortened);
 }
+
+/// Splits CamelCase at lower-to-Upper boundaries: `MakingLovers` becomes
+/// `Making Lovers`. Null when there is no such boundary, so `KANADE`
+/// stays whole.
+String? splitCamelQuery(String query) {
+  final split = query
+      .replaceAllMapped(RegExp('(?<=[a-z])(?=[A-Z])'), (_) => ' ')
+      .split(RegExp(r'\s+'))
+      .where((w) => w.isNotEmpty)
+      .join(' ');
+  return split == query || split.isEmpty ? null : split;
+}
+
+const _languageTags = {
+  'japanese',
+  'english',
+  'eng',
+  'jpn',
+  'jp',
+  'en',
+};
+
+/// Drops a trailing language tag (`ENG`, `EN`, `JP`, `JPN`, `English` or
+/// `Japanese`): as a separate word, or as a CamelCase suffix as in
+/// `PhantomENG`, which becomes `Phantom`. Null when there is none.
+String? stripLanguageTag(String query) {
+  final trimmed = query.trim();
+  if (trimmed.isEmpty) return null;
+  final words = trimmed.split(RegExp(r'\s+'));
+  if (words.length > 1) {
+    if (_languageTags.contains(words.last.toLowerCase())) {
+      return words.sublist(0, words.length - 1).join(' ');
+    }
+    return null;
+  }
+  final word = words.single;
+  final lower = word.toLowerCase();
+  for (final tag in _languageTags) {
+    if (word.length > tag.length &&
+        lower.endsWith(tag) &&
+        _isAsciiLower(word[word.length - tag.length - 1])) {
+      return word.substring(0, word.length - tag.length);
+    }
+  }
+  return null;
+}
+
+bool _isAsciiLower(String char) {
+  final code = char.codeUnitAt(0);
+  return code >= 0x61 && code <= 0x7a;
+}
+
+/// The queries to try for a cleaned folder name, in order: the name
+/// itself, its CamelCase split, and each of those with a trailing
+/// language tag dropped.
+List<String> folderQueryVariants(String cleaned) {
+  final out = <String>[cleaned];
+  final split = splitCamelQuery(cleaned);
+  if (split != null) out.add(split);
+  for (final base in [...out]) {
+    final stripped = stripLanguageTag(base);
+    if (stripped != null &&
+        stripped.isNotEmpty &&
+        !out.contains(stripped)) {
+      out.add(stripped);
+    }
+  }
+  return out;
+}
+
+/// The cleaned names of the folders between [exeDir] (the folder holding
+/// the row's exe) and the scanned [root], nearest first. Empty when
+/// [root] is unknown: without it there is no scope to search upwards in.
+List<String> parentFolderQueries({
+  required String exeDir,
+  required String? root,
+}) {
+  if (root == null || root.isEmpty) return const [];
+  final stop = p.normalize(root);
+  final out = <String>[];
+  var dir = p.dirname(p.normalize(exeDir));
+  while (!p.equals(dir, stop) && p.isWithin(stop, dir)) {
+    final cleaned = cleanFolderName(p.basename(dir));
+    if (cleaned.isNotEmpty && !out.contains(cleaned)) out.add(cleaned);
+    final parent = p.dirname(dir);
+    if (parent == dir) break;
+    dir = parent;
+  }
+  return out;
+}
+
+/// Searches VNDB for each query variant in order (the cleaned name, its
+/// CamelCase split, language tags dropped, then the parent folders
+/// nearest first), each with its [shortenedQuery] retry. Stops at the
+/// first matched; otherwise keeps the first check.
+Future<FolderMatch> lookupFolderMatch({
+  required String query,
+  required List<String> parentQueries,
+  required Future<List<VnSearchResult>> Function(String query) search,
+}) async {
+  FolderMatch? check;
+  final tried = <String>{};
+  for (final candidate in [...folderQueryVariants(query), ...parentQueries]) {
+    if (candidate.isEmpty || !tried.add(candidate)) continue;
+    final results = await lookupFolder(candidate, search);
+    final match = matchFolder(candidate, results);
+    if (match.state == ImportMatchState.matched) return match;
+    if (check == null && match.state == ImportMatchState.check) {
+      check = match;
+    }
+  }
+  return check ?? const FolderMatch(ImportMatchState.none, null);
+}

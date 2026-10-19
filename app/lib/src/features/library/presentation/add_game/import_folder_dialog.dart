@@ -228,21 +228,35 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     }
   }
 
+  String? _rootFor(String path) {
+    for (final root in _roots) {
+      if (p.equals(root, path) || p.isWithin(root, path)) return root;
+    }
+    return null;
+  }
+
   Future<void> _match(_ImportRow row, int token) async {
     final query = cleanFolderName(row.folder.name);
-    var results = const <VnSearchResult>[];
+    final exeDir = row.exePath == null
+        ? row.folder.path
+        : p.dirname(row.exePath!);
+    final parents = parentFolderQueries(
+      exeDir: exeDir,
+      root: _rootFor(row.folder.path),
+    );
+    var match = const FolderMatch(ImportMatchState.none, null);
     String? error;
     try {
-      results = await lookupFolder(
-        query,
-        ref.read(vndbSearchClientProvider).search,
+      match = await lookupFolderMatch(
+        query: query,
+        parentQueries: parents,
+        search: ref.read(vndbSearchClientProvider).search,
       );
     } catch (e) {
       error = '$e';
     }
     if (!mounted || token != _scanToken) return;
     setState(() {
-      final match = matchFolder(query, results);
       row.state = match.state;
       row.vn = match.vn;
       row.error = error;
