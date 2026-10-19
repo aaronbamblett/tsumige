@@ -73,6 +73,7 @@ class _SgdbConfig {
     this.releaseGate,
     this.searchGate,
     this.vndbExtlinks = const <Map<String, Object?>>[],
+    this.vndbReleases,
     this.sgdbRequests,
     this.vndbReleaseBodies,
     this.vndbReleaseStatus = 200,
@@ -91,6 +92,7 @@ class _SgdbConfig {
   Completer<void>? releaseGate;
   Completer<void>? searchGate;
   List<Map<String, Object?>> vndbExtlinks;
+  List<Map<String, Object?>>? vndbReleases;
   List<Uri>? sgdbRequests;
   List<String>? vndbReleaseBodies;
   int vndbReleaseStatus;
@@ -183,7 +185,7 @@ http.Client _fakeSgdbHttp(_SgdbConfig config, List<String> downloads) {
         }
         return http.Response(
           jsonEncode({
-            'results': [
+            'results': config.vndbReleases ?? [
               {
                 'images': [],
                 'extlinks': config.vndbExtlinks,
@@ -295,6 +297,45 @@ Future<core.LoadedLibrary> _pumpSgdbDialog(
   await _settle(tester);
   return loaded;
 }
+
+List<Map<String, Object?>> _higurashiReleases() => [
+  {
+    'title': 'Higurashi no Naku Koro ni Hou - Meakashi Hen',
+    'extlinks': [
+      {'name': 'steam', 'id': '577480'},
+    ],
+  },
+  {
+    'title': 'Higurashi no Naku Koro ni Hou - Tsumihoroboshi Hen',
+    'extlinks': [
+      {'name': 'steam', 'id': '668350'},
+    ],
+  },
+  {
+    'title': 'Higurashi no Naku Koro ni Hou - Minagoroshi Hen',
+    'extlinks': [
+      {'name': 'steam', 'id': '1034940'},
+    ],
+  },
+  {
+    'title': 'Higurashi no Naku Koro ni Hou - Matsuribayashi Hen',
+    'extlinks': [
+      {'name': 'steam', 'id': '1243670'},
+    ],
+  },
+  {
+    'title': 'Higurashi no Naku Koro ni Hou+',
+    'extlinks': [
+      {'name': 'steam', 'id': '2491040'},
+    ],
+  },
+];
+
+bool _chipSelected(WidgetTester tester, String name) =>
+    tester.widget<Text>(find.text(name)).style?.fontWeight == FontWeight.w600;
+
+const _tsumihoroboshi = 'Higurashi no Naku Koro ni Hou - Tsumihoroboshi Hen';
+const _minagoroshi = 'Higurashi no Naku Koro ni Hou - Minagoroshi Hen';
 
 void main() {
   testWidgets('no key shows the note and Set API key', (tester) async {
@@ -1155,5 +1196,100 @@ void main() {
       tester.element(find.byType(ArtPickerDialog)),
     );
     expect(container.read(steamGridDbKeyProvider), 'fake-test-key');
+  });
+
+  testWidgets('several Steam apps show a chip each and preselect the title match',
+      (tester) async {
+    final sgdb = <Uri>[];
+    final releases = <String>[];
+    await _pumpSgdbDialog(
+      tester,
+      prefsKey: 'fake-test-key',
+      game: core.Game(
+        id: 'g1',
+        title: 'Higurashi When They Cry Hou - Ch.6 Tsumihoroboshi',
+        vndbId: 'v68',
+      ),
+      config: _SgdbConfig(
+        sgdbRequests: sgdb,
+        vndbReleaseBodies: releases,
+        vndbReleases: _higurashiReleases(),
+      ),
+    );
+    for (final app in _higurashiReleases()) {
+      expect(find.text(app['title'] as String), findsOneWidget);
+    }
+    expect(_chipSelected(tester, _tsumihoroboshi), isTrue);
+    expect(_chipSelected(tester, _minagoroshi), isFalse);
+    expect(
+      sgdb
+          .where((u) => u.path.startsWith('/api/v2/grids/steam/'))
+          .map((u) => u.path),
+      ['/api/v2/grids/steam/668350'],
+    );
+    expect(releases.where((b) => b.contains('"extlink"')), hasLength(1));
+  });
+
+  testWidgets('picking another Steam chip loads its art on both tabs',
+      (tester) async {
+    final sgdb = <Uri>[];
+    final releases = <String>[];
+    await _pumpSgdbDialog(
+      tester,
+      prefsKey: 'fake-test-key',
+      game: core.Game(
+        id: 'g1',
+        title: 'Higurashi When They Cry Hou - Ch.6 Tsumihoroboshi',
+        vndbId: 'v68',
+      ),
+      config: _SgdbConfig(
+        sgdbRequests: sgdb,
+        vndbReleaseBodies: releases,
+        vndbReleases: _higurashiReleases(),
+      ),
+    );
+    await tester.tap(find.text(_minagoroshi));
+    await tester.pump();
+    await _settle(tester);
+    expect(_chipSelected(tester, _minagoroshi), isTrue);
+    expect(_chipSelected(tester, _tsumihoroboshi), isFalse);
+    expect(
+      sgdb.where((u) => u.path == '/api/v2/grids/steam/1034940'),
+      hasLength(1),
+    );
+    await tester.tap(find.text('Background'));
+    await tester.pump();
+    await _settle(tester);
+    expect(_chipSelected(tester, _minagoroshi), isTrue);
+    expect(
+      sgdb.where((u) => u.path == '/api/v2/heroes/steam/1034940'),
+      hasLength(1),
+    );
+    expect(find.byKey(ValueKey('art-$_sgdbHero')), findsOneWidget);
+    expect(releases.where((b) => b.contains('"extlink"')), hasLength(1));
+  });
+
+  testWidgets('without a title match the first Steam app is preselected',
+      (tester) async {
+    final sgdb = <Uri>[];
+    await _pumpSgdbDialog(
+      tester,
+      prefsKey: 'fake-test-key',
+      game: core.Game(id: 'g1', title: 'Something Else', vndbId: 'v68'),
+      config: _SgdbConfig(
+        sgdbRequests: sgdb,
+        vndbReleases: _higurashiReleases(),
+      ),
+    );
+    expect(
+      _chipSelected(tester, 'Higurashi no Naku Koro ni Hou - Meakashi Hen'),
+      isTrue,
+    );
+    expect(
+      sgdb
+          .where((u) => u.path.startsWith('/api/v2/grids/steam/'))
+          .map((u) => u.path),
+      ['/api/v2/grids/steam/577480'],
+    );
   });
 }

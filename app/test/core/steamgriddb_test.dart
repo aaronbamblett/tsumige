@@ -212,7 +212,7 @@ void main() {
     expect(normalizeGridTitle('White Album 2'), 'whitealbum2');
   });
 
-  group('fetchSteamAppIds', () {
+  group('fetchSteamApps', () {
     VndbClient vndbFor(List<Map<String, Object?>> releases) => VndbClient(
       client: MockClient((request) async {
         if (request.url.path.endsWith('/release')) {
@@ -238,18 +238,20 @@ void main() {
         }),
         retryDelay: Duration.zero,
       );
-      await client.fetchSteamAppIds('v123');
+      await client.fetchSteamApps('v123');
       expect(seen!['filters'], [
         'and',
         ['vn', '=', ['id', '=', 'v123']],
         ['extlink', '=', 'steam'],
       ]);
-      expect(seen!['fields'], 'extlinks.name,extlinks.id');
+      expect(seen!['fields'], 'title,extlinks.name,extlinks.id');
     });
 
-    test('parses string and int ids and de-duplicates', () async {
+    test('parses string and int ids, de-duplicates, keeps the first title',
+        () async {
       final client = vndbFor([
         {
+          'title': 'First',
           'extlinks': [
             {'name': 'steam', 'id': '100'},
             {'name': 'website', 'id': 'https://example.com'},
@@ -257,13 +259,17 @@ void main() {
           ],
         },
         {
+          'title': 'Second',
           'extlinks': [
             {'name': 'steam', 'id': 100},
             {'name': 'steam', 'id': 'not-a-number'},
           ],
         },
       ]);
-      expect(await client.fetchSteamAppIds('v1'), [100, 200]);
+      expect(await client.fetchSteamApps('v1'), [
+        (appId: 100, title: 'First'),
+        (appId: 200, title: 'First'),
+      ]);
     });
   });
 }

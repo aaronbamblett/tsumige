@@ -1157,6 +1157,8 @@ enum _SgdbKind {
 /// kind fetch never invalidates the lookup or the other kind.
 class _SgdbShared extends ChangeNotifier {
   List<int>? steamIds;
+  /// The VN's Steam apps to choose between when there is more than one.
+  List<SteamApp> steamChoices = const [];
   List<SteamGridDbGame>? search;
   int? selectedSearchId;
   var grids = const <ArtCandidate>[];
@@ -1241,6 +1243,7 @@ class _SgdbShared extends ChangeNotifier {
     _gridsFuture = null;
     _heroesFuture = null;
     steamIds = null;
+    steamChoices = const [];
     search = null;
     selectedSearchId = null;
     grids = const [];
@@ -1291,7 +1294,7 @@ class _SgdbShared extends ChangeNotifier {
   /// does not depend on the search selection; search art does.
   String _artKey(String print) {
     final ids = steamIds;
-    if (ids != null && ids.isNotEmpty) return '$print|steam';
+    if (ids != null && ids.isNotEmpty) return '$print|steam:${ids.join(',')}';
     return '$print|search:$selectedSearchId';
   }
 
@@ -1393,19 +1396,20 @@ class _SgdbShared extends ChangeNotifier {
   }) async {
     bool stale() => _disposed || generation != _lookupGeneration;
     try {
-      List<int> ids = const [];
+      List<SteamApp> apps = const [];
       if (game.launch.steamAppId != null) {
-        ids = [game.launch.steamAppId!];
+        apps = [(appId: game.launch.steamAppId!, title: game.title)];
       } else if (game.vndbId != null) {
         try {
-          ids = await vndb.fetchSteamAppIds(game.vndbId!);
+          apps = await vndb.fetchSteamApps(game.vndbId!);
         } catch (_) {
-          ids = const [];
+          apps = const [];
         }
       }
       if (stale()) return;
-      if (ids.isNotEmpty) {
-        steamIds = ids;
+      if (apps.isNotEmpty) {
+        steamChoices = apps.length > 1 ? apps : const [];
+        steamIds = [_preselectSteamApp(game.title, apps)];
         search = null;
         lookupFor = print;
         _notify();
@@ -1422,6 +1426,7 @@ class _SgdbShared extends ChangeNotifier {
         }
       }
       steamIds = const [];
+      steamChoices = const [];
       search = results;
       selectedSearchId = selected;
       lookupFor = print;
@@ -1502,10 +1507,33 @@ class _SgdbShared extends ChangeNotifier {
     required SteamGridDbClient? client,
   }) async {
     if (client == null) return;
+    selectedSearchId = id;
+    await _reselect(kind, game: game, key: key, client: client);
+  }
+
+  /// The user picked one of the VN's Steam apps: load this tab's art for it,
+  /// with the same invalidation as [selectSearch].
+  Future<void> selectSteam(
+    _SgdbKind kind,
+    int appId, {
+    required Game game,
+    required String key,
+    required SteamGridDbClient? client,
+  }) async {
+    if (client == null) return;
+    steamIds = [appId];
+    await _reselect(kind, game: game, key: key, client: client);
+  }
+
+  Future<void> _reselect(
+    _SgdbKind kind, {
+    required Game game,
+    required String key,
+    required SteamGridDbClient client,
+  }) async {
     final generation = kind == _SgdbKind.grids
         ? ++_gridsGeneration
         : ++_heroesGeneration;
-    selectedSearchId = id;
     _setLoading(kind, true);
     _setError(kind, null);
     _notify();
@@ -1533,6 +1561,28 @@ class _SgdbShared extends ChangeNotifier {
 /// SteamGridDB art below the VNDB art: covers on the Cover tab, heroes on the
 /// Background tab. Loads independently of VNDB so one source never blocks the
 /// other. The lookup is shared between the tabs; only the key form is local.
+/// The Steam app whose title shares the most words with [gameTitle]. Words
+/// that every release shares are ignored; a tie or no overlap keeps the first.
+int _preselectSteamApp(String gameTitle, List<SteamApp> apps) {
+  Set<String> words(String title) => {
+    for (final word in title.split(RegExp(r'[^A-Za-z0-9]+')))
+      if (word.isNotEmpty) normalizeGridTitle(word),
+  };
+  final releases = [for (final app in apps) words(app.title)];
+  final common = releases.reduce((a, b) => a.intersection(b));
+  final game = words(gameTitle).difference(common);
+  var best = 0;
+  var bestScore = -1;
+  for (var i = 0; i < apps.length; i++) {
+    final score = releases[i].difference(common).intersection(game).length;
+    if (score > bestScore) {
+      best = i;
+      bestScore = score;
+    }
+  }
+  return apps[best].appId;
+}
+
 class _SteamGridDbSection extends ConsumerStatefulWidget {
   const _SteamGridDbSection({
     super.key,
@@ -1637,6 +1687,18 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
       _shared.selectSearch(
         _kind,
         id,
+        game: widget.game,
+        key: ref.read(steamGridDbKeyProvider),
+        client: ref.read(steamGridDbClientProvider),
+      ),
+    );
+  }
+
+  void _selectSteam(int appId) {
+    unawaited(
+      _shared.selectSteam(
+        _kind,
+        appId,
         game: widget.game,
         key: ref.read(steamGridDbKeyProvider),
         client: ref.read(steamGridDbClientProvider),
@@ -1843,6 +1905,31 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
     if (shared.steamIds == null && shared.search == null) {
       return const [_SgdbPending()];
     }
+    if (shared.steamChoices.length > 1) {
+      final selectedAppId = shared.steamIds?.first;
+      return [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final app in shared.steamChoices)
+              _chip(
+                scheme,
+                id: app.appId,
+                name: app.title,
+                selected: app.appId == selectedAppId,
+                onTap: _selectSteam,
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (!loading && arts.isEmpty)
+          Text(emptyMessage)
+        else
+          _grid(scheme, arts),
+        if (loading && arts.isEmpty) const _SgdbPending(),
+      ];
+    }
     if (shared.steamIds != null && shared.steamIds!.isNotEmpty) {
       if (arts.isNotEmpty) return [_grid(scheme, arts)];
       if (loading) return const [_SgdbPending()];
@@ -1857,7 +1944,14 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
         spacing: 8,
         runSpacing: 8,
         children: [
-          for (final result in search) _chip(scheme, result),
+          for (final result in search)
+            _chip(
+              scheme,
+              id: result.id,
+              name: result.name,
+              selected: result.id == shared.selectedSearchId,
+              onTap: _selectSearch,
+            ),
         ],
       ),
       const SizedBox(height: 10),
@@ -1872,11 +1966,16 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
     ];
   }
 
-  Widget _chip(ColorScheme scheme, SteamGridDbGame result) {
-    final selected = result.id == _shared.selectedSearchId;
+  Widget _chip(
+    ColorScheme scheme, {
+    required int id,
+    required String name,
+    required bool selected,
+    required void Function(int) onTap,
+  }) {
     return InkWell(
       borderRadius: BorderRadius.circular(8),
-      onTap: () => _selectSearch(result.id),
+      onTap: () => onTap(id),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
@@ -1887,7 +1986,7 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
           ),
         ),
         child: Text(
-          result.name,
+          name,
           style: TextStyle(
             fontSize: 12.5,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w400,

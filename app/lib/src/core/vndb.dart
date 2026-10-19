@@ -251,6 +251,9 @@ VnSearchResult _parseSearchResult(Map raw) {
   );
 }
 
+/// A Steam app linked to a VN, labelled with the title of the release that links it.
+typedef SteamApp = ({int appId, String title});
+
 class VndbClient {
   final http.Client _client;
   final String baseUrl;
@@ -449,10 +452,11 @@ class VndbClient {
     );
   }
 
-  /// Steam app ids linked to [vndbId] through its releases' extlinks,
-  /// deduplicated in first-seen order.
-  Future<List<int>> fetchSteamAppIds(String vndbId) async {
-    final out = <int>[];
+  /// Steam apps linked to [vndbId] through its releases' extlinks, deduplicated
+  /// by app id in first-seen order, each with the title of the first release
+  /// that linked it.
+  Future<List<SteamApp>> fetchSteamApps(String vndbId) async {
+    final out = <SteamApp>[];
     final seen = <int>{};
     for (var page = 1;; page++) {
       final result = await _postPage('/release', {
@@ -461,11 +465,12 @@ class VndbClient {
           ['vn', '=', ['id', '=', vndbId]],
           ['extlink', '=', 'steam'],
         ],
-        'fields': 'extlinks.name,extlinks.id',
+        'fields': 'title,extlinks.name,extlinks.id',
         'results': 100,
         'page': page,
       });
       for (final release in result.results) {
+        final title = release['title'];
         final extlinks = release['extlinks'];
         if (extlinks is! List) continue;
         for (final link in extlinks) {
@@ -476,7 +481,9 @@ class VndbClient {
               : raw is String
               ? int.tryParse(raw)
               : null;
-          if (appId != null && seen.add(appId)) out.add(appId);
+          if (appId != null && seen.add(appId)) {
+            out.add((appId: appId, title: title is String ? title : ''));
+          }
         }
       }
       if (!result.more) break;
