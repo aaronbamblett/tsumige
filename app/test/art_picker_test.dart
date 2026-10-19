@@ -429,7 +429,7 @@ void main() {
   );
 
   testWidgets(
-    'From file… makes the file the pending cover and Save stores it',
+    'Choose file… makes the file the pending cover and Save stores it',
     (tester) async {
       final temp = Directory.systemTemp.createTempSync('tsumige_art_picker_');
       addTearDown(() => temp.deleteSync(recursive: true));
@@ -439,7 +439,7 @@ void main() {
       final loaded = core.LoadedLibrary(library: core.Library(games: [game]));
       final harness = _Harness(tester, temp, loaded);
       await harness.open(picker: () async => source.path);
-      await tester.tap(find.text('From file…'));
+      await tester.tap(find.text('Choose file…'));
       await tester.pump();
       await tester.pump();
       await runRealFlow(tester, () async {
@@ -456,7 +456,7 @@ void main() {
   );
 
   testWidgets(
-    'Use the cover clears the background and moves its file to trash',
+    'Use cover clears the background and moves its file to trash',
     (tester) async {
       final temp = Directory.systemTemp.createTempSync('tsumige_art_picker_');
       addTearDown(() => temp.deleteSync(recursive: true));
@@ -480,7 +480,7 @@ void main() {
       await settleVndb(tester);
       await tester.tap(find.text('Background'));
       await tester.pump();
-      await tester.tap(find.text('Use the cover'));
+      await tester.tap(find.text('Use cover'));
       await tester.pump();
       await runRealFlow(tester, () async {
         await tester.tap(find.text('Save'));
@@ -514,9 +514,8 @@ void main() {
 
   testWidgets('no VNDB id shows only the file option', (tester) async {
     await _pumpDialog(tester, vndbId: null);
-    expect(find.text('No VNDB id, so pick a file.'), findsOneWidget);
     expect(find.text('VNDB covers and packages'), findsNothing);
-    expect(find.text('From file…'), findsOneWidget);
+    expect(find.text('Choose file…'), findsOneWidget);
     expect(find.text('Use VNDB cover'), findsNothing);
   });
 
@@ -541,17 +540,17 @@ void main() {
     await tester.tap(find.text('Background'));
     await tester.pump();
     expect(
-      find.text('No background picked, so the pane uses the cover.'),
+      find.text('Using the cover'),
       findsOneWidget,
     );
-    expect(find.text('Use the cover'), findsNothing);
+    expect(find.text('Use cover'), findsNothing);
     await tester.tap(_tile(_shotOne['url'] as String));
     await tester.pump();
     expect(
-      find.text('No background picked, so the pane uses the cover.'),
+      find.text('Using the cover'),
       findsNothing,
     );
-    expect(find.text('Use the cover'), findsOneWidget);
+    expect(find.text('Use cover'), findsOneWidget);
   });
 
   testWidgets('a portal file path is rejected with a toast', (tester) async {
@@ -560,7 +559,7 @@ void main() {
       vndbId: null,
       picker: () async => '/run/user/1000/docs/c.png',
     );
-    await tester.tap(find.text('From file…'));
+    await tester.tap(find.text('Choose file…'));
     await tester.pump();
     await tester.pump();
     expect(find.textContaining('Flatpak portal'), findsOneWidget);
@@ -571,7 +570,7 @@ void main() {
     await _pumpDialog(tester);
     expect(find.widgetWithText(BrandButton, 'Save'), findsOneWidget);
     expect(find.widgetWithText(BrandGlassButton, 'Cancel'), findsOneWidget);
-    expect(find.widgetWithText(BrandGlassButton, 'From file…'), findsOneWidget);
+    expect(find.widgetWithText(BrandGlassButton, 'Choose file…'), findsOneWidget);
     expect(
       find.widgetWithText(BrandGlassButton, 'Use VNDB cover'),
       findsOneWidget,
@@ -758,10 +757,10 @@ void main() {
         cover: 'g1.png',
         seed: (dir) => _seedStored(dir, cover: _tallPng()),
       );
-      expect(find.text('Drag to reposition.'), findsOneWidget);
+      expect(find.text('Drag to reposition'), findsOneWidget);
       await tester.tap(find.text('Background'));
       await tester.pump();
-      expect(find.text('Drag to reposition.'), findsOneWidget);
+      expect(find.text('Drag to reposition'), findsOneWidget);
     });
 
     testWidgets('the size caption sits below the image inside the tile', (
@@ -1205,7 +1204,7 @@ void main() {
         seed: (dir) => _seedStored(dir, cover: _pngSized(20, 30)),
       );
       expect(find.byKey(const ValueKey('crop-frame')), findsNothing);
-      expect(find.text('Drag to reposition.'), findsNothing);
+      expect(find.text('Drag to reposition'), findsNothing);
       await tester.drag(
         find.byKey(const ValueKey('cover-reposition')),
         const Offset(0, -50),

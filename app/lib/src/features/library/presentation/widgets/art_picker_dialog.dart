@@ -349,7 +349,6 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _note('No VNDB id, so pick a file.'),
           if (_tab == _ArtTab.cover)
             _steamGridDbSection()
           else
@@ -433,14 +432,6 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
       );
     }
     return background ? _backgroundSections(art) : _coverSections(art);
-  }
-
-  Widget _note(String text) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(top: 24),
-      child: Text(text, style: TextStyle(color: scheme.onSurfaceVariant)),
-    );
   }
 
   Widget _coverSections(ArtCandidates art) {
@@ -611,7 +602,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'In the library',
+          'Library',
           style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
         ),
         const SizedBox(height: 10),
@@ -666,7 +657,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'In the details pane',
+          'Details pane',
           style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
         ),
         const SizedBox(height: 10),
@@ -685,7 +676,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
         if (!picked) ...[
           const SizedBox(height: 10),
           Text(
-            'No background picked, so the pane uses the cover.',
+            'Using the cover',
             style: TextStyle(fontSize: 12, color: scheme.outline),
           ),
         ],
@@ -777,7 +768,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
               onPressed: () =>
                   setState(() => _backgroundPick = const _ClearPick()),
               icon: const Icon(Icons.restore_rounded),
-              label: const Text('Use the cover'),
+              label: const Text('Use cover'),
             )
           : null;
     }
@@ -790,7 +781,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
             expand: false,
             onPressed: _pickFile,
             icon: const Icon(Icons.folder_outlined),
-            label: const Text('From file…'),
+            label: const Text('Choose file…'),
           ),
           if (reset != null) ...[const SizedBox(width: 10), reset],
           const Spacer(),
@@ -1090,7 +1081,7 @@ class _RepositionableArtState extends State<_RepositionableArt> {
         if (overflows) ...[
           const SizedBox(height: 10),
           Text(
-            'Drag to reposition.',
+            'Drag to reposition',
             style: TextStyle(fontSize: 12, color: scheme.outline),
           ),
         ],
@@ -1106,12 +1097,8 @@ enum _SgdbKind {
   heroes;
 
   String get noKeyMessage => switch (this) {
-    grids =>
-      'Covers from SteamGridDB need your own free API key. '
-      'Get one in your SteamGridDB preferences.',
-    heroes =>
-      'Backgrounds from SteamGridDB need your own free API key. '
-      'Get one in your SteamGridDB preferences.',
+    grids => 'SteamGridDB covers need a free API key.',
+    heroes => 'SteamGridDB backgrounds need a free API key.',
   };
 
   String get emptyMessage => switch (this) {
@@ -1818,7 +1805,7 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
               controller: _keyController,
               obscureText: true,
               decoration: InputDecoration(
-                hintText: 'Paste your SteamGridDB API key',
+                hintText: 'SteamGridDB API key',
                 hintStyle: TextStyle(color: scheme.onSurfaceVariant),
                 border: InputBorder.none,
                 isDense: true,
