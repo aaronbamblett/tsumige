@@ -10,6 +10,11 @@ import 'json_read.dart';
 
 const int schemaVersion = 1;
 
+const String vndbTitleKey = 'title';
+const String vndbOriginalTitleKey = 'original_title';
+const String vndbDevelopersKey = 'developers';
+const String vndbReleasedKey = 'released';
+
 enum Language { japanese, english }
 
 enum LaunchMode { proton, wine, native, steam }
@@ -69,6 +74,7 @@ class Game {
   bool? adultVndb;
   bool? adultOverride;
   DateTime? vndbDataFetchedAt;
+  Map<String, Object?> vndbOriginals;
 
   Game({
     required this.id,
@@ -103,7 +109,9 @@ class Game {
     this.adultVndb,
     this.adultOverride,
     this.vndbDataFetchedAt,
-  })  : tags = tags ?? [],
+    Map<String, Object?>? vndbOriginals,
+  })  : vndbOriginals = vndbOriginals ?? {},
+        tags = tags ?? [],
         addedAt = addedAt ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
         launch = launch ?? LaunchOverrides(),
         playSessions = playSessions ?? [],
@@ -147,6 +155,7 @@ class Game {
         adultVndb: _boolOrNull(m, 'adult_vndb'),
         adultOverride: _boolOrNull(m, 'adult_override'),
         vndbDataFetchedAt: readDateOrNull(m, 'vndb_data_fetched_at'),
+        vndbOriginals: readVndbOriginals(m['vndb_originals']),
       );
 
   Map<String, Object?> toJson() => {
@@ -187,9 +196,16 @@ class Game {
         'adult_vndb': adultVndb,
         'adult_override': adultOverride,
         'vndb_data_fetched_at': vndbDataFetchedAt?.toUtc().toIso8601String(),
+        if (vndbOriginals.isNotEmpty) 'vndb_originals': vndbOriginals,
       };
 
   bool get isAdult => adultOverride ?? adultVndb ?? false;
+
+  List<Developer> get vndbOriginalDevelopers {
+    final raw = vndbOriginals[vndbDevelopersKey];
+    if (raw is! List) return const [];
+    return [for (final entry in raw) Developer.fromJson(entry)];
+  }
 
   int get totalPlaytimeSeconds =>
       playSessions.fold(0, (sum, s) => sum + s.durationSeconds);
@@ -206,6 +222,32 @@ class Game {
 bool? _boolOrNull(Map m, String k) {
   final v = m[k];
   return v is bool ? v : null;
+}
+
+/// Reads the VNDB values kept for fields the user edited. Kept in the same
+/// JSON shape they are written in: strings and lists of developer maps.
+Map<String, Object?> readVndbOriginals(Object? raw) {
+  if (raw is! Map) return {};
+  final out = <String, Object?>{};
+  for (final key in const [
+    vndbTitleKey,
+    vndbOriginalTitleKey,
+    vndbReleasedKey,
+  ]) {
+    if (!raw.containsKey(key)) continue;
+    final value = raw[key];
+    out[key] = value is String ? value : null;
+  }
+  if (raw.containsKey(vndbDevelopersKey)) {
+    final value = raw[vndbDevelopersKey];
+    out[vndbDevelopersKey] = [
+      if (value is List)
+        for (final entry in value)
+          if (entry is Map && entry['id'] is String)
+            Map<String, Object?>.from(entry),
+    ];
+  }
+  return out;
 }
 
 /// Reads an [Alignment] from a two-number `[x, y]` list. Absent, null or
