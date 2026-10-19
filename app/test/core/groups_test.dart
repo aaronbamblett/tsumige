@@ -168,6 +168,66 @@ void main() {
     expect(resolvePickedMember(group, byId(members))!.id, 'a');
   });
 
+  test('short name never cuts mid-token', () {
+    final eps = [game('a', 'Episode 1'), game('b', 'Episode 10')];
+    final eg = GameGroup(id: 'g', name: 'E', memberIds: ['a', 'b']);
+    final eids = byId(eps);
+    expect(memberShortName(eg, eps[0], eids), '1');
+    expect(memberShortName(eg, eps[1], eids), '10');
+  });
+
+  test('short name keeps the full part number', () {
+    final members = [
+      game('a', 'Chapter 10'),
+      game('b', 'Chapter 11'),
+      game('c', 'Chapter 12'),
+    ];
+    final group =
+        GameGroup(id: 'g', name: 'Chapters', memberIds: ['a', 'b', 'c']);
+    final ids = byId(members);
+    expect(memberShortName(group, members[0], ids), '10');
+    expect(memberShortName(group, members[1], ids), '11');
+    expect(memberShortName(group, members[2], ids), '12');
+  });
+
+  test('short name keeps Episode N for a 9-nine- group', () {
+    final members = [
+      game('a', '9-nine- Episode 1'),
+      game('b', '9-nine- Episode 2'),
+      game('c', '9-nine- Episode 3'),
+      game('d', '9-nine- Episode 4'),
+      game('e', '9-nine- NewEpisode'),
+    ];
+    final group = GameGroup(
+        id: 'g', name: '9-nine-', memberIds: ['a', 'b', 'c', 'd', 'e']);
+    final ids = byId(members);
+    expect(memberShortName(group, members[0], ids), 'Episode 1');
+    expect(memberShortName(group, members[3], ids), 'Episode 4');
+    expect(memberShortName(group, members[4], ids), 'NewEpisode');
+  });
+
+  test('part markers inside words do not match', () {
+    expect(episodePartNumber('Sleep 3'), isNull);
+    expect(episodePartNumber('Deep 4'), isNull);
+    expect(episodePartNumber('Episode 3'), 3);
+    expect(episodePartNumber('Game Ep. 3'), 3);
+  });
+
+  test('fullwidth digits in dai-N-wa and dai-N-kan parse as ASCII', () {
+    expect(episodePartNumber('ゲーム 第３話'), 3);
+    expect(episodePartNumber('ゲーム 第２章'), 2);
+    expect(episodePartNumber('ゲーム 第12話'), 12);
+  });
+
+  test('members without a release date sort after dated ones', () {
+    final members = [
+      game('a', 'X Part 1'),
+      game('b', 'X Part 1', released: '2020-01-01'),
+      game('c', 'X Part 1', released: '2019-01-01'),
+    ];
+    expect(sortEpisodeIds(members), ['c', 'b', 'a']);
+  });
+
   test('short name strips the shared prefix, full title when empty', () {
     final members = [
       game('a', '9-nine- Episode 1'),
