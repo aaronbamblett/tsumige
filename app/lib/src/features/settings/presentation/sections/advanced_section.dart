@@ -20,8 +20,8 @@ class AdvancedSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SettingsGroup(
-          title: 'UMU game id',
-          subtitle: 'Used by umu for game fixes. Leave as umu-default unless a fix needs a specific id.',
+          title: 'UMU game ID',
+          subtitle: 'Leave as umu-default unless a game fix needs its own ID.',
           divider: false,
           control: SizedBox(
             width: 320,

@@ -117,8 +117,6 @@ class _LibrarySectionState extends ConsumerState<LibrarySection> {
         SettingsGroup(
           rowKey: const Key('settings-row-vndb'),
           title: 'VNDB data',
-          subtitle:
-              'Ratings, tags, developers and related VNs are fetched for every game with a VNDB id.',
           control: IntrinsicWidth(
             child: BrandButton(
               key: const Key('settings-refresh-ratings'),
@@ -126,15 +124,14 @@ class _LibrarySectionState extends ConsumerState<LibrarySection> {
               expand: false,
               loading: _refreshing,
               onPressed: _refreshing ? null : _refreshRatings,
-              label: const Text('Refresh now'),
+              label: const Text('Refresh'),
             ),
           ),
         ),
         SettingsGroup(
           rowKey: const Key('settings-row-steamgriddb'),
           title: 'SteamGridDB',
-          subtitle:
-              'Optional. Adds covers and backgrounds from steamgriddb.com to Change art. Uses your own API key, stored on this computer.',
+          subtitle: 'API key for covers and backgrounds in Change art.',
           control: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -185,7 +182,6 @@ class _LibrarySectionState extends ConsumerState<LibrarySection> {
         SettingsGroup(
           rowKey: const Key('settings-row-launch-logs'),
           title: 'Launch logs',
-          subtitle: 'One log per launch.',
           divider: false,
           control: IntrinsicWidth(
             child: BrandGlassButton(

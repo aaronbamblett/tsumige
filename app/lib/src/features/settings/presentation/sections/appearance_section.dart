@@ -28,7 +28,6 @@ class AppearanceSection extends ConsumerWidget {
       children: [
         SettingsGroup(
           title: 'Theme mode',
-          subtitle: 'Follow the system or pick light or dark.',
           control: Row(
             mainAxisSize: MainAxisSize.min,
             spacing: 2,
@@ -61,7 +60,6 @@ class AppearanceSection extends ConsumerWidget {
         ),
         SettingsGroup(
           title: 'Cover size',
-          subtitle: 'Width of covers in the library grid.',
           control: Row(
             children: [
               Expanded(
@@ -92,7 +90,7 @@ class AppearanceSection extends ConsumerWidget {
           ),
         ),
         SettingsGroup(
-          title: 'Game fields to be displayed on details panel:',
+          title: 'Show in details pane',
           divider: false,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
