@@ -24,6 +24,7 @@ import 'package:tsumige/src/features/library/domain/cover_source.dart';
 import 'package:tsumige/src/features/library/domain/selection.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_cover_tile.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/library_toolbar.dart';
+import 'package:tsumige/src/utils/desktop/desktop_window.dart';
 import 'package:tsumige/src/utils/prefs/app_prefs.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 import 'package:tsumige/src/utils/theme/brand.dart';
@@ -194,7 +195,12 @@ void main() {
 
   testWidgets('pane open at 1000 wide: no overflow, search is 200 wide',
       (tester) async {
-    await pumpToolbar(tester, manyGames(), size: const Size(1000, 640));
+    await pumpToolbar(tester, manyGames());
+    final barContext = tester.element(find.byType(LibraryTopBar));
+    final breakpoint =
+        oneBarBreakpoint(barContext, isMacOS: false).ceilToDouble();
+    final narrowWidth = 1000.0 < breakpoint ? 1000.0 : breakpoint - 1;
+    await pumpToolbar(tester, manyGames(), size: Size(narrowWidth, 640));
     openPane(tester, 'game-0');
     await settle(tester);
     expect(tester.takeException(), isNull);
@@ -220,28 +226,40 @@ void main() {
     expect((filterRight - lastCoverRight(tester)).abs(), lessThanOrEqualTo(1.0));
   });
 
-  // At 1400 wide the bars merge: Add/Settings sit one gap left of the
-  // window buttons instead of at the toolbar's old right edge.
-  testWidgets('settings box ends one gap left of the window buttons at 1400',
+  // Above the breakpoint the bars merge: Add/Settings sit one gap left of
+  // the window buttons instead of at the toolbar's old right edge.
+  testWidgets(
+      'settings box ends one gap left of the window buttons above the breakpoint',
       (tester) async {
-    await pumpToolbar(tester, manyGames(), size: const Size(1400, 980));
+    await pumpToolbar(tester, manyGames());
+    final barContext = tester.element(find.byType(LibraryTopBar));
+    final mergedWidth =
+        oneBarBreakpoint(barContext, isMacOS: false).ceilToDouble() + 40;
+    expect(mergedWidth, greaterThanOrEqualTo(kMinWindowSize.width));
+    await pumpToolbar(tester, manyGames(), size: Size(mergedWidth, 980));
     openPane(tester, 'game-0');
     await settle(tester);
     final settingsRight =
         tester.getRect(find.byKey(const ValueKey('toolbar-settings'))).right;
     expect(
-      1400 - settingsRight,
+      mergedWidth - settingsRight,
       moreOrLessEquals(kWindowButtonsWidth + 10, epsilon: 1.0),
     );
   });
 
-  testWidgets('settings box ends one gap left of the window buttons, pane closed',
+  testWidgets(
+      'settings box ends one gap left of the window buttons above the breakpoint, pane closed',
       (tester) async {
-    await pumpToolbar(tester, manyGames(), size: const Size(1400, 980));
+    await pumpToolbar(tester, manyGames());
+    final barContext = tester.element(find.byType(LibraryTopBar));
+    final mergedWidth =
+        oneBarBreakpoint(barContext, isMacOS: false).ceilToDouble() + 40;
+    expect(mergedWidth, greaterThanOrEqualTo(kMinWindowSize.width));
+    await pumpToolbar(tester, manyGames(), size: Size(mergedWidth, 980));
     final settingsRight =
         tester.getRect(find.byKey(const ValueKey('toolbar-settings'))).right;
     expect(
-      1400 - settingsRight,
+      mergedWidth - settingsRight,
       moreOrLessEquals(kWindowButtonsWidth + 10, epsilon: 1.0),
     );
   });

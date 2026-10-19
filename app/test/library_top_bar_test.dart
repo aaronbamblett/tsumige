@@ -22,6 +22,7 @@ import 'package:tsumige/src/features/library/data/library_repository.dart';
 import 'package:tsumige/src/features/library/domain/cover_source.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/library_grid.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/library_toolbar.dart';
+import 'package:tsumige/src/utils/desktop/desktop_window.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 import 'package:tsumige/src/utils/platform/platform_runtime.dart';
 import 'package:tsumige/src/widgets/desktop/desktop_title_bar.dart';
@@ -94,11 +95,17 @@ List<core.Game> _games() => List.generate(
     );
 
 void main() {
-  // 1440, not 1280: under the test font the runtime-measured boxes are
-  // wider than on a real machine, pushing the breakpoint past 1280.
-  testWidgets('at 1440 wide the search field and window buttons share one bar',
+  // Sized from the measured breakpoint: the test font advances wider than
+  // a real machine's, so a hard-coded width can land on either side of it.
+  testWidgets(
+      'above the breakpoint the search field and window buttons share one bar',
       (tester) async {
-    await _pumpApp(tester, _games(), size: const Size(1440, 800));
+    await _pumpApp(tester, _games(), size: const Size(1280, 800));
+    final context = tester.element(find.byType(LibraryTopBar));
+    final mergedWidth =
+        oneBarBreakpoint(context, isMacOS: false).ceilToDouble() + 40;
+    expect(mergedWidth, greaterThanOrEqualTo(kMinWindowSize.width));
+    await _pumpApp(tester, _games(), size: Size(mergedWidth, 800));
 
     // One 64 px bar: no separate 40 px title bar anywhere.
     expect(find.byType(DesktopTitleBar), findsNothing);
@@ -128,7 +135,12 @@ void main() {
   });
 
   testWidgets('merged bar shows the enlarged brand', (tester) async {
-    await _pumpApp(tester, _games(), size: const Size(1440, 800));
+    await _pumpApp(tester, _games(), size: const Size(1280, 800));
+    final context = tester.element(find.byType(LibraryTopBar));
+    final mergedWidth =
+        oneBarBreakpoint(context, isMacOS: false).ceilToDouble() + 40;
+    expect(mergedWidth, greaterThanOrEqualTo(kMinWindowSize.width));
+    await _pumpApp(tester, _games(), size: Size(mergedWidth, 800));
 
     expect(tester.getSize(find.byType(TsumigeLogo)), const Size(28, 28));
     final name = tester.widget<Text>(find.text('Tsumige'));
@@ -142,12 +154,17 @@ void main() {
 
   testWidgets('at 1000 wide the title bar and toolbar stack as before',
       (tester) async {
-    await _pumpApp(tester, _games(), size: const Size(1000, 640));
+    await _pumpApp(tester, _games(), size: const Size(1280, 800));
+    final context = tester.element(find.byType(LibraryTopBar));
+    final breakpoint =
+        oneBarBreakpoint(context, isMacOS: false).ceilToDouble();
+    final narrowWidth = 1000.0 < breakpoint ? 1000.0 : breakpoint - 1;
+    await _pumpApp(tester, _games(), size: Size(narrowWidth, 640));
 
     expect(find.byType(DesktopTitleBar), findsOneWidget);
     expect(
       tester.getSize(find.byType(DesktopTitleBar)),
-      const Size(1000, 40),
+      Size(narrowWidth, 40),
     );
     expect(find.byType(LibraryToolbar), findsOneWidget);
     final toolbarTop = tester.getTopLeft(find.byType(LibraryToolbar)).dy;
@@ -160,6 +177,16 @@ void main() {
       tester,
       _games(),
       size: const Size(1280, 800),
+      platform: const HostPlatform(HostOs.macos),
+    );
+    final context = tester.element(find.byType(LibraryTopBar));
+    final mergedWidth =
+        oneBarBreakpoint(context, isMacOS: true).ceilToDouble() + 40;
+    expect(mergedWidth, greaterThanOrEqualTo(kMinWindowSize.width));
+    await _pumpApp(
+      tester,
+      _games(),
+      size: Size(mergedWidth, 800),
       platform: const HostPlatform(HostOs.macos),
     );
 
