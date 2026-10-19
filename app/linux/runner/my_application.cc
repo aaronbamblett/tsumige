@@ -54,6 +54,14 @@ static void my_application_activate(GApplication* application) {
 
   gtk_window_set_default_size(window, 1280, 720);
 
+  // Enforce the minimum window size through GtkWindow: window_manager sets
+  // the hint on the GdkWindow, which GtkWindow then overrides, so it is
+  // lost. Must match kMinWindowSize in desktop_window.dart.
+  GdkGeometry geometry;
+  geometry.min_width = 1000;
+  geometry.min_height = 640;
+  gtk_window_set_geometry_hints(window, nullptr, &geometry, GDK_HINT_MIN_SIZE);
+
   g_autofree gchar* exe_path = g_file_read_link("/proc/self/exe", nullptr);
   if (exe_path != nullptr) {
     g_autofree gchar* exe_dir = g_path_get_dirname(exe_path);

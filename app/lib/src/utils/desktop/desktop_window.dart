@@ -17,6 +17,8 @@ import 'window_geometry_listener.dart';
 import 'window_geometry_store.dart';
 
 // Narrower than this and the toolbar's controls run into each other.
+// Kept in sync with the GtkWindow geometry hint in my_application.cc,
+// which is what enforces it on Linux.
 const kMinWindowSize = Size(1000, 640);
 const kDefaultWindowSize = Size(1280, 900);
 
