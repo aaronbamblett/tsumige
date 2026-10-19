@@ -749,9 +749,9 @@ void main() {
         return const [];
       });
       await Future.wait([
-        queue.search('a'),
-        queue.search('b'),
-        queue.search('c'),
+        queue.run('a'),
+        queue.run('b'),
+        queue.run('c'),
       ]);
       expect(started, hasLength(3));
       expect(
@@ -773,7 +773,7 @@ void main() {
         }
         return [_vn('v1', 'DEMO')];
       });
-      final results = await queue.search('DEMO');
+      final results = await queue.run('DEMO');
       expect(results.single.id, 'v1');
       expect(calls, 3);
       expect(waits, const [
@@ -788,7 +788,7 @@ void main() {
         calls++;
         throw const VndbException('HTTP 429', statusCode: 429);
       });
-      await expectLater(queue.search('DEMO'), throwsA(isA<VndbException>()));
+      await expectLater(queue.run('DEMO'), throwsA(isA<VndbException>()));
       expect(calls, 4);
       expect(waits, hasLength(3));
     });
@@ -799,7 +799,7 @@ void main() {
         calls++;
         throw const VndbException('HTTP 500', statusCode: 500);
       });
-      await expectLater(queue.search('DEMO'), throwsA(isA<VndbException>()));
+      await expectLater(queue.run('DEMO'), throwsA(isA<VndbException>()));
       expect(calls, 1);
       expect(waits, isEmpty);
     });

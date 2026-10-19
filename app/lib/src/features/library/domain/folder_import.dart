@@ -52,7 +52,7 @@ class ImportFolder {
   final List<String> skipped;
 }
 
-enum ImportMatchState { matched, check, none }
+enum ImportMatchState { matched, check, none, error }
 
 class FolderMatch {
   const FolderMatch(this.state, this.vn);
@@ -773,17 +773,16 @@ List<String> parentFolderQueries({
 /// to [maxRetries] times. [now] and [delay] are injectable for tests.
 class VndbRequestQueue {
   VndbRequestQueue({
-    required Future<List<VnSearchResult>> Function(String query) search,
+    required this.search,
     this.gap = const Duration(milliseconds: 1600),
     this.maxRetries = 3,
     this.retryWait = const Duration(seconds: 60),
     DateTime Function()? now,
     Future<void> Function(Duration)? delay,
-  }) : _search = search,
-       _now = now ?? DateTime.now,
+  }) : _now = now ?? DateTime.now,
        _delay = delay ?? Future.delayed;
 
-  final Future<List<VnSearchResult>> Function(String query) _search;
+  final Future<List<VnSearchResult>> Function(String query) search;
   final Duration gap;
   final int maxRetries;
   final Duration retryWait;
@@ -795,15 +794,15 @@ class VndbRequestQueue {
 
   /// Runs [query] through the queue, serialized with the other queued
   /// requests.
-  Future<List<VnSearchResult>> search(String query) {
+  Future<List<VnSearchResult>> run(String query) {
     final done = Completer<List<VnSearchResult>>();
     _tail = _tail
-        .then((_) => _run(query))
+        .then((_) => _execute(query))
         .then(done.complete, onError: done.completeError);
     return done.future;
   }
 
-  Future<List<VnSearchResult>> _run(String query) async {
+  Future<List<VnSearchResult>> _execute(String query) async {
     final last = _lastStart;
     if (last != null) {
       final wait = last.add(gap).difference(_now());
@@ -813,7 +812,7 @@ class VndbRequestQueue {
     for (;;) {
       _lastStart = _now();
       try {
-        return await _search(query);
+        return await search(query);
       } on VndbException catch (e) {
         if (e.statusCode != 429 || retries >= maxRetries) rethrow;
         retries++;

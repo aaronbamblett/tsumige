@@ -134,15 +134,35 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     setState(() {});
   }
 
+  List<Game>? _dupGamesKey;
+  String _dupExeKey = '';
+  String? _dupFolderKey;
+  LaunchMode? _dupModeKey;
+  Game? _dupValue;
+  bool _dupSet = false;
+
   /// The library game the picked exe would duplicate, if any. Steam games
-  /// need no exe, so they never count.
+  /// need no exe, so they never count. Resolved paths are cached per
+  /// inputs so builds don't re-resolve symlinks on every rebuild.
   Game? _duplicate(List<Game> games) {
-    if (_mode == LaunchMode.steam) return null;
-    return duplicateLibraryGame(
-      exe: _exe.text.trim(),
-      folder: _folder,
-      games: games,
-    );
+    final exe = _exe.text.trim();
+    if (_dupSet &&
+        identical(games, _dupGamesKey) &&
+        exe == _dupExeKey &&
+        _folder == _dupFolderKey &&
+        _mode == _dupModeKey) {
+      return _dupValue;
+    }
+    final value = _mode == LaunchMode.steam
+        ? null
+        : duplicateLibraryGame(exe: exe, folder: _folder, games: games);
+    _dupGamesKey = games;
+    _dupExeKey = exe;
+    _dupFolderKey = _folder;
+    _dupModeKey = _mode;
+    _dupValue = value;
+    _dupSet = true;
+    return value;
   }
 
   @override

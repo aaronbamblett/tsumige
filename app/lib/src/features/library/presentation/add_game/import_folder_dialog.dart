@@ -105,6 +105,22 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     );
   }
 
+  int? _hoveredRow;
+
+  /// The resolved library exe paths for the current library value,
+  /// recomputed only when the games list instance changes so a rebuild
+  /// per matched row stays cheap.
+  List<Game>? _cachedGames;
+  Set<String> _cachedLibraryExes = const {};
+
+  Set<String> _libraryExes(List<Game> games) {
+    if (!identical(games, _cachedGames)) {
+      _cachedGames = games;
+      _cachedLibraryExes = libraryRealExePaths(games);
+    }
+    return _cachedLibraryExes;
+  }
+
   int? _pickIndex;
   VnSearchResult? _pickSelected;
   late final TextEditingController _pickQuery;
@@ -271,10 +287,11 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       match = await lookupFolderMatch(
         query: query,
         parentQueries: parents,
-        search: _vndb.search,
+        search: _vndb.run,
       );
     } catch (e) {
       error = '$e';
+      match = const FolderMatch(ImportMatchState.error, null);
     }
     if (!mounted || token != _scanToken) return;
     setState(() {
@@ -287,6 +304,14 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
             match.state == ImportMatchState.matched && row.exePath != null;
       }
     });
+  }
+
+  void _retryRow(_ImportRow row) {
+    setState(() {
+      row.state = null;
+      row.error = null;
+    });
+    unawaited(_match(row, _scanToken));
   }
 
   void _openPick(int index) {
@@ -328,7 +353,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     });
     List<VnSearchResult> results;
     try {
-      results = rankSearchResults(await _vndb.search(query), query);
+      results = rankSearchResults(await _vndb.run(query), query);
     } catch (e) {
       if (!mounted || token != _pickToken) return;
       setState(() {
@@ -443,15 +468,16 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     final games =
         ref.watch(libraryProvider).value?.library.games ?? const <Game>[];
     final pick = _pickIndex;
-    // Resolved once per build so every row compares against the same set.
-    final libraryExes = libraryRealExePaths(games);
+    // Resolved once per library value so every row compares against the
+    // same set without re-resolving symlinks on every rebuild.
+    final libraryExes = _libraryExes(games);
     final plan = _plan(games, libraryExes);
     if (pick != null) {
       return DialogShell(
         autofocus: false,
         size: dialogShellSize(context),
         eyebrow: _rows[pick].folder.name,
-        title: 'Select item',
+        title: 'Search VNDB',
         onClose: _close,
         closeKey: const Key('import-close'),
         body: _pickBody(context, games),
@@ -541,6 +567,21 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                 ),
               ),
               if (_scanning) const LinearProgressIndicator(),
+              if (_matching case (done: final done, total: final total))
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      LinearProgressIndicator(value: done / total),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Matching with VNDB… $done of $total',
+                        style: muted,
+                      ),
+                    ],
+                  ),
+                ),
               Expanded(
                 child: visible.isEmpty
                     ? Center(
@@ -569,6 +610,14 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     );
   }
 
+  /// Finished and total rows while matching runs. Null once every row
+  /// has a result (or there is nothing to match), which hides the bar.
+  ({int done, int total})? get _matching {
+    if (_rows.isEmpty) return null;
+    final done = _rows.where((row) => row.state != null).length;
+    return done < _rows.length ? (done: done, total: _rows.length) : null;
+  }
+
   void _setAllTicked(List<int> indices, bool ticked) {
     setState(() {
       for (final i in indices) {
@@ -592,13 +641,12 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     final inLibrary = _inLibrary(row, games, libraryExes);
     final vn =
         row.state == ImportMatchState.matched ||
-            row.state == ImportMatchState.check
+            (!inLibrary && row.state == ImportMatchState.check)
         ? row.vn
         : null;
-    final isCheck = row.state == ImportMatchState.check && vn != null;
     final canPick = !inLibrary && !_saving;
     final unmatched = vn == null;
-    Widget nameText = Text(
+    final nameText = Text(
       vn?.title ?? row.folder.name,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
@@ -608,100 +656,225 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
         color: unmatched ? scheme.onSurfaceVariant : null,
       ),
     );
-    if (row.error != null) {
-      nameText = Tooltip(message: row.error!, child: nameText);
+    Widget cover;
+    if (row.state == null) {
+      cover = Container(
+        width: 36,
+        height: 48,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainer,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: scheme.outlineVariant),
+        ),
+        child: const SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    } else if (vn != null) {
+      cover = VnCoverThumb(
+        imageUrl: vn.imageUrl,
+        sexual: vn.imageSexual,
+        width: 36,
+        height: 48,
+        radius: 4,
+      );
+    } else {
+      cover = Container(
+        width: 36,
+        height: 48,
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainer,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: scheme.outlineVariant),
+        ),
+      );
     }
     return Opacity(
       opacity: inLibrary || plan.duplicate[index] ? 0.55 : 1,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 40,
-              child: Checkbox(
-                key: Key('import-check-$index'),
-                value: plan.selected[index],
-                onChanged:
-                    _eligible(row, games, libraryExes) &&
-                            !plan.duplicate[index] &&
-                            !_saving
-                    ? (value) => setState(() {
-                        row.ticked = value ?? false;
-                        row.tickTouched = true;
-                      })
-                    : null,
-              ),
-            ),
-            if (vn != null)
-              VnCoverThumb(
-                imageUrl: vn.imageUrl,
-                sexual: vn.imageSexual,
-                width: 36,
-                height: 48,
-                radius: 4,
-              )
-            else
-              Container(
-                width: 36,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainer,
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: scheme.outlineVariant),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hoveredRow = index),
+        onExit: (_) => setState(() => _hoveredRow = null),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 40,
+                child: Checkbox(
+                  key: Key('import-check-$index'),
+                  value: plan.selected[index],
+                  onChanged:
+                      _eligible(row, games, libraryExes) &&
+                              !plan.duplicate[index] &&
+                              !_saving
+                      ? (value) => setState(() {
+                          row.ticked = value ?? false;
+                          row.tickTouched = true;
+                        })
+                      : null,
                 ),
               ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 5,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  InkWell(
-                    key: Key('import-name-$index'),
-                    borderRadius: BorderRadius.circular(6),
-                    onTap: canPick ? () => _openPick(index) : null,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: nameText,
+              cover,
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 5,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    InkWell(
+                      key: Key('import-name-$index'),
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: canPick ? () => _openPick(index) : null,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: nameText,
+                      ),
                     ),
+                    _statusRow(context, index, row, inLibrary),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 6,
+                child: MiddleEllipsisText(
+                  text: row.exePath ?? '',
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    color: scheme.outline,
                   ),
-                  if (isCheck)
-                    Container(
-                      height: 24,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: scheme.onSurface.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        'Best match',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 6,
-              child: MiddleEllipsisText(
-                text: row.exePath ?? '',
-                style: TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 12,
-                  color: scheme.outline,
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  /// The muted status line under a row's name, with its small text button.
+  /// Library rows keep their old look and show nothing here.
+  Widget _statusRow(
+    BuildContext context,
+    int index,
+    _ImportRow row,
+    bool inLibrary,
+  ) {
+    if (inLibrary) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      fontSize: 12.5,
+      color: scheme.onSurfaceVariant,
+    );
+    switch (row.state) {
+      case null:
+        return const SizedBox.shrink();
+      case ImportMatchState.none:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                'No matches on VNDB',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: muted,
+              ),
+            ),
+            _statusButton(
+              key: Key('import-choose-$index'),
+              label: 'Choose…',
+              onPressed: _saving ? null : () => _openPick(index),
+            ),
+          ],
+        );
+      case ImportMatchState.check:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _bestMatchBadge(context),
+            _statusButton(
+              key: Key('import-change-$index'),
+              label: 'Change…',
+              onPressed: _saving ? null : () => _openPick(index),
+            ),
+          ],
+        );
+      case ImportMatchState.error:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                'VNDB search failed',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: muted,
+              ),
+            ),
+            _statusButton(
+              key: Key('import-retry-$index'),
+              label: 'Try again',
+              onPressed: _saving ? null : () => _retryRow(row),
+            ),
+          ],
+        );
+      case ImportMatchState.matched:
+        if (_hoveredRow != index) return const SizedBox.shrink();
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _statusButton(
+              key: Key('import-change-$index'),
+              label: 'Change…',
+              onPressed: _saving ? null : () => _openPick(index),
+            ),
+          ],
+        );
+    }
+  }
+
+  Widget _bestMatchBadge(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      height: 24,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: scheme.onSurface.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        'Best match',
+        style: TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w600,
+          color: scheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  Widget _statusButton({
+    required Key key,
+    required String label,
+    required VoidCallback? onPressed,
+  }) {
+    return TextButton(
+      key: key,
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        minimumSize: const Size(0, 28),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+      ),
+      onPressed: onPressed,
+      child: Text(label, style: const TextStyle(fontSize: 12.5)),
     );
   }
 
