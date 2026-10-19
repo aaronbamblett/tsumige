@@ -105,9 +105,8 @@ class _ImportRow {
   /// The Steam name, or the folder name.
   String get name => isSteam ? steamGame!.name : folder!.name;
 
-  /// The Path column: the exe for folders, `Steam · <appId>` for Steam.
-  String get pathText =>
-      isSteam ? 'Steam · ${steamGame!.appId}' : exePath ?? '';
+  /// The Path column: the exe for folders, `Steam` for Steam rows.
+  String get pathText => isSteam ? 'Steam' : exePath ?? '';
 
   /// Whether the row can be added: Steam rows always can, folder rows need
   /// their exe picked.
@@ -956,8 +955,11 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
         : null;
     final canPick = !inLibrary && !_saving;
     final unmatched = vn == null;
+    // The main line is always the source name: the Steam game's name or
+    // the folder name. A VNDB title reads below it in [_statusRow], never
+    // in place of the source name.
     final nameText = Text(
-      vn?.title ?? row.name,
+      row.name,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
@@ -1074,10 +1076,12 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     );
   }
 
-  /// The muted status line under a row's name, with its small text button.
+  /// The muted status line under a row's source name, with its small text
+  /// button. A matched or best-match row shows its VNDB title here; rows
+  /// with no match, an error, or a pending lookup keep their status text.
   /// Library rows keep their old look and show nothing here. A repeated
-  /// VNDB entry reads in place of the other status text, with the badge
-  /// and button staying as for the row's state.
+  /// VNDB entry reads in place of the VNDB title or status text, with the
+  /// badge and button staying as for the row's state.
   Widget _statusRow(
     BuildContext context,
     int index,
@@ -1116,11 +1120,12 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
           ],
         );
       case ImportMatchState.check:
+        final checkLabel = repeatWarning ?? row.vn?.title;
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             _bestMatchBadge(context),
-            if (repeatWarning != null) statusText(repeatWarning),
+            if (checkLabel != null) statusText(checkLabel),
             _statusButton(
               key: Key('import-change-$index'),
               label: 'Change…',
@@ -1141,13 +1146,14 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
           ],
         );
       case ImportMatchState.matched:
-        if (repeatWarning == null && _hoveredRow != index) {
+        final matchedLabel = repeatWarning ?? row.vn?.title;
+        if (matchedLabel == null && _hoveredRow != index) {
           return const SizedBox.shrink();
         }
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (repeatWarning != null) statusText(repeatWarning),
+            if (matchedLabel != null) statusText(matchedLabel),
             if (_hoveredRow == index)
               _statusButton(
                 key: Key('import-change-$index'),

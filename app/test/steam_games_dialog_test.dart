@@ -285,17 +285,28 @@ void main() {
         ],
       );
       expect(find.text('Select Steam games'), findsOneWidget);
-      // The Steam ID match shows the VNDB title and is ticked.
+      // The Steam ID match keeps the Steam name on the main line, with
+      // the VNDB title below it, and is ticked.
+      expect(
+        tester
+            .widget<Text>(
+              find.descendant(
+                of: find.byKey(const Key('import-name-0')),
+                matching: find.byType(Text),
+              ),
+            )
+            .data,
+        'Doki Doki Literature Club',
+      );
       expect(find.text('Doki Doki Literature Club!'), findsOneWidget);
-      expect(find.text('Steam · 698780'), findsOneWidget);
+      expect(find.text('Steam'), findsWidgets);
+      expect(find.textContaining('Steam ·'), findsNothing);
       expect(_checked(tester, 0), isTrue);
       // No extlink and no title match: the Steam name, unticked.
       expect(find.text('Slay the Princess'), findsOneWidget);
-      expect(find.text('Steam · 1989270'), findsOneWidget);
       expect(_checked(tester, 1), isFalse);
       // In the library by steamAppId: hidden while Hide imported is on.
       expect(find.text('Coteries of New York'), findsNothing);
-      expect(find.text('Steam · 1096410'), findsNothing);
       expect(find.byKey(const Key('import-check-2')), findsNothing);
 
       await tester.tap(find.byKey(const Key('import-add')));
