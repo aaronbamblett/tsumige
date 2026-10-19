@@ -24,7 +24,8 @@ import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 
 Finder paneField(WidgetTester tester) => find.descendant(
       of: find.byType(GameDetailPane),
-      matching: find.byType(TextField),
+      matching: find.byWidgetPredicate((w) =>
+          w is TextField && w.key != const ValueKey('notes-field')),
     );
 
 class EditorFakeRepository implements LibraryRepository {

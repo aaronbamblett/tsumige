@@ -355,6 +355,7 @@ class SettingsTextBox extends StatefulWidget {
     this.autofocus = false,
     this.onSubmitted,
     this.overlay,
+    this.obscureText = false,
   });
 
   final TextEditingController? controller;
@@ -368,6 +369,7 @@ class SettingsTextBox extends StatefulWidget {
   final bool autofocus;
   final ValueChanged<String>? onSubmitted;
   final String? overlay;
+  final bool obscureText;
 
   @override
   State<SettingsTextBox> createState() => _SettingsTextBoxState();
@@ -395,6 +397,7 @@ class _SettingsTextBoxState extends State<SettingsTextBox> {
         focusNode: widget.focusNode,
         autofocus: widget.autofocus,
         keyboardType: widget.keyboardType,
+        obscureText: widget.obscureText,
         minLines: widget.minLines,
         maxLines: widget.maxLines,
         style: theme.textTheme.bodyMedium,
@@ -570,6 +573,7 @@ class PrefTextField extends ConsumerStatefulWidget {
     this.hint,
     this.isPath = false,
     this.middleEllipsis = false,
+    this.obscureText = false,
     required this.onSave,
   });
 
@@ -579,6 +583,7 @@ class PrefTextField extends ConsumerStatefulWidget {
 
   /// Shows the value shortened from the middle while the field is unfocused.
   final bool middleEllipsis;
+  final bool obscureText;
   final void Function(String text) onSave;
 
   @override
@@ -665,6 +670,7 @@ class _PrefTextFieldState extends ConsumerState<PrefTextField> {
         focusNode: _focusNode,
         hint: widget.hint,
         overlay: overlay,
+        obscureText: widget.obscureText,
         onSubmitted: (_) => _submit(),
       ),
     );

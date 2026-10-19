@@ -127,6 +127,16 @@ Finder tabLabel(String text) => find.descendant(
       matching: find.text(text),
     );
 
+/// Notes is always a TextField, so the tag and description editors are the
+/// pane's TextField that is not the notes field.
+Finder paneEditorField() => find.descendant(
+      of: find.byType(GameDetailPane),
+      matching: find.byWidgetPredicate((w) =>
+          w is TextField && w.key != const ValueKey('notes-field')),
+    );
+
+Finder notesField() => find.byKey(const ValueKey('notes-field'));
+
 /// Real file work never finishes inside the fake-async test zone, so flows
 /// that touch the filesystem run end to end inside `runAsync` (real async),
 /// polling for the file effect before returning for assertions.
@@ -1068,7 +1078,9 @@ void main() {
     expect(paneText(tester, 'Description'), findsOneWidget);
     expect(paneText(tester, 'No description'), findsOneWidget);
     expect(paneText(tester, 'Notes'), findsOneWidget);
-    expect(paneText(tester, 'No notes'), findsOneWidget);
+    final field = notesField();
+    expect(field, findsOneWidget);
+    expect(tester.widget<TextField>(field).decoration?.hintText, 'No notes');
     expect(paneText(tester, 'Tags'), findsOneWidget);
     expect(paneText(tester, '+'), findsOneWidget);
     expect(find.text('VNDB Rating'), findsNothing);
@@ -1091,10 +1103,7 @@ void main() {
     await tester.ensureVisible(paneText(tester, '+'));
     await tester.tap(paneText(tester, '+'));
     await tester.pump();
-    final field = find.descendant(
-      of: find.byType(GameDetailPane),
-      matching: find.byType(TextField),
-    );
+    final field = paneEditorField();
     await tester.enterText(field, 'Cozy');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
@@ -1113,10 +1122,7 @@ void main() {
     await tester.ensureVisible(paneText(tester, '+'));
     await tester.tap(paneText(tester, '+'));
     await tester.pump();
-    final field = find.descendant(
-      of: find.byType(GameDetailPane),
-      matching: find.byType(TextField),
-    );
+    final field = paneEditorField();
     expect(field, findsOneWidget);
     expect(tester.widget<TextField>(field).focusNode?.hasFocus, isTrue);
     await tester.enterText(field, 'Cozy');
@@ -1213,10 +1219,7 @@ void main() {
     await tester.ensureVisible(paneText(tester, '+'));
     await tester.tap(paneText(tester, '+'));
     await tester.pump();
-    final field = find.descendant(
-      of: find.byType(GameDetailPane),
-      matching: find.byType(TextField),
-    );
+    final field = paneEditorField();
     await tester.enterText(field, 'Mystery');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
@@ -1236,10 +1239,7 @@ void main() {
     await tester.ensureVisible(paneText(tester, '+'));
     await tester.tap(paneText(tester, '+'));
     await tester.pump();
-    final field = find.descendant(
-      of: find.byType(GameDetailPane),
-      matching: find.byType(TextField),
-    );
+    final field = paneEditorField();
     await tester.enterText(field, 'Nope');
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -1256,12 +1256,7 @@ void main() {
     await openPane(tester, 'Alpha');
     await tester.tap(find.byTooltip('Edit description'));
     await tester.pump();
-    await tester.enterText(
-        find.descendant(
-          of: find.byType(GameDetailPane),
-          matching: find.byType(TextField),
-        ),
-        'new words');
+    await tester.enterText(paneEditorField(), 'new words');
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pumpAndSettle();
     expect(paneText(tester, 'new words'), findsOneWidget);
@@ -1274,12 +1269,7 @@ void main() {
     await openPane(tester, 'Alpha');
     await tester.tap(find.byTooltip('Edit description'));
     await tester.pump();
-    await tester.enterText(
-        find.descendant(
-          of: find.byType(GameDetailPane),
-          matching: find.byType(TextField),
-        ),
-        'changed');
+    await tester.enterText(paneEditorField(), 'changed');
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
@@ -1294,24 +1284,76 @@ void main() {
     expect(find.byTooltip('Edit description'), findsOneWidget);
   });
 
-  testWidgets('notes edit the same way as the description', (tester) async {
+  testWidgets('notes save one second after typing stops', (tester) async {
+    final games = [core.Game(id: 'g1', title: 'Alpha', notes: 'old notes')];
+    await pumpLibrary(tester, games);
+    await openPane(tester, 'Alpha');
+    expect(paneText(tester, 'Notes'), findsOneWidget);
+    expect(find.byTooltip('Edit notes'), findsNothing);
+    final field = notesField();
+    expect(field, findsOneWidget);
+    await tester.ensureVisible(field);
+    await tester.enterText(field, 'new notes');
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(games.single.notes, 'old notes');
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    expect(games.single.notes, 'new notes');
+  });
+
+  testWidgets('moving focus away saves notes at once', (tester) async {
+    final games = [core.Game(id: 'g1', title: 'Alpha', notes: 'old notes')];
+    await pumpLibrary(tester, games);
+    await openPane(tester, 'Alpha');
+    final field = notesField();
+    await tester.ensureVisible(field);
+    await tester.enterText(field, 'new notes');
+    expect(games.single.notes, 'old notes');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    expect(games.single.notes, 'new notes');
+  });
+
+  testWidgets('switching games within a second saves to the first game',
+      (tester) async {
+    final games = [
+      core.Game(id: 'g1', title: 'Alpha', notes: 'alpha notes'),
+      core.Game(id: 'g2', title: 'Beta', notes: 'beta notes'),
+    ];
+    await pumpLibrary(tester, games);
+    await openPane(tester, 'Alpha');
+    final field = notesField();
+    await tester.ensureVisible(field);
+    await tester.enterText(field, 'typed for alpha');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Beta').first);
+    await tester.pump();
+    await tester.pump();
+    expect(games[0].notes, 'typed for alpha');
+    expect(games[1].notes, 'beta notes');
+  });
+
+  testWidgets('Escape while typing in Notes keeps the pane open',
+      (tester) async {
     await pumpLibrary(tester, [
       core.Game(id: 'g1', title: 'Alpha', notes: 'old notes'),
     ]);
     await openPane(tester, 'Alpha');
-    expect(paneText(tester, 'Notes'), findsOneWidget);
-    await tester.ensureVisible(find.byTooltip('Edit notes'));
-    await tester.tap(find.byTooltip('Edit notes'));
+    final field = notesField();
+    await tester.ensureVisible(field);
+    await tester.tap(field);
     await tester.pump();
-    await tester.enterText(
-        find.descendant(
-          of: find.byType(GameDetailPane),
-          matching: find.byType(TextField),
-        ),
-        'new notes');
-    FocusManager.instance.primaryFocus?.unfocus();
-    await tester.pumpAndSettle();
-    expect(paneText(tester, 'new notes'), findsOneWidget);
+    await tester.enterText(field, 'typing');
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    // The pane is still open and the text is untouched; let the debounce
+    // save finish so nothing is pending at teardown.
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    expect(find.byType(GameDetailPane), findsOneWidget);
+    expect(
+        tester.widget<TextField>(field).focusNode?.hasFocus, isTrue);
   });
 
   testWidgets('the favourite toggle saves', (tester) async {
