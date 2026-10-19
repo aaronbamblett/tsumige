@@ -147,6 +147,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   @override
   void dispose() {
     _scanToken++;
+    _queue?.cancel();
     _pickDebounce?.cancel();
     _pickQuery.dispose();
     super.dispose();
@@ -251,6 +252,10 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   Future<void> _scanRoots(List<String> roots, {required bool append}) async {
     final token = ++_scanToken;
     final platform = ref.read(hostPlatformProvider);
+    if (!append) {
+      _queue?.cancel();
+      _queue = null;
+    }
     setState(() {
       _scanning = true;
       if (!append) {

@@ -73,12 +73,15 @@ class _Vndb {
   /// Queries that fail this many times with a 500 before succeeding.
   final Map<String, int> failCounts = {};
 
+  int searches = 0;
+
   MockClient get client => MockClient((request) async {
     if (request.method == 'POST') {
       final body = jsonDecode(request.body) as Map;
       final filters = body['filters'] as List;
       if (filters.first == 'search') {
         final query = filters[2] as String;
+        searches++;
         if (query == gateQuery) await gate!.future;
         if ((failCounts[query] ?? 0) > 0) {
           failCounts[query] = failCounts[query]! - 1;
@@ -176,10 +179,11 @@ String _fixture(Directory temp, {bool duplicate = false, bool macos = false}) {
 }
 
 class _Harness {
-  _Harness(this.repo, this.root);
+  _Harness(this.repo, this.root, this.vndb);
 
   final _FakeRepository repo;
   final String root;
+  final _Vndb vndb;
   ImportFolderResult? result;
 }
 
@@ -224,7 +228,7 @@ Future<_Harness> _open(
     gateQuery: gateQuery,
   );
   if (failCounts != null) vndb.failCounts.addAll(failCounts);
-  final harness = _Harness(repo, root);
+  final harness = _Harness(repo, root, vndb);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -760,6 +764,24 @@ void main() {
     await _drainToast(tester);
   });
 
+  testWidgets('closing the dialog mid-lookup sends no more VNDB searches', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    final h = await _open(tester, gate: gate, gateQuery: 'DEMO');
+    for (var i = 0; i < 200 && h.vndb.searches == 0; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(h.vndb.searches, 1);
+    await tester.pumpWidget(const SizedBox());
+    gate.complete();
+    await _settle(tester);
+    expect(h.vndb.searches, 1);
+  });
+
   testWidgets('close is blocked while saving', (tester) async {
     final h = await _openAndMatch(tester);
     h.repo.saveGate = Completer<void>();
@@ -935,7 +957,7 @@ Future<_Harness> _openAddDialog(
   SharedPreferences.setMockInitialValues({});
   final repo = _FakeRepository([]);
   final vndb = _Vndb(_defaultResults());
-  final harness = _Harness(repo, root);
+  final harness = _Harness(repo, root, vndb);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [

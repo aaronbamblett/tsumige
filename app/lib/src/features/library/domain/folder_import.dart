@@ -795,6 +795,12 @@ class VndbRequestQueue {
 
   Future<void> _tail = Future<void>.value();
   DateTime? _lastStart;
+  bool _cancelled = false;
+
+  /// Stops this queue: requests not yet sent, and any retry not yet
+  /// waited out, complete with [VndbCancelled]. Requests made afterwards
+  /// fail the same way.
+  void cancel() => _cancelled = true;
 
   /// Runs [query] through the queue, serialized with the other queued
   /// requests.
@@ -807,6 +813,7 @@ class VndbRequestQueue {
   }
 
   Future<List<VnSearchResult>> _execute(String query) async {
+    if (_cancelled) throw const VndbCancelled();
     final last = _lastStart;
     if (last != null) {
       final wait = last.add(gap).difference(_now());
@@ -814,16 +821,22 @@ class VndbRequestQueue {
     }
     var retries = 0;
     for (;;) {
+      if (_cancelled) throw const VndbCancelled();
       _lastStart = _now();
       try {
         return await search(query);
       } on VndbException catch (e) {
         if (e.statusCode != 429 || retries >= maxRetries) rethrow;
         retries++;
+        if (_cancelled) throw const VndbCancelled();
         await _delay(retryWait);
       }
     }
   }
+}
+
+class VndbCancelled implements Exception {
+  const VndbCancelled();
 }
 
 /// Searches VNDB for each query variant in order (the cleaned name, its

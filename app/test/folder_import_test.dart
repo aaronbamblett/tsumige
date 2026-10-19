@@ -826,6 +826,20 @@ void main() {
       expect(waits, hasLength(3));
     });
 
+    test('cancel stops a retry before its wait and any later request', () async {
+      late final VndbRequestQueue queue;
+      var calls = 0;
+      queue = queueWith((query) async {
+        calls++;
+        queue.cancel();
+        throw const VndbException('HTTP 429', statusCode: 429);
+      });
+      await expectLater(queue.run('a'), throwsA(isA<VndbCancelled>()));
+      await expectLater(queue.run('b'), throwsA(isA<VndbCancelled>()));
+      expect(calls, 1);
+      expect(waits, isEmpty);
+    });
+
     test('other errors are not retried', () async {
       var calls = 0;
       final queue = queueWith((query) async {
