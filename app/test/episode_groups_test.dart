@@ -434,7 +434,7 @@ void main() {
         await pumpGroups(tester, core.LoadedLibrary(library: library));
     await ctrlClick(tester, find.text('Duo'));
     await ctrlClick(tester, find.text('Lone Wolf'));
-    expect(find.text('2 games selected'), findsOneWidget);
+    expect(find.text('3 games selected'), findsOneWidget);
     expect(find.text('Duo (2)'), findsOneWidget);
     await tester.tap(find.text('Combine into one tile…'));
     await tester.pumpAndSettle();
@@ -450,6 +450,30 @@ void main() {
     expect(group.memberIds, hasLength(3));
     expect(find.text('Trio'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
+  });
+
+  testWidgets('a group of 3 plus one game counts 4 games selected',
+      (tester) async {
+    final library = core.Library(games: [
+      game('ep1', 'Saga Episode 1'),
+      game('ep2', 'Saga Episode 2'),
+      game('ep3', 'Saga Episode 3'),
+      game('s1', 'Lone Wolf'),
+    ]);
+    library.groups.add(
+      core.GameGroup(
+          id: 'gr1', name: 'Saga', memberIds: ['ep1', 'ep2', 'ep3']),
+    );
+    await pumpGroups(tester, core.LoadedLibrary(library: library));
+    await ctrlClick(tester, find.text('Saga'));
+    await ctrlClick(tester, find.text('Lone Wolf'));
+    expect(find.text('4 games selected'), findsOneWidget);
+    Finder paneRow(String text) => find.descendant(
+          of: find.byType(MultiSelectionPane),
+          matching: find.text(text),
+        );
+    expect(paneRow('Saga (3)'), findsOneWidget);
+    expect(paneRow('Lone Wolf'), findsOneWidget);
   });
 
   testWidgets('rename changes the tile name and the saved file',
