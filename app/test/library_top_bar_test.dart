@@ -20,6 +20,7 @@ import 'package:tsumige/src/core/paths.dart' as paths;
 import 'package:tsumige/src/core/vndb.dart' as vndb;
 import 'package:tsumige/src/features/library/data/library_repository.dart';
 import 'package:tsumige/src/features/library/domain/cover_source.dart';
+import 'package:tsumige/src/features/library/domain/launch_actions.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/library_grid.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/library_toolbar.dart';
 import 'package:tsumige/src/utils/desktop/desktop_window.dart';
@@ -81,6 +82,7 @@ Future<void> _pumpApp(
       dataDirProvider.overrideWithValue(paths.DataDir(temp.path)),
       libraryRepositoryProvider.overrideWithValue(_FakeRepository(games)),
       coverExistsProvider.overrideWithValue((_) => false),
+      umuRunPathProvider.overrideWithValue('/usr/bin/umu-run'),
       if (platform != null) hostPlatformProvider.overrideWithValue(platform),
     ],
     child: const TsumigeApp(),

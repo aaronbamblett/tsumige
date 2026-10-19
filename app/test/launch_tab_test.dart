@@ -22,6 +22,7 @@ import 'package:tsumige/src/core/launch/game_runner.dart';
 import 'package:tsumige/src/features/library/data/library_repository.dart';
 import 'package:tsumige/src/features/library/domain/cover_source.dart';
 import 'package:tsumige/src/features/library/domain/game_editor.dart';
+import 'package:tsumige/src/features/library/domain/launch_actions.dart';
 import 'package:tsumige/src/features/library/domain/runner_detection.dart';
 import 'package:tsumige/src/features/library/domain/running_games.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/detail_tabs/launch_tab.dart';
@@ -86,6 +87,7 @@ Future<LaunchFakeRepository> pumpLaunch(
       dataDirProvider.overrideWithValue(core.DataDir(temp.path)),
       libraryRepositoryProvider.overrideWithValue(fake),
       coverExistsProvider.overrideWithValue((_) => false),
+      umuRunPathProvider.overrideWithValue('/usr/bin/umu-run'),
       wineRunnersProvider.overrideWith((ref) {
         onRunnerScan?.call();
         return Future.value(wines);

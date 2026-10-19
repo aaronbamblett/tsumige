@@ -21,6 +21,7 @@ import 'package:tsumige/src/core/paths.dart' as core;
 import 'package:tsumige/src/core/vndb.dart' as core;
 import 'package:tsumige/src/features/library/data/library_repository.dart';
 import 'package:tsumige/src/features/library/domain/cover_source.dart';
+import 'package:tsumige/src/features/library/domain/launch_actions.dart';
 import 'package:tsumige/src/features/library/domain/selection.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_cover_tile.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/library_toolbar.dart';
@@ -81,6 +82,7 @@ Future<void> pumpToolbar(
         ToolbarFakeRepository(games),
       ),
       coverExistsProvider.overrideWithValue((_) => false),
+      umuRunPathProvider.overrideWithValue('/usr/bin/umu-run'),
     ],
     child: const TsumigeApp(),
   ));
