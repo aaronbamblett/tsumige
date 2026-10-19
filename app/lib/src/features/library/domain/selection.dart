@@ -4,12 +4,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import 'dart:async';
+
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/groups.dart';
 import '../../../core/model.dart';
 import '../data/library_repository.dart';
 import 'cover_source.dart';
+import 'game_editor.dart';
 
 part 'selection.g.dart';
 
@@ -19,7 +22,8 @@ part 'selection.g.dart';
 ///
 /// Selecting a game id that belongs to a group selects the group instead and
 /// remembers that member, so every caller of [select] (grid, Related tab)
-/// opens the group with that member shown.
+/// opens the group with that member shown. The pick saves through
+/// [GameEditor.pickGroupMember], the same path the episode picker uses.
 @Riverpod(keepAlive: true)
 class SelectedGameId extends _$SelectedGameId {
   @override
@@ -34,13 +38,15 @@ class SelectedGameId extends _$SelectedGameId {
     if (groups != null) {
       for (final group in groups) {
         if (group.memberIds.contains(id)) {
-          group.lastPickedId = id;
           if (state == group.id) {
             // Same tile, different member: an equal assignment rebuilds
             // nothing, so bounce through null to show the newly picked one.
             state = null;
           }
           state = group.id;
+          unawaited(
+            ref.read(gameEditorProvider).pickGroupMember(group.id, id),
+          );
           return;
         }
       }
