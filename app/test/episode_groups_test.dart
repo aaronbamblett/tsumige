@@ -24,6 +24,7 @@ import 'package:tsumige/src/features/library/domain/launch_actions.dart';
 import 'package:tsumige/src/features/library/domain/selection.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_cover_tile.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_detail_pane.dart';
+import 'package:tsumige/src/features/library/presentation/widgets/multi_selection_pane.dart';
 import 'package:tsumige/src/utils/prefs/app_prefs.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 
@@ -316,6 +317,107 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
     await tester.pump();
     expect(find.text('4 games selected'), findsOneWidget);
+  });
+
+  testWidgets('click then ctrl+click keeps the open tile selected',
+      (tester) async {
+    final fake = await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
+    await tester.tap(find.text('Solo A'));
+    await tester.pump();
+    await tester.pump();
+    await ctrlClick(tester, find.text('Solo B'));
+    expect(find.text('2 games selected'), findsOneWidget);
+    Finder paneRow(String text) => find.descendant(
+          of: find.byType(MultiSelectionPane),
+          matching: find.text(text),
+        );
+    expect(paneRow('Solo A'), findsOneWidget);
+    expect(paneRow('Solo B'), findsOneWidget);
+    await tester.tap(find.text('Combine into one tile…'));
+    await tester.pumpAndSettle();
+    await tester.enterText(groupNameField(), 'Pair');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('group-name-confirm')));
+    await tester.pumpAndSettle();
+    final created = fake.loaded.library.groups
+        .firstWhere((group) => group.id != 'gr1');
+    expect(created.memberIds.toSet(), {'solo-a', 'solo-b'});
+  });
+
+  testWidgets('searching away a selected tile opens the one left',
+      (tester) async {
+    await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(GameCoverTile).first),
+    );
+    await ctrlClick(tester, find.text('Solo A'));
+    await ctrlClick(tester, find.text('Solo B'));
+    expect(find.text('2 games selected'), findsOneWidget);
+    await tester.enterText(toolbarSearch(), 'Solo A');
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('2 games selected'), findsNothing);
+    expect(container.read(selectedGameIdProvider), 'solo-a');
+    expect(paneText('Solo A'), findsOneWidget);
+  });
+
+  testWidgets('removing a selected game updates the panel', (tester) async {
+    final fake = await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
+    await ctrlClick(tester, find.text('Solo A'));
+    await ctrlClick(tester, find.text('Solo B'));
+    expect(find.text('2 games selected'), findsOneWidget);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(GameCoverTile).first),
+    );
+    await container.read(gameEditorProvider).remove('solo-a');
+    await tester.pump();
+    await tester.pump();
+    expect(
+      fake.loaded.library.games.any((game) => game.id == 'solo-a'),
+      isFalse,
+    );
+    expect(find.text('2 games selected'), findsNothing);
+    expect(container.read(selectedGameIdProvider), 'solo-b');
+    expect(paneText('Solo B'), findsOneWidget);
+  });
+
+  testWidgets('shift+click with no anchor starts from the open tile',
+      (tester) async {
+    await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
+    await tester.tap(find.text('Solo A'));
+    await tester.pump();
+    await tester.pump();
+    await ctrlClick(tester, find.text('Solo B'));
+    expect(find.text('2 games selected'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(find.text('2 games selected'), findsNothing);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
+    await tester.tap(find.text('Solo B'));
+    await tester.pump();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
+    await tester.pump();
+    expect(find.text('2 games selected'), findsOneWidget);
+  });
+
+  testWidgets('clear selection returns to the tile open before',
+      (tester) async {
+    await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
+    await tester.tap(find.text('Solo A'));
+    await tester.pump();
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
+    await tester.tap(find.text('Solo B'));
+    await tester.pump();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
+    await tester.pump();
+    expect(find.text('2 games selected'), findsOneWidget);
+    await tester.tap(find.text('Clear selection'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('2 games selected'), findsNothing);
+    expect(paneText('Solo A'), findsOneWidget);
+    expect(paneText('Solo B'), findsNothing);
   });
 
   testWidgets('combining a group with a game flattens into one group of 3',
