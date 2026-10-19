@@ -601,7 +601,7 @@ void main() {
         await tester.tap(find.byKey(const Key('settings-close')));
         await tester.pumpAndSettle();
       }
-      if (find.text('Delete game…').evaluate().isNotEmpty) {
+      if (find.text('Remove from library…').evaluate().isNotEmpty) {
         await tester.sendKeyEvent(LogicalKeyboardKey.escape);
         await tester.pumpAndSettle();
       }
@@ -1358,7 +1358,7 @@ void main() {
     expect(games.single.favourite, isTrue);
   });
 
-  testWidgets('delete asks first: Cancel does nothing', (tester) async {
+  testWidgets('remove asks first: Cancel does nothing', (tester) async {
     final games = [
       core.Game(id: 'g1', title: 'Alpha'),
       core.Game(id: 'g2', title: 'Beta'),
@@ -1367,16 +1367,21 @@ void main() {
     await openPane(tester, 'Alpha');
     await tester.tap(find.byTooltip('More'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete game…'));
+    await tester.tap(find.text('Remove from library…'));
     await tester.pumpAndSettle();
-    expect(find.text('Delete Alpha?'), findsOneWidget);
+    expect(find.text('Remove Alpha?'), findsOneWidget);
+    expect(find.textContaining('moves to the trash'), findsNothing);
+    expect(
+      tester.widget<AlertDialog>(find.byType(AlertDialog)).content,
+      isNull,
+    );
     await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
     await tester.pumpAndSettle();
     expect(find.byType(GameDetailPane), findsOneWidget);
     expect(games, hasLength(2));
   });
 
-  testWidgets('delete moves to trash and clears the selection',
+  testWidgets('remove moves to trash and clears the selection',
       (tester) async {
     late Directory temp;
     final games = [
@@ -1389,9 +1394,9 @@ void main() {
     await runRealFlow(tester, () async {
       await tester.tap(find.byTooltip('More'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Delete game…'));
+      await tester.tap(find.text('Remove from library…'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(TextButton, 'Delete'));
+      await tester.tap(find.widgetWithText(TextButton, 'Remove'));
       await tester.pumpAndSettle();
     }, () => Directory(p.join(temp.path, 'trash')).existsSync());
     expect(find.byType(GameDetailPane), findsNothing);

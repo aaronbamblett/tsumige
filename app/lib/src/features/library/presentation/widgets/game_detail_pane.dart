@@ -503,7 +503,10 @@ class _HeroControls extends ConsumerWidget {
                 value: 'adult-vndb',
                 child: Text("Use VNDB's adult flag"),
               ),
-            const PopupMenuItem(value: 'delete', child: Text('Delete game…')),
+            const PopupMenuItem(
+              value: 'delete',
+              child: Text('Remove from library…'),
+            ),
           ],
         ),
         _HeroButton(
@@ -520,11 +523,7 @@ Future<void> _deleteGame(BuildContext context, WidgetRef ref, Game game) async {
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: Text('Delete ${game.title}?'),
-      content: const Text(
-        "It moves to the trash folder in Tsumige's data "
-        'folder and can be restored by hand.',
-      ),
+      title: Text('Remove ${game.title}?'),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -535,7 +534,7 @@ Future<void> _deleteGame(BuildContext context, WidgetRef ref, Game game) async {
             foregroundColor: Theme.of(dialogContext).colorScheme.error,
           ),
           onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: const Text('Delete'),
+          child: const Text('Remove'),
         ),
       ],
     ),
