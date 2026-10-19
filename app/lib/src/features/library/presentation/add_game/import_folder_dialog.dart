@@ -202,7 +202,9 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     final id = _rows[index].vn?.id;
     if (id == null) return null;
     for (final game in games) {
-      if (game.vndbId == id) return 'Same VNDB entry as ${game.title}';
+      if (game.vndbId == id) {
+        return 'Already in library as ${game.title}';
+      }
     }
     for (var j = 0; j < index; j++) {
       if (_rows[j].vn?.id == id) {
@@ -523,7 +525,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     Toast(context).show(
       coverFailures == 0
           ? 'Added $count'
-          : 'Added $count ($coverFailures covers failed)',
+          : 'Added $count. ${_games(coverFailures)} failed to download.',
     );
     _pop(ImportFolderResult.added);
   }
@@ -640,7 +642,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                       LinearProgressIndicator(value: done / total),
                       const SizedBox(height: 4),
                       Text(
-                        'Matching with VNDB… $done of $total',
+                        'Matching on VNDB… $done of $total',
                         style: muted,
                       ),
                     ],
@@ -969,7 +971,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                     height: 40,
                     expand: false,
                     onPressed: _saving ? null : () => _browse(),
-                    label: const Text('Browse…'),
+                    label: const Text('Choose folder…'),
                   ),
                 ),
                 IntrinsicWidth(
@@ -978,7 +980,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                     height: 40,
                     expand: false,
                     onPressed: _saving ? null : () => _browse(append: true),
-                    label: const Text('Scan Folder…'),
+                    label: const Text('Add folder…'),
                   ),
                 ),
                 InkWell(
@@ -1021,7 +1023,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
             height: 40,
             expand: false,
             onPressed: _saving || count == 0 ? null : _add,
-            label: Text(_saving ? 'Adding $_done of $_total…' : 'Add Games'),
+            label: Text(_saving ? 'Adding $_done of $_total…' : 'Add games'),
           ),
           const SizedBox(width: 10),
           BrandGlassButton(
@@ -1092,7 +1094,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                                   _runPickSearch(value.trim());
                                 },
                                 decoration: InputDecoration.collapsed(
-                                  hintText: 'Search VNDB',
+                                  hintText: 'Title, VNDB link or ID (v12345)',
                                   hintStyle: TextStyle(
                                     color: scheme.outline,
                                     fontSize: 14,
@@ -1103,11 +1105,6 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                           ],
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Search by title, or paste a VNDB link or ID (v12345).',
-                      style: muted,
                     ),
                   ],
                 ),

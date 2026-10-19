@@ -459,7 +459,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     );
     if (duplicate != null) {
       setState(
-        () => _formError = 'Already in your library as ${duplicate.title}.',
+        () => _formError = 'Already in library as ${duplicate.title}.',
       );
       return;
     }
@@ -516,7 +516,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     ref.read(selectedGameIdProvider.notifier).select(game.id);
     if (!mounted) return;
     Toast(context).show(
-      coverFailed ? 'Added $title (cover download failed)' : 'Added $title',
+      coverFailed ? 'Added $title. Cover download failed.' : 'Added $title',
     );
     Navigator.of(context).pop();
   }
@@ -535,7 +535,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
       title: switch (_step) {
         _AddStep.start => 'Add a game',
         _AddStep.match => 'Match on VNDB',
-        _AddStep.setup => 'Set it up',
+        _AddStep.setup => 'Details',
       },
       onClose: _close,
       closeKey: const Key('add-game-close'),
@@ -581,7 +581,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Drop a game folder or game file here',
+                    'Drop a game folder or file here',
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -620,8 +620,8 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   context,
                   key: const Key('add-game-steam'),
                   icon: Icons.sports_esports_outlined,
-                  title: 'Add a Steam game',
-                  subtitle: 'By Steam app ID, no folder needed',
+                  title: 'Steam game',
+                  subtitle: 'By App ID',
                   onTap: _startSteam,
                 ),
               ),
@@ -631,8 +631,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   context,
                   key: const Key('add-game-import'),
                   icon: Icons.folder_copy_outlined,
-                  title: 'Import a folder',
-                  subtitle: 'Add every game in a folder',
+                  title: 'Import folder',
                   onTap: () => _openImport(),
                 ),
               ),
@@ -648,7 +647,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     required Key key,
     required IconData icon,
     required String title,
-    required String subtitle,
+    String? subtitle,
     required VoidCallback onTap,
   }) {
     final theme = Theme.of(context);
@@ -677,13 +676,15 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -732,20 +733,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _searchBox(context),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Search by title, or paste a VNDB link or ID (v12345).',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontSize: 13,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
+                child: _searchBox(context),
               ),
               if (_loading) const LinearProgressIndicator(),
               Expanded(child: _resultsBody(context, inLibrary)),
@@ -910,7 +898,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   _runSearch(value.trim());
                 },
                 decoration: InputDecoration.collapsed(
-                  hintText: 'Search VNDB',
+                  hintText: 'Title, VNDB link or ID (v12345)',
                   hintStyle: TextStyle(color: scheme.outline, fontSize: 14),
                 ),
               ),
@@ -1099,7 +1087,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                 ),
                 const SizedBox(height: 14),
                 if (_mode == LaunchMode.steam) ...[
-                  launchFieldLabel(context, 'Steam app ID', false),
+                  launchFieldLabel(context, 'Steam App ID', false),
                   const SizedBox(height: 6),
                   Row(
                     children: [
@@ -1145,7 +1133,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   if (duplicate != null) ...[
                     const SizedBox(height: 6),
                     Text(
-                      'Already in your library as ${duplicate.title}.',
+                      'Already in library as ${duplicate.title}.',
                       key: const Key('add-game-duplicate'),
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: scheme.error,

@@ -381,7 +381,7 @@ void main() {
     (tester) async {
       final h = await _openAndMatch(tester);
       expect(find.text('Select games to import'), findsOneWidget);
-      expect(find.text('Add games'), findsOneWidget);
+      expect(find.widgetWithText(BrandButton, 'Add games'), findsOneWidget);
       expect(find.text('DEMO'), findsOneWidget);
       expect(find.text('Rena-sensei to Pool Ryokou'), findsOneWidget);
       expect(find.text('Solo Quest'), findsNothing);
@@ -389,7 +389,7 @@ void main() {
       expect(find.text('Best match'), findsOneWidget);
       expect(find.text('Nothing Here'), findsOneWidget);
       expect(find.text('Owned Game'), findsOneWidget);
-      expect(find.text('Same VNDB entry as Owned'), findsOneWidget);
+      expect(find.text('Already in library as Owned'), findsOneWidget);
       expect(find.text('Matched'), findsNothing);
       expect(find.text('Check match'), findsNothing);
       expect(find.text('Pick the game file'), findsNothing);
@@ -412,7 +412,7 @@ void main() {
       games: [core.Game(id: 'g1', title: 'Alpha', vndbId: 'v99')],
     );
     expect(find.byKey(const Key('import-check-2')), findsOneWidget);
-    expect(find.text('Same VNDB entry as Alpha'), findsOneWidget);
+    expect(find.text('Already in library as Alpha'), findsOneWidget);
     expect(_checked(tester, 2), isFalse);
     expect(
       tester
@@ -425,7 +425,7 @@ void main() {
     expect(_checked(tester, 2), isTrue);
   });
 
-  testWidgets('Scan Folder does not list a folder twice', (tester) async {
+  testWidgets('Add folder does not list a folder twice', (tester) async {
     await _openAndMatch(tester);
     await tester.tap(find.byKey(const Key('import-scan')));
     await _settle(tester);
@@ -456,10 +456,6 @@ void main() {
     await tester.pump();
     expect(_dialogTitle('Search VNDB'), findsOneWidget);
     expect(find.text('Solo Quest'), findsWidgets);
-    expect(
-      find.text('Search by title, or paste a VNDB link or ID (v12345).'),
-      findsOneWidget,
-    );
     expect(find.text('Selected'), findsOneWidget);
     expect(
       tester
@@ -559,7 +555,7 @@ void main() {
     for (
       var i = 0;
       i < 200 &&
-          find.text('Matching with VNDB… 4 of 5').evaluate().isEmpty;
+          find.text('Matching on VNDB… 4 of 5').evaluate().isEmpty;
       i++
     ) {
       await tester.runAsync(
@@ -567,13 +563,13 @@ void main() {
       );
       await tester.pump();
     }
-    expect(find.text('Matching with VNDB… 4 of 5'), findsOneWidget);
+    expect(find.text('Matching on VNDB… 4 of 5'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
     gate.complete();
     for (
       var i = 0;
       i < 200 &&
-          find.textContaining('Matching with VNDB').evaluate().isNotEmpty;
+          find.textContaining('Matching on VNDB').evaluate().isNotEmpty;
       i++
     ) {
       await tester.runAsync(
@@ -581,7 +577,7 @@ void main() {
       );
       await tester.pump();
     }
-    expect(find.textContaining('Matching with VNDB'), findsNothing);
+    expect(find.textContaining('Matching on VNDB'), findsNothing);
     expect(find.text('Solo Quest Remake'), findsOneWidget);
   });
 
@@ -774,7 +770,7 @@ void main() {
     await tester.tap(find.byKey(const Key('import-add')));
     await _waitForSave(tester, h.repo);
     expect(_added(h), hasLength(2));
-    expect(find.text('Added 2 games (1 covers failed)'), findsOneWidget);
+    expect(find.text('Added 2 games. 1 game failed to download.'), findsOneWidget);
     await _drainToast(tester);
   });
 
@@ -842,10 +838,10 @@ void main() {
       tester,
       () =>
           find.byKey(const Key('import-check-6')).evaluate().isNotEmpty &&
-          find.textContaining('Matching with VNDB').evaluate().isEmpty,
+          find.textContaining('Matching on VNDB').evaluate().isEmpty,
     );
     expect(find.byKey(const Key('import-check-6')), findsOneWidget);
-    expect(find.textContaining('Matching with VNDB'), findsNothing);
+    expect(find.textContaining('Matching on VNDB'), findsNothing);
   });
 
   testWidgets('a manual pick survives the late VNDB result of its row', (

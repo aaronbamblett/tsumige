@@ -313,7 +313,7 @@ void main() {
     await tester.tap(_resultRow('DEMO'));
     await tester.pumpAndSettle();
     await _next(tester);
-    expect(find.text('Set it up'), findsOneWidget);
+    expect(find.text('Details'), findsOneWidget);
   });
 
   testWidgets('picking moves to step 2 with the fields filled', (tester) async {
@@ -583,7 +583,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(fake.saves, 1);
     expect(fake.games.single.cover, isNull);
-    expect(find.text('Added DEMO (cover download failed)'), findsOneWidget);
+    expect(find.text('Added DEMO. Cover download failed.'), findsOneWidget);
     await _drainToast(tester);
   });
 
@@ -593,7 +593,7 @@ void main() {
     await _pump(tester);
     await tester.tap(find.byKey(const Key('add-game-manual')));
     await tester.pumpAndSettle();
-    expect(find.text('Set it up'), findsOneWidget);
+    expect(find.text('Details'), findsOneWidget);
     expect(find.byKey(const Key('add-game-description')), findsOneWidget);
     expect(find.text('New game'), findsOneWidget);
     expect(find.byIcon(Icons.image_not_supported_outlined), findsOneWidget);
@@ -633,7 +633,7 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('add-game-manual')));
     await tester.pumpAndSettle();
-    expect(find.text('Set it up'), findsOneWidget);
+    expect(find.text('Details'), findsOneWidget);
     await tester.enterText(find.byKey(const Key('add-game-title')), '');
     await tester.tap(find.byKey(const Key('add-game-add')));
     await tester.pumpAndSettle();
@@ -815,7 +815,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(find.text('Set it up'), findsOneWidget);
+    expect(find.text('Details'), findsOneWidget);
     fake.saveGate!.complete();
     await _waitForSave(tester, fake);
     expect(fake.games.single.title, 'Manual game');
@@ -826,11 +826,12 @@ void main() {
     tester,
   ) async {
     await _pump(tester, openMatch: false);
-    expect(find.text('Drop a game folder or game file here'), findsOneWidget);
+    expect(find.text('Drop a game folder or file here'), findsOneWidget);
     expect(find.text('Choose folder…'), findsOneWidget);
     expect(find.text('Choose game file…'), findsOneWidget);
-    expect(find.text('By Steam app ID, no folder needed'), findsOneWidget);
-    expect(find.text('Add every game in a folder'), findsOneWidget);
+    expect(find.text('Steam game'), findsOneWidget);
+    expect(find.text('By App ID'), findsOneWidget);
+    expect(find.text('Import folder'), findsOneWidget);
   });
 
   testWidgets('Choose game file matches the file folder with that file', (
@@ -854,8 +855,8 @@ void main() {
     await _pump(tester, openMatch: false);
     await tester.tap(find.byKey(const Key('add-game-steam')));
     await tester.pumpAndSettle();
-    expect(find.text('Set it up'), findsOneWidget);
-    expect(find.text('Steam app ID'), findsOneWidget);
+    expect(find.text('Details'), findsOneWidget);
+    expect(find.text('Steam App ID'), findsOneWidget);
     expect(find.text('Game file'), findsNothing);
     expect(find.byKey(const Key('add-game-find-vndb')), findsOneWidget);
   });
@@ -885,8 +886,8 @@ void main() {
     await tester.tap(_resultRow('DEMO'));
     await tester.pumpAndSettle();
     await _next(tester);
-    expect(find.text('Set it up'), findsOneWidget);
-    expect(find.text('Steam app ID'), findsOneWidget);
+    expect(find.text('Details'), findsOneWidget);
+    expect(find.text('Steam App ID'), findsOneWidget);
     expect(find.text('DEMO'), findsWidgets);
   });
 
@@ -896,7 +897,7 @@ void main() {
     await _pump(tester, rows: [_row('v900017', 'DEMO', imageUrl: null)]);
     expect(find.text('Best match'), findsOneWidget);
     await _next(tester);
-    expect(find.text('Set it up'), findsOneWidget);
+    expect(find.text('Details'), findsOneWidget);
     expect(find.text('DEMO'), findsWidgets);
   });
 
@@ -950,7 +951,7 @@ void main() {
       p.join(temp.path, 'link', 'Alpha.exe'),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Already in your library as Alpha.'), findsOneWidget);
+    expect(find.text('Already in library as Alpha.'), findsOneWidget);
     final add = tester.widget<BrandButton>(
       find.byKey(const Key('add-game-add')),
     );
