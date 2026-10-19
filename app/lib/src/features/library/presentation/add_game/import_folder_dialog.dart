@@ -73,6 +73,9 @@ class _ImportRow {
   bool ticked = false;
   bool tickTouched = false;
 
+  /// Set by a manual pick so a late VNDB result does not replace it.
+  bool picked = false;
+
   Set<String>? libraryExes;
   bool inLibrary = false;
 }
@@ -93,6 +96,8 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   bool _scanning = false;
   List<_ImportRow> _rows = const [];
   int _scanToken = 0;
+  int _generation = 0;
+  int? _matchingGeneration;
   bool _saving = false;
   int _done = 0;
   int _total = 0;
@@ -152,6 +157,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   @override
   void dispose() {
     _scanToken++;
+    _generation++;
     _queue?.cancel();
     _pickDebounce?.cancel();
     _pickQuery.dispose();
@@ -266,6 +272,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     final token = ++_scanToken;
     final platform = ref.read(hostPlatformProvider);
     if (!append) {
+      _generation++;
       _queue?.cancel();
       _queue = null;
     }
@@ -301,10 +308,21 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       }
       _scanning = false;
     });
-    for (var i = 0; i < fresh.length; i++) {
-      if (!mounted || token != _scanToken) return;
-      await _match(fresh[i], token);
+    await _matchPending();
+  }
+
+  /// Matches every row still waiting for a result, in order. Only one loop
+  /// runs per generation, so an appended scan's rows join the running loop.
+  Future<void> _matchPending() async {
+    final generation = _generation;
+    if (_matchingGeneration == generation) return;
+    _matchingGeneration = generation;
+    while (mounted && generation == _generation) {
+      final index = _rows.indexWhere((row) => row.state == null);
+      if (index == -1) break;
+      await _match(_rows[index], generation);
     }
+    if (_matchingGeneration == generation) _matchingGeneration = null;
   }
 
   String? _rootFor(String path) {
@@ -314,7 +332,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     return null;
   }
 
-  Future<void> _match(_ImportRow row, int token) async {
+  Future<void> _match(_ImportRow row, int generation) async {
     final query = cleanFolderName(row.folder.name);
     final exeDir = row.exePath == null
         ? row.folder.path
@@ -335,7 +353,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       error = '$e';
       match = const FolderMatch(ImportMatchState.error, null);
     }
-    if (!mounted || token != _scanToken) return;
+    if (!mounted || generation != _generation || row.picked) return;
     final games = ref.read(libraryProvider).value?.library.games ?? const [];
     setState(() {
       row.state = match.state;
@@ -357,7 +375,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       row.state = null;
       row.error = null;
     });
-    unawaited(_match(row, _scanToken));
+    unawaited(_matchPending());
   }
 
   void _openPick(int index) {
@@ -433,6 +451,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     final row = _rows[index];
     final games = ref.read(libraryProvider).value?.library.games ?? const [];
     setState(() {
+      row.picked = true;
       row.vn = vn;
       row.state = ImportMatchState.matched;
       row.error = null;

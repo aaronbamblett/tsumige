@@ -64,11 +64,16 @@ class _FakeRepository implements LibraryRepository {
 
 /// Fake VNDB keyed by search query. Cover URLs containing "fail" return 404.
 class _Vndb {
-  _Vndb(this.byQuery, {this.gateQuery, this.gate});
+  _Vndb(this.byQuery, {this.gateQuery, this.gate, this.holds = const {}});
 
   final Map<String, List<Map<String, Object?>>> byQuery;
   final String? gateQuery;
   final Completer<void>? gate;
+
+  /// Requests for these queries wait until their completer completes.
+  final Map<String, Completer<void>> holds;
+
+  final List<String> heldQueries = [];
 
   /// Queries that fail this many times with a 500 before succeeding.
   final Map<String, int> failCounts = {};
@@ -83,6 +88,11 @@ class _Vndb {
         final query = filters[2] as String;
         searches++;
         if (query == gateQuery) await gate!.future;
+        final hold = holds[query];
+        if (hold != null) {
+          heldQueries.add(query);
+          await hold.future;
+        }
         if ((failCounts[query] ?? 0) > 0) {
           failCounts[query] = failCounts[query]! - 1;
           return http.Response('boom', 500);
@@ -199,6 +209,8 @@ Future<_Harness> _open(
   bool duplicate = false,
   Completer<void>? gate,
   String? gateQuery,
+  Map<String, Completer<void>> holds = const {},
+  List<String> appended = const [],
   Completer<String?>? picker,
   HostPlatform? platform,
   Map<String, int>? failCounts,
@@ -218,6 +230,11 @@ Future<_Harness> _open(
     duplicate: duplicate,
     macos: platform?.isMacOS ?? false,
   );
+  final appendRoot = p.join(temp.path, 'More games');
+  for (final name in appended) {
+    _exe(appendRoot, '$name/$name.exe');
+  }
+  var picks = 0;
   SharedPreferences.setMockInitialValues({});
   final repo = _FakeRepository([
     ...(games ?? gamesForRoot?.call(root) ?? [_ownedGame()]),
@@ -226,6 +243,7 @@ Future<_Harness> _open(
     results ?? _defaultResults(),
     gate: gate,
     gateQuery: gateQuery,
+    holds: holds,
   );
   if (failCounts != null) vndb.failCounts.addAll(failCounts);
   final harness = _Harness(repo, root, vndb);
@@ -241,8 +259,11 @@ Future<_Harness> _open(
         importVndbGapProvider.overrideWithValue(Duration.zero),
         importVndbRetryWaitProvider.overrideWithValue(Duration.zero),
         pathPickerProvider.overrideWithValue(
-          ({String? initialDirectory, PathPickMode? mode}) async =>
-              picker != null ? picker.future : root,
+          ({String? initialDirectory, PathPickMode? mode}) async {
+            if (picker != null) return picker.future;
+            picks++;
+            return picks > 1 && appended.isNotEmpty ? appendRoot : root;
+          },
         ),
         if (platform != null) hostPlatformProvider.overrideWithValue(platform),
       ],
@@ -327,6 +348,15 @@ Future<void> _waitForSave(WidgetTester tester, _FakeRepository fake) async {
     await tester.pump();
   }
   await tester.pump();
+}
+
+Future<void> _waitFor(WidgetTester tester, bool Function() done) async {
+  for (var i = 0; i < 200 && !done(); i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump();
+  }
 }
 
 // FToast dismisses on a 3-second timer that outlives the test body.
@@ -792,6 +822,73 @@ void main() {
     await tester.tap(find.byKey(const Key('import-check-1')));
     await tester.pump();
     expect(resolved, isEmpty);
+  });
+
+  testWidgets('an appended scan finishes the rows still matching', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    final h = await _open(
+      tester,
+      gate: gate,
+      gateQuery: 'DEMO',
+      appended: const ['Alpha', 'Beta'],
+    );
+    await _waitFor(tester, () => h.vndb.searches > 0);
+    await tester.tap(find.byKey(const Key('import-scan')));
+    await tester.pump();
+    gate.complete();
+    await _waitFor(
+      tester,
+      () =>
+          find.byKey(const Key('import-check-6')).evaluate().isNotEmpty &&
+          find.textContaining('Matching with VNDB').evaluate().isEmpty,
+    );
+    expect(find.byKey(const Key('import-check-6')), findsOneWidget);
+    expect(find.textContaining('Matching with VNDB'), findsNothing);
+  });
+
+  testWidgets('a manual pick survives the late VNDB result of its row', (
+    tester,
+  ) async {
+    final nothing = Completer<void>();
+    final owned = Completer<void>();
+    final results = _defaultResults()..remove('Owned Game');
+    final h = await _open(
+      tester,
+      results: results,
+      holds: {'Nothing Here': nothing, 'Owned': owned},
+    );
+    await _waitFor(tester, () => h.vndb.heldQueries.contains('Nothing Here'));
+    await tester.tap(find.byKey(const Key('import-name-2')));
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const Key('import-pick-search')),
+      'Solo Quest',
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    nothing.complete();
+    await _waitFor(
+      tester,
+      () =>
+          h.vndb.heldQueries.contains('Owned') &&
+          find.text('Solo Quest Remake').evaluate().isNotEmpty,
+    );
+    await tester.tap(find.text('Solo Quest Remake'));
+    await _settle(tester);
+    expect(find.text('Selected'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('import-pick-select')));
+    await _settle(tester);
+    owned.complete();
+    await _settle(tester);
+    expect(_dialogTitle('Search VNDB'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('import-name-2')),
+        matching: find.text('Solo Quest Remake'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('closing the dialog mid-lookup sends no more VNDB searches', (
