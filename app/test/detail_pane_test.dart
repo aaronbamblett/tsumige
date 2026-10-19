@@ -117,6 +117,14 @@ Future<void> openPane(WidgetTester tester, String title) async {
   await tester.pump();
 }
 
+Future<void> openEditDetails(WidgetTester tester, String title) async {
+  await openPane(tester, title);
+  await tester.tap(find.byTooltip('More'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Edit…'));
+  await tester.pumpAndSettle();
+}
+
 Finder paneText(WidgetTester tester, String text) => find.descendant(
       of: find.byType(GameDetailPane),
       matching: find.text(text),
@@ -1435,6 +1443,125 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Change art…'), findsOneWidget);
     expect(find.text('Re-fetch cover from VNDB'), findsNothing);
+  });
+
+  testWidgets('Edit… saves the name into the pane and the grid tile',
+      (tester) async {
+    final games = [core.Game(id: 'g1', title: 'Alpha')];
+    await pumpLibrary(tester, games);
+    await openEditDetails(tester, 'Alpha');
+    await tester.enterText(
+        find.byKey(const Key('edit-details-name')), 'Alpha Plus');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('edit-details-save')));
+    await tester.pumpAndSettle();
+    expect(games.single.title, 'Alpha Plus');
+    expect(games.single.vndbOriginals, isEmpty);
+    expect(paneText(tester, 'Alpha Plus'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(GameCoverTile),
+        matching: find.text('Alpha Plus'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Use VNDB value restores the edited field and drops the key',
+      (tester) async {
+    final games = [
+      core.Game(
+        id: 'g1',
+        title: 'My Name',
+        vndbId: 'v1',
+        vndbOriginals: {core.vndbTitleKey: 'VNDB Name'},
+      ),
+    ];
+    await pumpLibrary(tester, games);
+    await openEditDetails(tester, 'My Name');
+    expect(find.text('Use VNDB value'), findsOneWidget);
+    expect(
+      find.text(
+          'Your values are kept when Tsumige refreshes data from VNDB.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Use VNDB value'));
+    await tester.pump();
+    expect(find.text('VNDB Name'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('edit-details-save')));
+    await tester.pumpAndSettle();
+    expect(games.single.title, 'VNDB Name');
+    expect(games.single.vndbOriginals, isEmpty);
+  });
+
+  testWidgets('a bad release date shows an error and disables Save',
+      (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openEditDetails(tester, 'Alpha');
+    final field = find.byKey(const Key('edit-details-released'));
+    final save = find.byKey(const Key('edit-details-save'));
+    await tester.enterText(field, '2024-13');
+    await tester.pump();
+    expect(find.text('Enter a valid release date.'), findsOneWidget);
+    expect(tester.widget<BrandButton>(save).onPressed, isNull);
+    for (final date in ['2024', '2024-05', '2024-05-17']) {
+      await tester.enterText(field, date);
+      await tester.pump();
+      expect(find.text('Enter a valid release date.'), findsNothing);
+      expect(tester.widget<BrandButton>(save).onPressed, isNotNull,
+          reason: date);
+    }
+    await tester.enterText(field, '2024-02-30');
+    await tester.pump();
+    expect(find.text('Enter a valid release date.'), findsOneWidget);
+    expect(tester.widget<BrandButton>(save).onPressed, isNull);
+  });
+
+  testWidgets('an empty Name disables Save', (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openEditDetails(tester, 'Alpha');
+    final save = find.byKey(const Key('edit-details-save'));
+    await tester.enterText(find.byKey(const Key('edit-details-name')), '   ');
+    await tester.pump();
+    expect(tester.widget<BrandButton>(save).onPressed, isNull);
+    await tester.enterText(find.byKey(const Key('edit-details-name')), 'Ok');
+    await tester.pump();
+    expect(tester.widget<BrandButton>(save).onPressed, isNotNull);
+  });
+
+  testWidgets('a game without a VNDB id has no Use VNDB value and no note',
+      (tester) async {
+    final games = [core.Game(id: 'g1', title: 'Gnosia')];
+    await pumpLibrary(tester, games);
+    await openEditDetails(tester, 'Gnosia');
+    expect(find.text('Use VNDB value'), findsNothing);
+    expect(
+      find.text(
+          'Your values are kept when Tsumige refreshes data from VNDB.'),
+      findsNothing,
+    );
+    await tester.enterText(
+        find.byKey(const Key('edit-details-original-title')), 'グノーシア');
+    await tester.tap(find.byKey(const Key('edit-details-save')));
+    await tester.pumpAndSettle();
+    expect(games.single.vndbOriginalTitle, 'グノーシア');
+    expect(games.single.vndbOriginals, isEmpty);
+  });
+
+  testWidgets('Developers save as names and show as plain text',
+      (tester) async {
+    final games = [core.Game(id: 'g1', title: 'Alpha')];
+    await pumpLibrary(tester, games);
+    await openEditDetails(tester, 'Alpha');
+    await tester.enterText(
+        find.byKey(const Key('edit-details-developers')), 'A, B');
+    await tester.tap(find.byKey(const Key('edit-details-save')));
+    await tester.pumpAndSettle();
+    expect([for (final d in games.single.developers) d.name], ['A', 'B']);
+    expect([for (final d in games.single.developers) d.id], ['', '']);
+    expect(paneText(tester, 'A'), findsOneWidget);
+    expect(tester.widget<Text>(paneText(tester, 'A')).style?.decoration,
+        isNull);
   });
 
   testWidgets('Change art stores a picked file as the cover and thumbnails',

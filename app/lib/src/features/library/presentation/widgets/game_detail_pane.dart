@@ -32,6 +32,7 @@ import 'detail_tabs/history_tab.dart';
 import 'detail_tabs/info_tab.dart';
 import 'detail_tabs/launch_tab.dart';
 import 'detail_tabs/related_tab.dart';
+import 'edit_details_dialog.dart';
 
 /// Pane hero height; the art covers the full width from the top.
 const double _kHeroHeight = 340;
@@ -470,6 +471,8 @@ class _HeroControls extends ConsumerWidget {
           child: const _HeroButton(icon: Icons.more_vert_rounded),
           onSelected: (value) {
             switch (value) {
+              case 'edit':
+                showEditDetailsDialog(context, game);
               case 'art':
                 showArtPickerDialog(context, game);
               case 'adult':
@@ -493,6 +496,7 @@ class _HeroControls extends ConsumerWidget {
             }
           },
           itemBuilder: (context) => [
+            const PopupMenuItem(value: 'edit', child: Text('Edit…')),
             const PopupMenuItem(value: 'art', child: Text('Change art…')),
             PopupMenuItem(
               value: 'adult',
