@@ -34,6 +34,7 @@ import 'detail_tabs/info_tab.dart';
 import 'detail_tabs/launch_tab.dart';
 import 'detail_tabs/related_tab.dart';
 import 'edit_details_dialog.dart';
+import 'group_name_dialog.dart';
 
 /// Pane hero height; the art covers the full width from the top.
 const double _kHeroHeight = 340;
@@ -574,10 +575,30 @@ class _HeroControls extends ConsumerWidget {
           padding: EdgeInsets.zero,
           splashRadius: 19,
           child: const _HeroButton(icon: Icons.more_vert_rounded),
-          onSelected: (value) {
+          onSelected: (value) async {
             switch (value) {
               case 'edit':
                 showEditDetailsDialog(context, game);
+              case 'rename':
+                final renameGroup = group;
+                if (renameGroup != null) {
+                  final name = await showGroupNameDialog(
+                    context: context,
+                    eyebrow: 'Rename',
+                    title: 'Rename group',
+                    initialName: renameGroup.name,
+                    confirmLabel: 'Save',
+                    canConfirm: (text) => text.trim().isNotEmpty,
+                  );
+                  if (name == null ||
+                      name == renameGroup.name ||
+                      !context.mounted) {
+                    return;
+                  }
+                  await ref
+                      .read(gameEditorProvider)
+                      .renameGroup(renameGroup.id, name, context: context);
+                }
               case 'art':
                 showArtPickerDialog(context, game);
               case 'adult':
@@ -610,6 +631,11 @@ class _HeroControls extends ConsumerWidget {
           itemBuilder: (context) => [
             const PopupMenuItem(value: 'edit', child: Text('Edit…')),
             const PopupMenuItem(value: 'art', child: Text('Change art…')),
+            if (group != null)
+              const PopupMenuItem(
+                value: 'rename',
+                child: Text('Rename group…'),
+              ),
             if (group != null)
               const PopupMenuItem(
                 value: 'split',

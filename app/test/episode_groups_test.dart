@@ -349,6 +349,25 @@ void main() {
     expect(find.text('3'), findsOneWidget);
   });
 
+  testWidgets('rename changes the tile name and the saved file',
+      (tester) async {
+    final fake = await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
+    await tester.tap(find.text('Nine Nine'));
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rename group…'));
+    await tester.pumpAndSettle();
+    expect(groupNameFieldText(tester), 'Nine Nine');
+    await tester.enterText(groupNameField(), 'Renamed');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('group-name-confirm')));
+    await tester.pumpAndSettle();
+    expect(find.text('Renamed'), findsOneWidget);
+    expect(fake.loaded.library.groups.single.name, 'Renamed');
+  });
+
   testWidgets('split restores separate tiles and drops the group',
       (tester) async {
     final fake = await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));

@@ -179,4 +179,33 @@ void main() {
     expect(again.library.groups, isEmpty);
     expect(again.library.games, hasLength(2));
   });
+
+  test('renameGroup saves through the real repository', () async {
+    final temp =
+        Directory.systemTemp.createTempSync('tsumige_editor_rename_');
+    addTearDown(() => Directory(temp.path).deleteSync(recursive: true));
+    resetBackupSessionForTest();
+    final dir = core.DataDir(temp.path);
+    final seed = core.LoadedLibrary(
+      library: core.Library(games: [
+        core.Game(id: const Uuid().v4(), title: 'Duo Episode 1'),
+        core.Game(id: const Uuid().v4(), title: 'Duo Episode 2'),
+      ]),
+    );
+    seed.library.groups.add(
+      core.GameGroup(id: 'gr1', name: 'Duo', memberIds: [
+        seed.library.games[0].id,
+        seed.library.games[1].id,
+      ]),
+    );
+    await saveLibrary(dir, seed);
+    final container = ProviderContainer(overrides: [
+      libraryRepositoryProvider.overrideWithValue(IoLibraryRepository(dir)),
+    ]);
+    addTearDown(container.dispose);
+    await container.read(libraryProvider.future);
+    await container.read(gameEditorProvider).renameGroup('gr1', 'Renamed');
+    final again = await loadLibrary(dir);
+    expect(again.library.groups.single.name, 'Renamed');
+  });
 }

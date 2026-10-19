@@ -253,6 +253,33 @@ class GameEditor {
     return group.id;
   }
 
+  /// Renames the group; the tile shows the new name.
+  Future<void> renameGroup(String groupId, String name,
+      {BuildContext? context}) async {
+    final loaded = _ref.read(libraryProvider).value;
+    if (loaded == null) return;
+    GameGroup? group;
+    for (final gr in loaded.library.groups) {
+      if (gr.id == groupId) group = gr;
+    }
+    if (group == null) return;
+    group.name = name;
+    try {
+      await _ref.read(libraryRepositoryProvider).save(loaded);
+    } on ChangedOnDisk {
+      _ref.invalidate(libraryProvider);
+      if (context?.mounted == false) return;
+      _tell(context, changedOnDiskMessage, error: false);
+      return;
+    } catch (e) {
+      _ref.invalidate(libraryProvider);
+      if (context?.mounted == false) return;
+      _tell(context, '$e', error: true);
+      return;
+    }
+    _ref.invalidate(libraryProvider);
+  }
+
   void _tell(BuildContext? context, String message, {required bool error}) {
     if (context == null || !context.mounted) return;
     if (error) {
