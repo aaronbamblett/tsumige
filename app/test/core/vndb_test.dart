@@ -296,6 +296,41 @@ void main() {
     expect(override.vndbDataFetchedAt, _now);
   });
 
+  test('a refresh keeps edited fields and updates their VNDB originals',
+      () async {
+    final loaded = _library([(_uuids[0], 'v1')]);
+    final game = _byVndb(loaded, 'v1');
+    game
+      ..title = 'My Name'
+      ..released = '2018'
+      ..vndbOriginals[vndbTitleKey] = 'Old Name'
+      ..vndbOriginals[vndbReleasedKey] = '2017';
+    final client = _routed(
+      vn: (body) => _ok([
+        {
+          'id': 'v1',
+          'title': 'New Name',
+          'alttitle': 'New Alt',
+          'released': '2021-04-02',
+          'developers': [
+            {'id': 'p1', 'name': 'Studio'},
+          ],
+          'rating': 80,
+          'votecount': 4,
+        },
+      ]),
+    );
+    final report = await refreshVndbData(loaded, client,
+        now: _now, gap: Duration.zero);
+    expect(report.error, isNull);
+    expect(game.title, 'My Name');
+    expect(game.vndbOriginals[vndbTitleKey], 'New Name');
+    expect(game.released, '2018');
+    expect(game.vndbOriginals[vndbReleasedKey], '2021-04-02');
+    expect(game.vndbOriginalTitle, 'New Alt');
+    expect(game.developers.single.name, 'Studio');
+  });
+
   test('refresh counts notFound', () async {
     final loaded = _library([(_uuids[0], 'v900017'), (_uuids[1], 'v404')]);
     final client = _routed(

@@ -575,13 +575,32 @@ class VndbRefreshReport {
       {'updated': updated, 'not_found': notFound, 'error': error};
 }
 
+/// True when VNDB's value may replace the game's field. An edited field keeps
+/// its value, while the stored VNDB value follows the new data for
+/// "Use VNDB value".
+bool _mayWrite(Game game, String key, Object? vndbValue) {
+  if (!game.vndbOriginals.containsKey(key)) return true;
+  game.vndbOriginals[key] = vndbValue;
+  return false;
+}
+
 void applyVnData(Game game, VnData vn,
     {required bool adult, required DateTime fetchedAt}) {
   game.vndbRating = vn.rating;
   game.vndbVotecount = vn.votecount;
-  game.released = vn.released;
-  game.vndbOriginalTitle = vn.alttitle;
-  game.developers = [...vn.developers];
+  if (_mayWrite(game, vndbReleasedKey, vn.released)) {
+    game.released = vn.released;
+  }
+  if (_mayWrite(game, vndbOriginalTitleKey, vn.alttitle)) {
+    game.vndbOriginalTitle = vn.alttitle;
+  }
+  if (_mayWrite(game, vndbDevelopersKey,
+      [for (final developer in vn.developers) developer.toJson()])) {
+    game.developers = [...vn.developers];
+  }
+  // A refresh never renames a game, but an edited title's stored VNDB value
+  // still follows VNDB.
+  _mayWrite(game, vndbTitleKey, vn.title);
   game.lengthMinutes = vn.lengthMinutes;
   game.lengthVotes = vn.lengthVotes;
   game.originalLanguage = vn.olang;

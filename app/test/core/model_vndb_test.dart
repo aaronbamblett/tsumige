@@ -216,6 +216,39 @@ void main() {
     }
   });
 
+  test('vndb originals round-trip and only edited games write the key', () {
+    final game = Game(
+      id: 'g10',
+      title: 'Mine',
+      vndbId: 'v1',
+      vndbOriginals: {
+        vndbTitleKey: 'VNDB Name',
+        vndbOriginalTitleKey: null,
+        vndbDevelopersKey: [
+          {'id': 'p1', 'name': 'Studio', 'original': 'スタジオ'},
+        ],
+        vndbReleasedKey: '2024-05',
+      },
+    );
+    final json = jsonDecode(jsonEncode(game.toJson())) as Map<String, Object?>;
+    expect(json['vndb_originals'], isA<Map>());
+    final back = Game.fromJson(json);
+    expect(back.vndbOriginals[vndbTitleKey], 'VNDB Name');
+    expect(back.vndbOriginals.containsKey(vndbOriginalTitleKey), isTrue);
+    expect(back.vndbOriginals[vndbOriginalTitleKey], isNull);
+    expect(back.vndbOriginals[vndbReleasedKey], '2024-05');
+    expect(back.vndbOriginalDevelopers.single.id, 'p1');
+    expect(back.vndbOriginalDevelopers.single.name, 'Studio');
+    expect(back.vndbOriginalDevelopers.single.original, 'スタジオ');
+
+    final old = Game.fromJson({'id': 'g11', 'title': 'Old'});
+    expect(old.vndbOriginals, isEmpty);
+
+    final neverEdited =
+        jsonDecode(jsonEncode(Game(id: 'g12').toJson())) as Map<String, Object?>;
+    expect(neverEdited.containsKey('vndb_originals'), isFalse);
+  });
+
   test('isAdult takes the override, then VNDB, then false', () {
     expect(Game(id: 'a').isAdult, isFalse);
     expect(Game(id: 'a', adultVndb: true).isAdult, isTrue);
