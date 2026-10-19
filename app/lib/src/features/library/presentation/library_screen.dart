@@ -115,7 +115,7 @@ class LibraryScreen extends HookConsumerWidget {
                   (selected == null ? 0 : _kPaneSlotWidth);
               return Column(
                 children: [
-                  LibraryToolbar(
+                  LibraryTopBar(
                     gridRight: gridWidth - LibraryGrid.horizontalPadding,
                   ),
                   SkippedBanner(

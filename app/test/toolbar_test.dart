@@ -22,7 +22,6 @@ import 'package:tsumige/src/features/library/data/library_repository.dart';
 import 'package:tsumige/src/features/library/domain/cover_source.dart';
 import 'package:tsumige/src/features/library/domain/selection.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_cover_tile.dart';
-import 'package:tsumige/src/features/library/presentation/widgets/game_detail_pane.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/library_toolbar.dart';
 import 'package:tsumige/src/utils/prefs/app_prefs.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
@@ -109,7 +108,7 @@ List<core.Game> manyGames() => List.generate(
     );
 
 void openPane(WidgetTester tester, String id) {
-  ProviderScope.containerOf(tester.element(find.byType(LibraryToolbar)))
+  ProviderScope.containerOf(tester.element(find.byType(LibraryTopBar)))
       .read(selectedGameIdProvider.notifier)
       .select(id);
 }
@@ -152,7 +151,7 @@ void main() {
     await tester.tap(find.text('Title').last);
     await tester.pumpAndSettle();
     final container = ProviderScope.containerOf(
-        tester.element(find.byType(LibraryToolbar)));
+        tester.element(find.byType(LibraryTopBar)));
     expect(container.read(sortFieldProvider), keys.SortField.title);
     expect(find.text('Title'), findsOneWidget);
   });
@@ -161,7 +160,7 @@ void main() {
       (tester) async {
     await pumpToolbar(tester, taggedGames());
     final container = ProviderScope.containerOf(
-        tester.element(find.byType(LibraryToolbar)));
+        tester.element(find.byType(LibraryTopBar)));
     await openFilter(tester);
     await tester.tap(find.text('Romance'));
     await tester.pumpAndSettle();
@@ -215,23 +214,30 @@ void main() {
     expect((filterRight - lastCoverRight(tester)).abs(), lessThanOrEqualTo(1.0));
   });
 
-  testWidgets('settings box ends on the pane edge at 1400 wide',
+  // At 1400 wide the bars merge: Add/Settings sit one gap left of the
+  // window buttons instead of at the toolbar's old right edge.
+  testWidgets('settings box ends one gap left of the window buttons at 1400',
       (tester) async {
     await pumpToolbar(tester, manyGames(), size: const Size(1400, 980));
     openPane(tester, 'game-0');
     await settle(tester);
     final settingsRight =
         tester.getRect(find.byKey(const ValueKey('toolbar-settings'))).right;
-    final paneRight = tester.getRect(find.byType(GameDetailPane)).right;
-    expect((settingsRight - paneRight).abs(), lessThanOrEqualTo(1.0));
+    expect(
+      1400 - settingsRight,
+      moreOrLessEquals(kWindowButtonsWidth + 10, epsilon: 1.0),
+    );
   });
 
-  testWidgets('settings box ends 12 px from the window edge with pane closed',
+  testWidgets('settings box ends one gap left of the window buttons, pane closed',
       (tester) async {
     await pumpToolbar(tester, manyGames(), size: const Size(1400, 980));
     final settingsRight =
         tester.getRect(find.byKey(const ValueKey('toolbar-settings'))).right;
-    expect(1400 - settingsRight, moreOrLessEquals(12, epsilon: 1.0));
+    expect(
+      1400 - settingsRight,
+      moreOrLessEquals(kWindowButtonsWidth + 10, epsilon: 1.0),
+    );
   });
 
   testWidgets('no toolbar overflow at 480, 1280 and 1920 wide',
@@ -269,7 +275,7 @@ void main() {
       ]),
     ]);
     final container = ProviderScope.containerOf(
-        tester.element(find.byType(LibraryToolbar)));
+        tester.element(find.byType(LibraryTopBar)));
     await openFilter(tester);
     expect(find.text('Mine'), findsOneWidget);
     expect(find.text('VNDB tags'), findsOneWidget);
@@ -304,7 +310,7 @@ void main() {
       core.Game(id: 'g3', title: 'Gamma', adultOverride: true),
     ]);
     final container = ProviderScope.containerOf(
-        tester.element(find.byType(LibraryToolbar)));
+        tester.element(find.byType(LibraryTopBar)));
     await openFilter(tester);
     await tester.tap(find.text('Hide adult'));
     await tester.pumpAndSettle();
@@ -328,7 +334,7 @@ void main() {
       (tester) async {
     await pumpToolbar(tester, taggedGames());
     final container = ProviderScope.containerOf(
-        tester.element(find.byType(LibraryToolbar)));
+        tester.element(find.byType(LibraryTopBar)));
     container.read(tagFilterProvider.notifier).set('Romance');
     container.read(adultFilterProvider.notifier).set(keys.AdultFilter.hide);
     container
@@ -351,7 +357,7 @@ void main() {
     final border = (box.decoration! as BoxDecoration).border! as Border;
     expect(
       border.top.color,
-      Theme.of(tester.element(find.byType(LibraryToolbar))).colorScheme.primary,
+      Theme.of(tester.element(find.byType(LibraryTopBar))).colorScheme.primary,
     );
   });
 
@@ -359,7 +365,7 @@ void main() {
       (tester) async {
     await pumpToolbar(tester, taggedGames());
     final container = ProviderScope.containerOf(
-        tester.element(find.byType(LibraryToolbar)));
+        tester.element(find.byType(LibraryTopBar)));
     await openFilter(tester);
     await tester.tap(find.text('Romance'));
     await tester.pumpAndSettle();
@@ -393,7 +399,7 @@ void main() {
       (tester) async {
     await pumpToolbar(tester, taggedGames());
     final container = ProviderScope.containerOf(
-        tester.element(find.byType(LibraryToolbar)));
+        tester.element(find.byType(LibraryTopBar)));
     await openFilter(tester);
     await tester.tap(find.text('Beta'));
     await tester.pumpAndSettle();
@@ -407,7 +413,7 @@ void main() {
     for (final size in [const Size(1000, 640), const Size(1280, 800), const Size(1400, 980)]) {
       await pumpToolbar(tester, manyGames(), size: size);
       final container = ProviderScope.containerOf(
-          tester.element(find.byType(LibraryToolbar)));
+          tester.element(find.byType(LibraryTopBar)));
       container
           .read(developerFilterProvider.notifier)
           .set(core.Developer(id: 'p1', name: 'Azarashi Soft'));

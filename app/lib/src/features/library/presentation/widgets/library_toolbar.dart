@@ -10,8 +10,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import 'package:window_manager/window_manager.dart';
+
 import '../../../../constants/pref_keys.dart' as keys;
 import '../../../../core/model.dart' show Developer;
+import '../../../../utils/platform/platform_runtime.dart';
+import '../../../../widgets/desktop/desktop_title_bar.dart';
 import '../../data/library_repository.dart';
 import '../../domain/cover_source.dart';
 import '../../domain/library_query.dart';
@@ -57,6 +61,56 @@ const double _kLeftGroupMinWidth =
     _kFilterWidth +
     3 * _kGap;
 
+/// Height of the merged title/toolbar bar: the toolbar's height.
+const double kLibraryTopBarHeight = 64;
+
+/// Width of the minimise / maximise-restore / close cluster: three buttons at
+/// window_manager's 46 px minimum width each.
+const double kWindowButtonsWidth = 3 * 46;
+
+/// Left inset on macOS: clears the native traffic lights, which AppKit keeps
+/// at the top-left of the window when the title bar is hidden. window_manager
+/// 0.5.2 has no API to reposition them (its macOS `setTitleBarStyle` only
+/// shows or hides the buttons), and the default position sits low in a 64 px
+/// bar, so the merged bar starts its controls past them instead.
+const double kMacOSTrafficLightsInset = 80;
+
+/// Pixel width of the brand group (logo + gap + name) in [context]'s theme.
+double brandGroupWidth(BuildContext context) {
+  final text = TextPainter(
+    text: TextSpan(
+      text: 'Tsumige',
+      style: Theme.of(context).textTheme.labelMedium,
+    ),
+    textDirection: TextDirection.ltr,
+  )..layout();
+  return kBrandLogoSize + kBrandGap + text.width;
+}
+
+/// Window width at and above which the title bar and the toolbar merge into
+/// one 64 px bar. Below it the two rows stack as before. Built from the same
+/// widths and gaps as the bars themselves: the left inset, the brand group
+/// (or the macOS traffic-lights inset), the left group's minimum, the right
+/// group, the window buttons (not macOS) and one [_kGap] between each part.
+double oneBarBreakpoint(BuildContext context, {required bool isMacOS}) {
+  if (isMacOS) {
+    return kMacOSTrafficLightsInset +
+        _kGap * 2 +
+        _kLeftGroupMinWidth +
+        _kGap +
+        _kRightGroupWidth +
+        _kRightInset;
+  }
+  return LibraryGrid.horizontalPadding +
+      brandGroupWidth(context) +
+      _kGap * 2 +
+      _kLeftGroupMinWidth +
+      _kGap +
+      _kRightGroupWidth +
+      _kGap +
+      kWindowButtonsWidth;
+}
+
 /// Search, sort, favourites and the Filter panel on the left; Add and Settings
 /// pinned right. [gridRight] is where the grid's last cover column ends, so
 /// the left group lines up with the covers. The left group stops short of
@@ -70,10 +124,6 @@ class LibraryToolbar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final field = ref.watch(sortFieldProvider);
-    final ascending = ref.watch(sortAscendingProvider);
-    final favouritesOnly = ref.watch(favouritesOnlyProvider);
-    final scheme = Theme.of(context).colorScheme;
     return SizedBox(
       height: 64,
       child: LayoutBuilder(
@@ -93,121 +143,253 @@ class LibraryToolbar extends ConsumerWidget {
                 top: 0,
                 bottom: 0,
                 width: leftWidth,
-                child: Row(
-                  children: [
-                    const Expanded(child: _ToolbarSearchField()),
-                    const SizedBox(width: _kGap),
-                    ToolbarBox(
-                      width: _kSortWidth,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(
-                            child: _SortMenu(
-                              field: field,
-                              onSelected: (value) => ref
-                                  .read(sortFieldProvider.notifier)
-                                  .set(value),
-                            ),
-                          ),
-                          Center(
-                            child: Container(
-                              width: 1,
-                              height: 22,
-                              color: scheme.outlineVariant,
-                            ),
-                          ),
-                          Tooltip(
-                            message: ascending ? 'Ascending' : 'Descending',
-                            child: InkWell(
-                              onTap: () => ref
-                                  .read(sortAscendingProvider.notifier)
-                                  .set(!ascending),
-                              child: SizedBox(
-                                width: _kControlHeight,
-                                child: Icon(
-                                  ascending
-                                      ? Icons.arrow_upward_rounded
-                                      : Icons.arrow_downward_rounded,
-                                  size: 18,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: _kGap),
-                    ToolbarBox(
-                      width: _kSegmentsWidth,
-                      child: Padding(
-                        padding: const EdgeInsets.all(3),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: ToolbarSegment(
-                                label: 'All',
-                                selected: !favouritesOnly,
-                                onTap: () => ref
-                                    .read(favouritesOnlyProvider.notifier)
-                                    .set(false),
-                              ),
-                            ),
-                            const SizedBox(width: 2),
-                            Expanded(
-                              child: ToolbarSegment(
-                                label: 'Favourites',
-                                selected: favouritesOnly,
-                                onTap: () => ref
-                                    .read(favouritesOnlyProvider.notifier)
-                                    .set(true),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: _kGap),
-                    const _FilterButton(),
-                  ],
-                ),
+                child: const _LeftGroup(),
               ),
               Positioned(
                 right: _kRightInset,
                 top: 0,
                 bottom: 0,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Tooltip(
-                      message: 'Add game',
-                      child: BrandGlassButton(
-                        height: 40,
-                        expand: false,
-                        onPressed: () => showAddGameDialog(context),
-                        icon: const Icon(Icons.add_rounded),
-                        label: const Text('Add'),
-                      ),
-                    ),
-                    const SizedBox(width: _kGap),
-                    ToolbarBox(
-                      key: const ValueKey('toolbar-settings'),
-                      width: _kControlHeight,
-                      child: Tooltip(
-                        message: 'Settings',
-                        child: InkWell(
-                          onTap: () => showSettingsDialog(context),
-                          child: const Icon(Icons.settings_rounded, size: 20),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                child: _RightGroup(),
               ),
             ],
           );
         },
       ),
+    );
+  }
+}
+
+/// The library screen's top: one 64 px bar merging the title bar and the
+/// toolbar when the window is wide enough, otherwise today's two rows — the
+/// plain title bar with the toolbar below it.
+class LibraryTopBar extends ConsumerWidget {
+  const LibraryTopBar({super.key, required this.gridRight});
+
+  final double gridRight;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isMacOS = ref.watch(hostPlatformProvider).isMacOS;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >=
+            oneBarBreakpoint(context, isMacOS: isMacOS)) {
+          return _MergedLibraryBar(gridRight: gridRight, isMacOS: isMacOS);
+        }
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const DesktopTitleBar(),
+            LibraryToolbar(gridRight: gridRight),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// The merged 64 px bar: the title bar's `surface` background with the brand,
+/// the toolbar's left group (search absorbing the slack, ending at
+/// [gridRight]), the Add/Settings group and the window buttons. A
+/// [DragToMoveArea] sits behind the controls, so every empty part drags the
+/// window and double-clicking it maximises/restores, as the title bar does.
+class _MergedLibraryBar extends ConsumerWidget {
+  const _MergedLibraryBar({required this.gridRight, required this.isMacOS});
+
+  final double gridRight;
+  final bool isMacOS;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    return Container(
+      height: kLibraryTopBarHeight,
+      color: theme.colorScheme.surface,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final maxWidth = constraints.maxWidth;
+          // Where the left group starts: past the brand on Linux/Windows,
+          // past the traffic-lights inset on macOS.
+          final leftStart = isMacOS
+              ? kMacOSTrafficLightsInset + _kGap * 2
+              : LibraryGrid.horizontalPadding +
+                    brandGroupWidth(context) +
+                    _kGap * 2;
+          // What the right side reserves: Add/Settings plus the window
+          // buttons on Linux/Windows, Add/Settings plus the edge inset on
+          // macOS.
+          final rightReserved = isMacOS
+              ? _kRightInset + _kRightGroupWidth
+              : kWindowButtonsWidth + _kGap + _kRightGroupWidth;
+          final leftEnd = math.min(
+            gridRight,
+            maxWidth - rightReserved - _kGap,
+          );
+          final leftWidth = math.max(
+            leftEnd - leftStart,
+            _kLeftGroupMinWidth,
+          );
+          return Stack(
+            children: [
+              const Positioned.fill(
+                child: DragToMoveArea(child: SizedBox.expand()),
+              ),
+              if (!isMacOS)
+                Positioned(
+                  left: LibraryGrid.horizontalPadding,
+                  top: 0,
+                  bottom: 0,
+                  child: const IgnorePointer(child: DesktopBrandTitle()),
+                ),
+              Positioned(
+                left: leftStart,
+                top: 0,
+                bottom: 0,
+                width: leftWidth,
+                child: const _LeftGroup(),
+              ),
+              Positioned(
+                right: isMacOS ? _kRightInset : kWindowButtonsWidth + _kGap,
+                top: 0,
+                bottom: 0,
+                child: _RightGroup(),
+              ),
+              if (!isMacOS)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: DesktopWindowButtons(brightness: theme.brightness),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Search, sort, All/Favourites and Filter in one row; the search box absorbs
+/// any slack.
+class _LeftGroup extends ConsumerWidget {
+  const _LeftGroup();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final field = ref.watch(sortFieldProvider);
+    final ascending = ref.watch(sortAscendingProvider);
+    final favouritesOnly = ref.watch(favouritesOnlyProvider);
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        const Expanded(child: _ToolbarSearchField()),
+        const SizedBox(width: _kGap),
+        ToolbarBox(
+          width: _kSortWidth,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _SortMenu(
+                  field: field,
+                  onSelected: (value) =>
+                      ref.read(sortFieldProvider.notifier).set(value),
+                ),
+              ),
+              Center(
+                child: Container(
+                  width: 1,
+                  height: 22,
+                  color: scheme.outlineVariant,
+                ),
+              ),
+              Tooltip(
+                message: ascending ? 'Ascending' : 'Descending',
+                child: InkWell(
+                  onTap: () => ref
+                      .read(sortAscendingProvider.notifier)
+                      .set(!ascending),
+                  child: SizedBox(
+                    width: _kControlHeight,
+                    child: Icon(
+                      ascending
+                          ? Icons.arrow_upward_rounded
+                          : Icons.arrow_downward_rounded,
+                      size: 18,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: _kGap),
+        ToolbarBox(
+          width: _kSegmentsWidth,
+          child: Padding(
+            padding: const EdgeInsets.all(3),
+            child: Row(
+              children: [
+                Expanded(
+                  child: ToolbarSegment(
+                    label: 'All',
+                    selected: !favouritesOnly,
+                    onTap: () => ref
+                        .read(favouritesOnlyProvider.notifier)
+                        .set(false),
+                  ),
+                ),
+                const SizedBox(width: 2),
+                Expanded(
+                  child: ToolbarSegment(
+                    label: 'Favourites',
+                    selected: favouritesOnly,
+                    onTap: () => ref
+                        .read(favouritesOnlyProvider.notifier)
+                        .set(true),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: _kGap),
+        const _FilterButton(),
+      ],
+    );
+  }
+}
+
+/// Add and Settings, pinned right.
+class _RightGroup extends StatelessWidget {
+  const _RightGroup();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Tooltip(
+          message: 'Add game',
+          child: BrandGlassButton(
+            height: 40,
+            expand: false,
+            onPressed: () => showAddGameDialog(context),
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Add'),
+          ),
+        ),
+        const SizedBox(width: _kGap),
+        ToolbarBox(
+          key: const ValueKey('toolbar-settings'),
+          width: _kControlHeight,
+          child: Tooltip(
+            message: 'Settings',
+            child: InkWell(
+              onTap: () => showSettingsDialog(context),
+              child: const Icon(Icons.settings_rounded, size: 20),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
