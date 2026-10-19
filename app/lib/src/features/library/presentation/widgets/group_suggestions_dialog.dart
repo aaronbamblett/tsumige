@@ -59,11 +59,13 @@ class GroupSuggestionsDialog extends ConsumerWidget {
     final byId = {for (final g in library?.games ?? const <Game>[]) g.id: g};
     return DialogShell(
       frameKey: const Key('group-suggestions-frame'),
+      shrinkToContent: true,
       size: dialogShellSize(context),
       eyebrow: 'Series',
       title: 'Group these into one tile each?',
       onClose: () => Navigator.of(context).pop(),
       body: ListView(
+        shrinkWrap: true,
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
         children: [
           for (final suggestion in suggestions)
@@ -143,9 +145,11 @@ class _SuggestionCard extends ConsumerWidget {
               ),
             ),
             const SizedBox(width: 12),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+            IntrinsicWidth(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                 BrandButton(
                   key: Key('suggest-group:${suggestion.key}'),
                   height: 40,
@@ -170,7 +174,8 @@ class _SuggestionCard extends ConsumerWidget {
                       ),
                   label: const Text('Not a series'),
                 ),
-              ],
+                ],
+              ),
             ),
           ],
         ),
@@ -179,7 +184,9 @@ class _SuggestionCard extends ConsumerWidget {
   }
 }
 
-/// The first member's cover at 2:3, small; `No cover` when it has none.
+/// The first member's cover at 2:3, small; a placeholder icon when it has
+/// none. The thumbnail is too small for `No cover` text (it wraps), so it
+/// reuses the app's small no-cover placeholder icon in `scheme.outline`.
 class _SuggestionCover extends ConsumerWidget {
   const _SuggestionCover({required this.game});
 
@@ -190,7 +197,14 @@ class _SuggestionCover extends ConsumerWidget {
     final dir = ref.watch(dataDirProvider);
     final exists = ref.watch(coverExistsProvider);
     final version = ref.watch(artVersionProvider);
+    final scheme = Theme.of(context).colorScheme;
     final source = coverSourceFor(game, dir, 96, exists);
+    final placeholder = Center(
+      child: Icon(
+        Icons.image_not_supported_outlined,
+        color: scheme.outline,
+      ),
+    );
     return SizedBox(
       width: 48,
       child: AspectRatio(
@@ -201,7 +215,7 @@ class _SuggestionCover extends ConsumerWidget {
             borderRadius: BorderRadius.circular(10),
           ),
           child: source == null
-              ? const Center(child: Text('No cover'))
+              ? placeholder
               : Image(
                   image: source.isThumbnail
                       ? artFileImage(
@@ -215,8 +229,7 @@ class _SuggestionCover extends ConsumerWidget {
                         ),
                   fit: BoxFit.cover,
                   gaplessPlayback: true,
-                  errorBuilder: (_, _, _) =>
-                      const Center(child: Text('No cover')),
+                  errorBuilder: (_, _, _) => placeholder,
                 ),
         ),
       ),

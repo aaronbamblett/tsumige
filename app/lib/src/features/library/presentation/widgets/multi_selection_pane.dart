@@ -7,15 +7,17 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../../core/model.dart';
 import '../../../../utils/theme/brand.dart';
 import '../../data/library_repository.dart';
 import '../../domain/game_editor.dart';
 import '../../domain/selection.dart';
 import 'group_name_dialog.dart';
 
-/// The pane slot's content while 2 or more tiles are selected: a heading,
-/// their titles (a group shows as its name plus its member count), and
-/// `Combine into one tile…` plus `Clear selection`.
+/// The pane slot's content while 2 or more tiles are selected: a heading
+/// with the game count (a group counts as its members), their titles (a
+/// group shows as its name plus its member count), and `Combine into one
+/// tile…` plus `Clear selection`.
 class MultiSelectionPane extends ConsumerWidget {
   const MultiSelectionPane({super.key, required this.tileIds});
 
@@ -29,13 +31,18 @@ class MultiSelectionPane extends ConsumerWidget {
     final byId = {for (final g in library?.games ?? const []) g.id: g};
     final groupsById = {for (final g in library?.groups ?? const []) g.id: g};
     final rows = <String>[];
+    var gameCount = 0;
     for (final id in tileIds) {
-      final group = groupsById[id];
+      final GameGroup? group = groupsById[id];
       if (group != null) {
         rows.add('${group.name} (${group.memberIds.length})');
+        gameCount += group.memberIds.length;
       } else {
-        final game = byId[id];
-        if (game != null) rows.add(game.title);
+        final Game? game = byId[id];
+        if (game != null) {
+          rows.add(game.title);
+          gameCount += 1;
+        }
       }
     }
     return Padding(
@@ -44,7 +51,7 @@ class MultiSelectionPane extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '${tileIds.length} games selected',
+            '$gameCount games selected',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(

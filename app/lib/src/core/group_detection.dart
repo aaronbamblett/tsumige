@@ -51,6 +51,27 @@ _Part? _partOf(String title) {
   );
 }
 
+/// The text before the part marker in [title]: the display form and the
+/// normalized form detection groups by. Null when the title names no
+/// numbered part.
+class SeriesPrefix {
+  const SeriesPrefix(this.prefix, this.key);
+
+  /// The series text as written, with trailing separators trimmed.
+  final String prefix;
+
+  /// The lowercased, whitespace-collapsed [prefix] detection groups by.
+  final String key;
+}
+
+/// The series prefix of [title], or null when it names no numbered part.
+/// Shares [_partOf]'s marker rules without changing detection's behaviour.
+SeriesPrefix? seriesPrefixOf(String title) {
+  final part = _partOf(title);
+  if (part == null) return null;
+  return SeriesPrefix(part.prefix, part.normalized);
+}
+
 /// Trims whitespace and any trailing separators such as ` -`, ` :`, ` –`.
 /// A hyphen glued to a word (`9-nine-`) is part of the name and stays.
 String _cleanPrefix(String raw) {

@@ -434,7 +434,7 @@ void main() {
         await pumpGroups(tester, core.LoadedLibrary(library: library));
     await ctrlClick(tester, find.text('Duo'));
     await ctrlClick(tester, find.text('Lone Wolf'));
-    expect(find.text('2 games selected'), findsOneWidget);
+    expect(find.text('3 games selected'), findsOneWidget);
     expect(find.text('Duo (2)'), findsOneWidget);
     await tester.tap(find.text('Combine into one tile…'));
     await tester.pumpAndSettle();
@@ -450,6 +450,30 @@ void main() {
     expect(group.memberIds, hasLength(3));
     expect(find.text('Trio'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
+  });
+
+  testWidgets('a group of 3 plus one game counts 4 games selected',
+      (tester) async {
+    final library = core.Library(games: [
+      game('ep1', 'Saga Episode 1'),
+      game('ep2', 'Saga Episode 2'),
+      game('ep3', 'Saga Episode 3'),
+      game('s1', 'Lone Wolf'),
+    ]);
+    library.groups.add(
+      core.GameGroup(
+          id: 'gr1', name: 'Saga', memberIds: ['ep1', 'ep2', 'ep3']),
+    );
+    await pumpGroups(tester, core.LoadedLibrary(library: library));
+    await ctrlClick(tester, find.text('Saga'));
+    await ctrlClick(tester, find.text('Lone Wolf'));
+    expect(find.text('4 games selected'), findsOneWidget);
+    Finder paneRow(String text) => find.descendant(
+          of: find.byType(MultiSelectionPane),
+          matching: find.text(text),
+        );
+    expect(paneRow('Saga (3)'), findsOneWidget);
+    expect(paneRow('Lone Wolf'), findsOneWidget);
   });
 
   testWidgets('rename changes the tile name and the saved file',
@@ -469,6 +493,30 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Renamed'), findsOneWidget);
     expect(fake.loaded.library.groups.single.name, 'Renamed');
+  });
+
+  testWidgets('the name field is focused, selected, and Enter saves',
+      (tester) async {
+    final fake = await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
+    await tester.tap(find.text('9-nine-'));
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rename group…'));
+    await tester.pumpAndSettle();
+    final field = tester.widget<TextField>(groupNameField());
+    expect(tester.binding.focusManager.primaryFocus, field.focusNode);
+    expect(
+      field.controller!.selection,
+      const TextSelection(baseOffset: 0, extentOffset: 7),
+    );
+    await tester.enterText(groupNameField(), 'X');
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(find.text('X'), findsOneWidget);
+    expect(fake.loaded.library.groups.single.name, 'X');
   });
 
   testWidgets('split restores separate tiles and drops the group',
@@ -537,6 +585,44 @@ void main() {
       find.text(
           'VNDB lists them as a sequel chain, and each title names a part.'),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('one suggestion sizes the Review dialog to its content',
+      (tester) async {
+    await pumpGroups(tester, suggestionLibrary(beta: false));
+    await tester.tap(find.text('Review'));
+    await tester.pumpAndSettle();
+    final frame = find.byKey(const ValueKey('group-suggestions-frame'));
+    expect(frame, findsOneWidget);
+    // The shell maximum for this window is 720 high; one card is far shorter.
+    expect(tester.getSize(frame).height, lessThan(700));
+  });
+
+  testWidgets('Group and Not a series share one width, no cover is an icon',
+      (tester) async {
+    await pumpGroups(tester, suggestionLibrary(beta: false));
+    await tester.tap(find.text('Review'));
+    await tester.pumpAndSettle();
+    final frame = find.byKey(const ValueKey('group-suggestions-frame'));
+    final groupWidth =
+        tester.getSize(find.byKey(const Key('suggest-group:a1,a2'))).width;
+    final dismissWidth =
+        tester.getSize(find.byKey(const Key('suggest-dismiss:a1,a2'))).width;
+    expect(groupWidth, dismissWidth);
+    expect(
+      find.descendant(
+        of: frame,
+        matching: find.byIcon(Icons.image_not_supported_outlined),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: frame,
+        matching: find.text('No cover'),
+      ),
+      findsNothing,
     );
   });
 

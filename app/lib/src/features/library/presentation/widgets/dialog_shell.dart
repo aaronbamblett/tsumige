@@ -19,12 +19,15 @@ Size dialogShellSize(BuildContext context) {
 }
 
 /// Shared dialog frame: a small label above a 20 px title, a close button,
-/// dividers around the body, and a footer. Escape closes it.
+/// dividers around the body, and a footer. Escape closes it. With
+/// [shrinkToContent] the frame wraps a shrink-wrapping body up to [size]
+/// instead of filling it.
 class DialogShell extends StatelessWidget {
   const DialogShell({
     super.key,
     this.frameKey,
     this.autofocus = true,
+    this.shrinkToContent = false,
     required this.size,
     required this.eyebrow,
     required this.title,
@@ -43,6 +46,7 @@ class DialogShell extends StatelessWidget {
   final Key? closeKey;
   final Key? frameKey;
   final bool autofocus;
+  final bool shrinkToContent;
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +58,10 @@ class DialogShell extends StatelessWidget {
       child: Container(
         key: frameKey,
         width: size.width,
-        height: size.height,
+        height: shrinkToContent ? null : size.height,
+        constraints: shrinkToContent
+            ? BoxConstraints(maxHeight: size.height)
+            : null,
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: scheme.surfaceContainer,
@@ -72,6 +79,8 @@ class DialogShell extends StatelessWidget {
             return KeyEventResult.ignored;
           },
           child: Column(
+            mainAxisSize:
+                shrinkToContent ? MainAxisSize.min : MainAxisSize.max,
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 14, 12, 14),
@@ -111,7 +120,7 @@ class DialogShell extends StatelessWidget {
                 ),
               ),
               Divider(height: 1, color: scheme.outlineVariant),
-              Expanded(child: body),
+              if (shrinkToContent) Flexible(child: body) else Expanded(child: body),
               Divider(height: 1, color: scheme.outlineVariant),
               footer,
             ],

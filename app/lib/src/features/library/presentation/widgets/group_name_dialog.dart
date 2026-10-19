@@ -9,6 +9,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../../core/group_detection.dart';
 import '../../../../core/groups.dart';
 import '../../../../utils/theme/brand.dart';
 import '../../../settings/presentation/sections/settings_widgets.dart';
@@ -39,10 +40,17 @@ Future<String?> showGroupNameDialog({
   );
 }
 
-/// The default Combine name for [titles]: the shared title prefix with
+/// The default Combine name for [titles]: when every title carries a part
+/// marker and the series text before it matches, that text (`9-nine-
+/// Episode 1..3` gives `9-nine-`); otherwise the shared title prefix with
 /// trailing spaces, hyphens and colons trimmed, else the first title.
 String combineDefaultName(List<String> titles) {
   if (titles.isEmpty) return '';
+  final series = [for (final title in titles) seriesPrefixOf(title)];
+  if (series.every((s) => s != null) &&
+      series.every((s) => s!.key == series.first!.key)) {
+    return series.first!.prefix;
+  }
   final prefix =
       sharedTitlePrefix(titles).replaceAll(RegExp(r'[\s\-:]+$'), '');
   return prefix.isEmpty ? titles.first : prefix;
@@ -120,24 +128,56 @@ class _GroupNameDialogState extends State<GroupNameDialog> {
   late final TextEditingController _name = TextEditingController(
     text: widget.initialName,
   );
+  late final FocusNode _focus = FocusNode();
+  ModalRoute<dynamic>? _route;
   late bool _canConfirm = widget.canConfirm(widget.initialName);
 
   @override
   void initState() {
     super.initState();
+    _name.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: _name.text.length,
+    );
     _name.addListener(() {
       final next = widget.canConfirm(_name.text);
       if (next != _canConfirm) setState(() => _canConfirm = next);
     });
+    FocusManager.instance.addListener(_reclaimFieldFocus);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reclaimFieldFocus());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _route ??= ModalRoute.of(context);
+  }
+
+  /// Keeps the field focused while the dialog opens: route transitions (the
+  /// dialog's own, or a closing menu under it) park focus on the dialog
+  /// frame, an ancestor of the field. Reclaim only from such scaffolding,
+  /// never from a sibling control the user moved to.
+  void _reclaimFieldFocus() {
+    if (!mounted || _focus.hasFocus) return;
+    if (_route != null && !_route!.isCurrent) return;
+    final primary = FocusManager.instance.primaryFocus;
+    if (primary == null || !_focus.ancestors.contains(primary)) return;
+    _focus.requestFocus();
   }
 
   @override
   void dispose() {
+    FocusManager.instance.removeListener(_reclaimFieldFocus);
     _name.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
   void _close() => Navigator.of(context).pop();
+
+  void _submit() {
+    if (_canConfirm) Navigator.of(context).pop(_name.text.trim());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -145,6 +185,7 @@ class _GroupNameDialogState extends State<GroupNameDialog> {
     final scheme = theme.colorScheme;
     return DialogShell(
       frameKey: const Key('group-name-frame'),
+      autofocus: false,
       size: _dialogSize(context),
       eyebrow: widget.eyebrow,
       title: widget.title,
@@ -166,7 +207,9 @@ class _GroupNameDialogState extends State<GroupNameDialog> {
             SettingsTextField(
               key: const Key('group-name-field'),
               controller: _name,
+              focusNode: _focus,
               autofocus: true,
+              onSubmitted: (_) => _submit(),
             ),
           ],
         ),
@@ -188,9 +231,7 @@ class _GroupNameDialogState extends State<GroupNameDialog> {
               key: const Key('group-name-confirm'),
               height: 40,
               expand: false,
-              onPressed: _canConfirm
-                  ? () => Navigator.of(context).pop(_name.text.trim())
-                  : null,
+              onPressed: _canConfirm ? _submit : null,
               label: Text(widget.confirmLabel),
             ),
           ],
