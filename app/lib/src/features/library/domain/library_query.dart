@@ -35,69 +35,166 @@ class LibraryQuery {
 
 List<Game> applyQuery(List<Game> games, LibraryQuery q) {
   final needle = q.search.toLowerCase();
+  final kept = games.where((g) => _matches(g, needle, q)).toList();
+  kept.sort((a, b) => _compareGames(a, b, q));
+  return kept;
+}
+
+/// One grid tile: either a single game or a group shown as one tile.
+sealed class LibraryTile {
+  const LibraryTile();
+
+  String get key;
+  String get title;
+}
+
+class SingleTile extends LibraryTile {
+  const SingleTile(this.game);
+
+  final Game game;
+
+  @override
+  String get key => game.id;
+
+  @override
+  String get title => game.title;
+}
+
+class GroupTile extends LibraryTile {
+  const GroupTile({
+    required this.group,
+    required this.members,
+    required this.visible,
+  });
+
+  final GameGroup group;
+  final List<Game> members;
+
+  /// The members that pass the current filters; the group ranks by its best
+  /// visible member.
+  final List<Game> visible;
+
+  /// The first member's cover shows on the group tile.
+  Game get coverGame => members.first;
+
+  @override
+  String get key => group.id;
+
+  @override
+  String get title => group.name;
+}
+
+bool _matches(Game g, String needle, LibraryQuery q) {
+  if (needle.isNotEmpty && !g.title.toLowerCase().contains(needle)) {
+    return false;
+  }
+  if (q.favouritesOnly && !g.favourite) return false;
   final tag = q.tag?.toLowerCase();
-  final kept = games.where((g) {
-    if (needle.isNotEmpty && !g.title.toLowerCase().contains(needle)) {
+  if (tag != null && tag.startsWith(vndbTagPrefix)) {
+    final name = tag.substring(vndbTagPrefix.length);
+    if (!g.vndbTags.any(
+      (t) => t.rating >= 1.0 && t.name.toLowerCase() == name,
+    )) {
       return false;
     }
-    if (q.favouritesOnly && !g.favourite) return false;
-    if (tag != null && tag.startsWith(vndbTagPrefix)) {
-      final name = tag.substring(vndbTagPrefix.length);
-      if (!g.vndbTags.any(
-        (t) => t.rating >= 1.0 && t.name.toLowerCase() == name,
-      )) {
-        return false;
-      }
-    } else if (tag != null &&
-        tag.isNotEmpty &&
-        !g.tags.any((t) => t.toLowerCase() == tag)) {
-      return false;
-    }
-    if (q.developerId != null &&
-        !g.developers.any((d) => d.id == q.developerId)) {
-      return false;
-    }
-    if (q.adult == AdultFilter.hide && g.isAdult) return false;
-    if (q.adult == AdultFilter.only && !g.isAdult) return false;
-    return true;
-  }).toList();
-  int byTitle(Game a, Game b) =>
-      a.title.toLowerCase().compareTo(b.title.toLowerCase());
+  } else if (tag != null &&
+      tag.isNotEmpty &&
+      !g.tags.any((t) => t.toLowerCase() == tag)) {
+    return false;
+  }
+  if (q.developerId != null &&
+      !g.developers.any((d) => d.id == q.developerId)) {
+    return false;
+  }
+  if (q.adult == AdultFilter.hide && g.isAdult) return false;
+  if (q.adult == AdultFilter.only && !g.isAdult) return false;
+  return true;
+}
+
+int _compareGames(Game a, Game b, LibraryQuery q) {
+  int byTitle(Game x, Game y) =>
+      x.title.toLowerCase().compareTo(y.title.toLowerCase());
   final dir = q.ascending ? 1 : -1;
-  int compare(Game a, Game b) {
-    switch (q.field) {
-      case SortField.title:
-        return byTitle(a, b) * dir;
-      case SortField.lastPlayed:
-        // Never-played games sort last in both directions.
-        final pa = a.lastPlayedAt;
-        final pb = b.lastPlayedAt;
-        if (pa == null && pb == null) return byTitle(a, b);
-        if (pa == null) return 1;
-        if (pb == null) return -1;
-        final c = pa.compareTo(pb);
-        return c != 0 ? c * dir : byTitle(a, b);
-      case SortField.playtime:
-        final c =
-            a.totalPlaytimeSeconds.compareTo(b.totalPlaytimeSeconds);
-        return c != 0 ? c * dir : byTitle(a, b);
-      case SortField.vndbRating:
-        // Null ratings sort last in both directions.
-        final ra = a.vndbRating;
-        final rb = b.vndbRating;
-        if (ra == null && rb == null) return byTitle(a, b);
-        if (ra == null) return 1;
-        if (rb == null) return -1;
-        final c = ra.compareTo(rb);
-        return c != 0 ? c * dir : byTitle(a, b);
-      case SortField.added:
-        final c = a.addedAt.compareTo(b.addedAt);
-        return c != 0 ? c * dir : byTitle(a, b);
+  switch (q.field) {
+    case SortField.title:
+      return byTitle(a, b) * dir;
+    case SortField.lastPlayed:
+      final pa = a.lastPlayedAt;
+      final pb = b.lastPlayedAt;
+      if (pa == null && pb == null) return byTitle(a, b);
+      if (pa == null) return 1;
+      if (pb == null) return -1;
+      final c = pa.compareTo(pb);
+      return c != 0 ? c * dir : byTitle(a, b);
+    case SortField.playtime:
+      final c = a.totalPlaytimeSeconds.compareTo(b.totalPlaytimeSeconds);
+      return c != 0 ? c * dir : byTitle(a, b);
+    case SortField.vndbRating:
+      final ra = a.vndbRating;
+      final rb = b.vndbRating;
+      if (ra == null && rb == null) return byTitle(a, b);
+      if (ra == null) return 1;
+      if (rb == null) return -1;
+      final c = ra.compareTo(rb);
+      return c != 0 ? c * dir : byTitle(a, b);
+    case SortField.added:
+      final c = a.addedAt.compareTo(b.addedAt);
+      return c != 0 ? c * dir : byTitle(a, b);
+  }
+}
+
+/// The grid tiles for [library]: group members collapse into one tile per
+/// group. A group shows when any member passes the filters; search matches
+/// the group name or any member's title. A group sorts by the value of
+/// whichever member would come first under the current sort (title sort
+/// uses the group name).
+List<LibraryTile> applyGroupedQuery(Library library, LibraryQuery q) {
+  final needle = q.search.toLowerCase();
+  final byId = {for (final g in library.games) g.id: g};
+  final groupedIds = <String>{};
+  final tiles = <LibraryTile>[];
+  for (final group in library.groups) {
+    final members = [
+      for (final id in group.memberIds)
+        if (byId[id] != null) byId[id]!,
+    ];
+    if (members.isEmpty) continue;
+    groupedIds.addAll(members.map((g) => g.id));
+    final nameHit =
+        needle.isNotEmpty && group.name.toLowerCase().contains(needle);
+    final passing = [
+      for (final m in members)
+        if (_matches(m, nameHit ? '' : needle, q)) m,
+    ];
+    if (passing.isEmpty) continue;
+    tiles.add(GroupTile(group: group, members: members, visible: passing));
+  }
+  for (final game in library.games) {
+    if (groupedIds.contains(game.id)) continue;
+    if (!_matches(game, needle, q)) continue;
+    tiles.add(SingleTile(game));
+  }
+  Game representative(LibraryTile tile) {
+    if (tile is SingleTile) return tile.game;
+    final group = tile as GroupTile;
+    final members = group.visible.isEmpty ? group.members : group.visible;
+    var best = members.first;
+    for (final m in members.skip(1)) {
+      if (_compareGames(m, best, q) < 0) best = m;
     }
+    return best;
   }
 
-  kept.sort(compare);
-  return kept;
+  tiles.sort((a, b) {
+    if (q.field == SortField.title) {
+      final c = a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      return q.ascending ? c : -c;
+    }
+    final c = _compareGames(representative(a), representative(b), q);
+    if (c != 0) return c;
+    return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+  });
+  return tiles;
 }
 
 List<String> allTags(List<Game> games) {

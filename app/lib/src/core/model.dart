@@ -36,9 +36,47 @@ LaunchMode? parseLaunchMode(String? s) => switch (s) {
 class Library {
   int schemaVersion;
   List<Game> games;
+  List<GameGroup> groups;
 
-  Library({this.schemaVersion = 1, List<Game>? games})
-      : games = games ?? [];
+  Library({this.schemaVersion = 1, List<Game>? games, List<GameGroup>? groups})
+      : games = games ?? [],
+        groups = groups ?? [];
+}
+
+/// A named set of episodes or chapters shown as one library tile.
+/// [memberIds] order is the episode order, sorted once at creation.
+class GameGroup {
+  String id;
+  String name;
+  List<String> memberIds;
+  String? lastPickedId;
+
+  GameGroup({
+    required this.id,
+    this.name = '',
+    List<String>? memberIds,
+    this.lastPickedId,
+  }) : memberIds = memberIds ?? [];
+
+  factory GameGroup.fromJson(Map m) {
+    final id = readStringOrNull(m, 'id');
+    if (id == null || id.isEmpty) {
+      throw const FormatException('group needs an id');
+    }
+    return GameGroup(
+      id: id,
+      name: readString(m, 'name'),
+      memberIds: readStringList(m, 'member_ids'),
+      lastPickedId: readStringOrNull(m, 'last_picked_id'),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'name': name,
+        'member_ids': memberIds,
+        if (lastPickedId != null) 'last_picked_id': lastPickedId,
+      };
 }
 
 class Game {

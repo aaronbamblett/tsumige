@@ -4,12 +4,14 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 import 'package:tsumige/main.dart';
 import 'package:tsumige/src/core/covers.dart' as core;
 import 'package:tsumige/src/core/model.dart' as core;
@@ -140,5 +142,70 @@ void main() {
     final games = container.read(libraryProvider).value!.library.games;
     expect(games.firstWhere((g) => g.id == 'g1').description, 'new words');
     expect(games.firstWhere((g) => g.id == 'g2').description, 'beta words');
+  });
+
+  /// `splitGroup` through the real repository: `groups` leaves the file and
+  /// stays gone on reload. Runs on a bare container (no widgets): with the
+  /// app pumped, async file IO never completes, so persistence is proven
+  /// here while the pane behaviour is proven in the group widget tests.
+  test('splitGroup saves through the real repository', () async {
+    final temp =
+        Directory.systemTemp.createTempSync('tsumige_editor_split_');
+    addTearDown(() => Directory(temp.path).deleteSync(recursive: true));
+    resetBackupSessionForTest();
+    final dir = core.DataDir(temp.path);
+    final ep1 = const Uuid().v4();
+    final ep2 = const Uuid().v4();
+    final seed = core.LoadedLibrary(
+      library: core.Library(games: [
+        core.Game(id: ep1, title: 'Duo Episode 1'),
+        core.Game(id: ep2, title: 'Duo Episode 2'),
+      ]),
+    );
+    seed.library.groups.add(
+      core.GameGroup(id: 'gr1', name: 'Duo', memberIds: [ep1, ep2]),
+    );
+    await saveLibrary(dir, seed);
+    final container = ProviderContainer(overrides: [
+      libraryRepositoryProvider.overrideWithValue(IoLibraryRepository(dir)),
+    ]);
+    addTearDown(container.dispose);
+    await container.read(libraryProvider.future);
+    await container.read(gameEditorProvider).splitGroup('gr1');
+    final saved = jsonDecode(await dir.libraryJson.readAsString())
+        as Map<String, Object?>;
+    expect(saved.containsKey('groups'), isFalse);
+    final again = await loadLibrary(dir);
+    expect(again.library.groups, isEmpty);
+    expect(again.library.games, hasLength(2));
+  });
+
+  test('renameGroup saves through the real repository', () async {
+    final temp =
+        Directory.systemTemp.createTempSync('tsumige_editor_rename_');
+    addTearDown(() => Directory(temp.path).deleteSync(recursive: true));
+    resetBackupSessionForTest();
+    final dir = core.DataDir(temp.path);
+    final seed = core.LoadedLibrary(
+      library: core.Library(games: [
+        core.Game(id: const Uuid().v4(), title: 'Duo Episode 1'),
+        core.Game(id: const Uuid().v4(), title: 'Duo Episode 2'),
+      ]),
+    );
+    seed.library.groups.add(
+      core.GameGroup(id: 'gr1', name: 'Duo', memberIds: [
+        seed.library.games[0].id,
+        seed.library.games[1].id,
+      ]),
+    );
+    await saveLibrary(dir, seed);
+    final container = ProviderContainer(overrides: [
+      libraryRepositoryProvider.overrideWithValue(IoLibraryRepository(dir)),
+    ]);
+    addTearDown(container.dispose);
+    await container.read(libraryProvider.future);
+    await container.read(gameEditorProvider).renameGroup('gr1', 'Renamed');
+    final again = await loadLibrary(dir);
+    expect(again.library.groups.single.name, 'Renamed');
   });
 }

@@ -26,6 +26,7 @@ import 'add_game/add_game_dialog.dart';
 import 'widgets/game_detail_pane.dart';
 import 'widgets/library_grid.dart';
 import 'widgets/library_toolbar.dart';
+import 'widgets/multi_selection_pane.dart';
 import 'widgets/skipped_banner.dart';
 
 /// One-line banner shown when Proton games cannot launch because `umu-run`
@@ -51,6 +52,32 @@ const double _kPaneWidth = 440;
 const double _kPaneMargin = 12;
 const double _kPaneSlotWidth = _kPaneWidth + 2 * _kPaneMargin;
 
+/// The pane slot's container, shared by the game pane and the
+/// multi-selection summary.
+class _PaneSlot extends StatelessWidget {
+  const _PaneSlot({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: _kPaneWidth,
+      margin: const EdgeInsets.all(_kPaneMargin),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant,
+          width: 1,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
+}
+
 /// The library view: toolbar above a lazy cover grid. After the first frame
 /// with data it prints `startup_ms` and fills in missing thumbnails in the
 /// background, rebuilding tiles only when thumbnails were generated.
@@ -60,7 +87,7 @@ class LibraryScreen extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final libraryAsync = ref.watch(libraryProvider);
-    final games = ref.watch(visibleGamesProvider);
+    final tiles = ref.watch(visibleTilesProvider);
     final kicked = useState(false);
     useEffect(() {
       if (kicked.value || !libraryAsync.hasValue) return null;
@@ -95,6 +122,10 @@ class LibraryScreen extends HookConsumerWidget {
       return null;
     }, [libraryAsync.hasValue]);
     final selected = ref.watch(selectedGameProvider);
+    final selectedGroup = ref.watch(selectedGroupProvider);
+    final multi = ref.watch(multiSelectionProvider);
+    final showSummary = multi.length >= 2;
+    final paneOpen = selected != null || showSummary;
     final platform = ref.watch(hostPlatformProvider);
     final onLinux = platform.isLinux;
     final umuMissing = ref.watch(umuRunPathProvider) == null;
@@ -111,8 +142,7 @@ class LibraryScreen extends HookConsumerWidget {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final gridWidth =
-                  constraints.maxWidth -
-                  (selected == null ? 0 : _kPaneSlotWidth);
+                  constraints.maxWidth - (paneOpen ? _kPaneSlotWidth : 0);
               return Column(
                 children: [
                   LibraryTopBar(
@@ -128,7 +158,11 @@ class LibraryScreen extends HookConsumerWidget {
                       onKeyEvent: (node, event) {
                         if (event is KeyDownEvent &&
                             event.logicalKey == LogicalKeyboardKey.escape) {
-                          ref.read(selectedGameIdProvider.notifier).clear();
+                          if (ref.read(multiSelectionProvider).isNotEmpty) {
+                            ref.read(multiSelectionProvider.notifier).clear();
+                          } else {
+                            ref.read(selectedGameIdProvider.notifier).clear();
+                          }
                           return KeyEventResult.handled;
                         }
                         return KeyEventResult.ignored;
@@ -136,28 +170,21 @@ class LibraryScreen extends HookConsumerWidget {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Expanded(child: LibraryGrid(games: games)),
-                          if (selected != null)
-                            Container(
-                              width: _kPaneWidth,
-                              margin: const EdgeInsets.all(_kPaneMargin),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainer,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .outlineVariant,
-                                  width: 1,
-                                ),
-                              ),
-                              clipBehavior: Clip.antiAlias,
-                              child: GameDetailPane(
-                                key: ValueKey(selected.id),
-                                game: selected,
-                              ),
+                          Expanded(child: LibraryGrid(tiles: tiles)),
+                          if (paneOpen)
+                            _PaneSlot(
+                              child: showSummary
+                                  ? MultiSelectionPane(
+                                      key: ValueKey(
+                                        'multi:${multi.join(',')}',
+                                      ),
+                                      tileIds: multi,
+                                    )
+                                  : GameDetailPane(
+                                      key: ValueKey(selected!.id),
+                                      game: selected,
+                                      group: selectedGroup,
+                                    ),
                             ),
                         ],
                       ),
