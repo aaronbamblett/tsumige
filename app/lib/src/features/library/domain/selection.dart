@@ -15,12 +15,37 @@ part 'selection.g.dart';
 /// Selected tile id: a game id, or a group id. Null means the detail pane is
 /// closed. When a group is selected, the pane shows one of its members (see
 /// [selectedGame]), so the selection represents "group X, showing member Y".
+///
+/// Selecting a game id that belongs to a group selects the group instead and
+/// remembers that member, so every caller of [select] (grid, Related tab)
+/// opens the group with that member shown.
 @Riverpod(keepAlive: true)
 class SelectedGameId extends _$SelectedGameId {
   @override
   String? build() => null;
 
-  void select(String? id) => state = id;
+  void select(String? id) {
+    if (id == null) {
+      state = id;
+      return;
+    }
+    final groups = ref.read(libraryProvider).value?.library.groups;
+    if (groups != null) {
+      for (final group in groups) {
+        if (group.memberIds.contains(id)) {
+          group.lastPickedId = id;
+          if (state == group.id) {
+            // Same tile, different member: an equal assignment rebuilds
+            // nothing, so bounce through null to show the newly picked one.
+            state = null;
+          }
+          state = group.id;
+          return;
+        }
+      }
+    }
+    state = id;
+  }
 
   void clear() => state = null;
 }

@@ -8,11 +8,19 @@ import 'model.dart';
 
 /// Matches a part number in an episode title: `Episode N`, `Ep. N`,
 /// `Chapter N` / `Ch. N`, `Volume N` / `Vol. N`, `Part N`, `第N話` / `第N章`.
-/// Decimals such as `Vol.5.5` are allowed.
+/// Decimals such as `Vol.5.5` are allowed. The leading word boundary keeps
+/// markers inside words (`Sleep 3`) from matching. The `第` branch also
+/// accepts fullwidth digits, normalised to ASCII before parsing.
 final RegExp _partPattern = RegExp(
-  r'(?:episode|ep\.?|chapter|ch\.?|volume|vol\.?|part)\s*\.?\s*(\d+(?:\.\d+)?)|第\s*(\d+(?:\.\d+)?)\s*[話章]',
+  r'(?:\b(?:episode|ep\.?|chapter|ch\.?|volume|vol\.?|part)\s*\.?\s*(\d+(?:\.\d+)?)|第\s*([0-9０-９]+(?:\.[0-9０-９]+)?)\s*[話章])',
   caseSensitive: false,
 );
+
+/// Fullwidth digits to their ASCII value.
+String _asciiDigits(String raw) => raw.replaceAllMapped(
+      RegExp('[０-９]'),
+      (m) => String.fromCharCode(m[0]!.codeUnitAt(0) - 0xFF10 + 0x30),
+    );
 
 /// The part number in [title], or null when it names no numbered part.
 double? episodePartNumber(String title) {
@@ -20,7 +28,7 @@ double? episodePartNumber(String title) {
   if (match == null) return null;
   final raw = match.group(1) ?? match.group(2);
   if (raw == null) return null;
-  return double.tryParse(raw);
+  return double.tryParse(_asciiDigits(raw));
 }
 
 /// Orders member ids once, when a group is created: by the part number in
@@ -35,9 +43,15 @@ List<String> sortEpisodeIds(List<Game> members) {
     if (pa != null && pb != null && pa != pb) return pa.compareTo(pb);
     if (pa == null && pb != null) return 1;
     if (pa != null && pb == null) return -1;
-    final ra = a.released ?? '';
-    final rb = b.released ?? '';
-    if (ra != rb) return ra.compareTo(rb);
+    final ra = a.released;
+    final rb = b.released;
+    if (ra != null && ra.isNotEmpty && rb != null && rb.isNotEmpty) {
+      if (ra != rb) return ra.compareTo(rb);
+    } else if (ra != null && ra.isNotEmpty) {
+      return -1;
+    } else if (rb != null && rb.isNotEmpty) {
+      return 1;
+    }
     return a.title.toLowerCase().compareTo(b.title.toLowerCase());
   });
   return [for (final m in sorted) m.id];
@@ -80,14 +94,14 @@ Game? resolvePickedMember(GameGroup group, Map<String, Game> byId) {
   return null;
 }
 
-/// The member's short name in the episode picker: its title with the group's
-/// shared title prefix removed and trimmed; the full title when nothing is
-/// left.
-String memberShortName(GameGroup group, Game member, Map<String, Game> byId) {
-  final titles = [
-    for (final id in group.memberIds)
-      if (byId[id] != null) byId[id]!.title,
-  ];
+/// Whitespace or punctuation: a title-prefix boundary, so stripping a shared
+/// prefix never cuts mid-token (`Episode 1` vs `Episode 10` keeps `10`).
+final RegExp _prefixBoundary = RegExp(r'[\s\p{P}]', unicode: true);
+
+/// The titles' shared prefix, trimmed back to the last whitespace or
+/// punctuation boundary. `Episode 1` and `Episode 10` share `Episode `, and
+/// `9-nine- Episode 1` with `9-nine- NewEpisode` shares `9-nine- `.
+String sharedTitlePrefix(List<String> titles) {
   var prefix = titles.isEmpty ? '' : titles.first;
   for (final title in titles) {
     var i = 0;
@@ -98,6 +112,21 @@ String memberShortName(GameGroup group, Game member, Map<String, Game> byId) {
     }
     prefix = prefix.substring(0, i);
   }
+  var end = prefix.length;
+  while (end > 0 && !_prefixBoundary.hasMatch(prefix[end - 1])) {
+    end--;
+  }
+  return prefix.substring(0, end);
+}
+
+/// The member's short name in the episode picker: its title with the group's
+/// shared title prefix removed and trimmed; the full title when nothing is
+/// left.
+String memberShortName(GameGroup group, Game member, Map<String, Game> byId) {
+  final prefix = sharedTitlePrefix([
+    for (final id in group.memberIds)
+      if (byId[id] != null) byId[id]!.title,
+  ]);
   final short = member.title.substring(prefix.length).trim();
   return short.isEmpty ? member.title : short;
 }

@@ -61,10 +61,18 @@ class SingleTile extends LibraryTile {
 }
 
 class GroupTile extends LibraryTile {
-  const GroupTile({required this.group, required this.members});
+  const GroupTile({
+    required this.group,
+    required this.members,
+    required this.visible,
+  });
 
   final GameGroup group;
   final List<Game> members;
+
+  /// The members that pass the current filters; the group ranks by its best
+  /// visible member.
+  final List<Game> visible;
 
   /// The first member's cover shows on the group tile.
   Game get coverGame => members.first;
@@ -159,7 +167,7 @@ List<LibraryTile> applyGroupedQuery(Library library, LibraryQuery q) {
         if (_matches(m, nameHit ? '' : needle, q)) m,
     ];
     if (passing.isEmpty) continue;
-    tiles.add(GroupTile(group: group, members: members));
+    tiles.add(GroupTile(group: group, members: members, visible: passing));
   }
   for (final game in library.games) {
     if (groupedIds.contains(game.id)) continue;
@@ -168,7 +176,8 @@ List<LibraryTile> applyGroupedQuery(Library library, LibraryQuery q) {
   }
   Game representative(LibraryTile tile) {
     if (tile is SingleTile) return tile.game;
-    final members = (tile as GroupTile).members;
+    final group = tile as GroupTile;
+    final members = group.visible.isEmpty ? group.members : group.visible;
     var best = members.first;
     for (final m in members.skip(1)) {
       if (_compareGames(m, best, q) < 0) best = m;
