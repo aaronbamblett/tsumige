@@ -12,6 +12,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/constants/app_theme.dart';
+import 'src/core/http_overrides.dart';
 import 'src/core/legacy_migration.dart';
 import 'src/features/library/data/library_repository.dart';
 import 'src/features/settings/presentation/appearance/widgets/app_theme_selector/app_theme_providers.dart';
@@ -36,6 +37,7 @@ Widget tsumigeRouterBuilder(BuildContext context, Widget? child) =>
 Future<void> main() async {
   appMainEntry = DateTime.now();
   WidgetsFlutterBinding.ensureInitialized();
+  HttpOverrides.global = TsumigeHttpOverrides();
   final env = Platform.environment;
   if (Platform.isLinux) await migrateLegacyDataDir(env);
   if (Platform.isLinux) await migrateLegacyPrefsFile(env);
