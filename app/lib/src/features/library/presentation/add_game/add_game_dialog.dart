@@ -55,7 +55,15 @@ Future<void> dropOntoLibrary(BuildContext context, List<String> paths) async {
     Toast(context).show(portalPathMessage);
     return;
   }
-  final route = routeDrop(paths, isDirectory: FileSystemEntity.isDirectorySync);
+  final platform = ProviderScope.containerOf(
+    context,
+  ).read(hostPlatformProvider);
+  final route = await routeDrop(
+    paths,
+    isDirectory: FileSystemEntity.isDirectorySync,
+    scanFolder: (path) => scanImportFolder(path, platform),
+  );
+  if (!context.mounted) return;
   switch (route) {
     case DropMatch(:final folder, :final file):
       await showAddGameDialog(context, folder: folder, file: file);
@@ -270,6 +278,17 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
       Toast(context).show(portalPathMessage);
       return;
     }
+    List<ImportFolder> found;
+    try {
+      found = await scanImportFolder(picked, ref.read(hostPlatformProvider));
+    } on FileSystemException {
+      found = const [];
+    }
+    if (!mounted) return;
+    if (found.length >= 2) {
+      await _openImport(roots: [picked]);
+      return;
+    }
     await _enterMatch(picked);
   }
 
@@ -429,9 +448,11 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
       Toast(context).show(portalPathMessage);
       return;
     }
-    final route = routeDrop(
+    final route = await routeDrop(
       paths,
       isDirectory: FileSystemEntity.isDirectorySync,
+      scanFolder: (path) =>
+          scanImportFolder(path, ref.read(hostPlatformProvider)),
     );
     switch (route) {
       case DropMatch(:final folder, :final file):

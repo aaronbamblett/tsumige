@@ -139,6 +139,7 @@ Future<(_FakeRepository, _Http, ProviderContainer)> _pump(
   List<Map<String, Object?>> rows = const [],
   Size surface = const Size(1280, 800),
   bool openMatch = true,
+  String Function(String folder)? pickFolder,
 }) async {
   tester.view.physicalSize = surface;
   tester.view.devicePixelRatio = 1.0;
@@ -165,7 +166,9 @@ Future<(_FakeRepository, _Http, ProviderContainer)> _pump(
         addGameHttpClientProvider.overrideWithValue(http.client),
         pathPickerProvider.overrideWithValue(
           ({String? initialDirectory, PathPickMode? mode}) async =>
-              mode == PathPickMode.file ? exe : folder,
+              mode == PathPickMode.file
+                  ? exe
+                  : (pickFolder?.call(folder) ?? folder),
         ),
       ],
       child: MaterialApp(
@@ -990,6 +993,39 @@ void main() {
     expect(find.text('Match on VNDB'), findsOneWidget);
     expect(find.text('DEMO.exe'), findsWidgets);
   });
+
+  testWidgets('a dropped folder of several games opens the import dialog',
+      (tester) async {
+    await _pump(tester, openMatch: false);
+    final root = _multiGameFolder();
+    _dropOn(tester, [DropItemDirectory(root, const [])]);
+    await _untilShown(tester, 'Alpha');
+    expect(find.byKey(const Key('import-close')), findsOneWidget);
+    expect(find.text('Alpha'), findsWidgets);
+    expect(find.text('Beta'), findsWidgets);
+  });
+
+  testWidgets('Choose folder with several games opens the import dialog',
+      (tester) async {
+    final root = _multiGameFolder();
+    await _pump(tester, openMatch: false, pickFolder: (_) => root);
+    await tester.tap(find.byKey(const Key('add-game-choose-folder')));
+    await _untilShown(tester, 'Alpha');
+    expect(find.byKey(const Key('import-close')), findsOneWidget);
+    expect(find.text('Alpha'), findsWidgets);
+    expect(find.text('Beta'), findsWidgets);
+  });
+}
+
+/// A throwaway folder holding two game folders, deleted with the test run.
+String _multiGameFolder() {
+  final root = Directory.systemTemp.createTempSync('tsumige_multi_test_');
+  addTearDown(() => root.deleteSync(recursive: true));
+  for (final name in ['Alpha', 'Beta']) {
+    final game = Directory(p.join(root.path, name))..createSync();
+    File(p.join(game.path, '$name.exe')).writeAsBytesSync([0, 1, 2]);
+  }
+  return root.path;
 }
 
 /// A throwaway folder holding DEMO.exe, deleted with the test directory.
