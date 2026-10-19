@@ -9,6 +9,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../../core/group_detection.dart';
 import '../../../../core/groups.dart';
 import '../../../../utils/theme/brand.dart';
 import '../../../settings/presentation/sections/settings_widgets.dart';
@@ -39,10 +40,17 @@ Future<String?> showGroupNameDialog({
   );
 }
 
-/// The default Combine name for [titles]: the shared title prefix with
+/// The default Combine name for [titles]: when every title carries a part
+/// marker and the series text before it matches, that text (`9-nine-
+/// Episode 1..3` gives `9-nine-`); otherwise the shared title prefix with
 /// trailing spaces, hyphens and colons trimmed, else the first title.
 String combineDefaultName(List<String> titles) {
   if (titles.isEmpty) return '';
+  final series = [for (final title in titles) seriesPrefixOf(title)];
+  if (series.every((s) => s != null) &&
+      series.every((s) => s!.key == series.first!.key)) {
+    return series.first!.prefix;
+  }
   final prefix =
       sharedTitlePrefix(titles).replaceAll(RegExp(r'[\s\-:]+$'), '');
   return prefix.isEmpty ? titles.first : prefix;
