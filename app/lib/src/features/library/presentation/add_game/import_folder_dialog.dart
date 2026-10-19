@@ -9,8 +9,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:path/path.dart' as p;
 
 import '../../../../core/model.dart';
+import '../../../../core/paths.dart';
 import '../../../../core/vndb.dart';
 import '../../../../utils/platform/platform_runtime.dart';
 import '../../../../utils/theme/brand.dart';
@@ -117,30 +119,36 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     _pop(ImportFolderResult.cancel);
   }
 
-  bool _inLibrary(_ImportRow row, List<Game> games) {
-    final exe = row.exePath;
-    final id = row.vn?.id;
-    return games.any(
-      (g) =>
-          (exe != null && g.launch.executable == exe) ||
-          (id != null && g.vndbId == id),
-    );
+  bool _inLibrary(_ImportRow row, List<Game> games, Set<String> libraryExes) =>
+      importRowInLibrary(
+        folder: row.folder.path,
+        vndbId: row.vn?.id,
+        libraryExes: libraryExes,
+        games: games,
+      );
+
+  bool _eligible(_ImportRow row, List<Game> games, Set<String> libraryExes) =>
+      row.state != null &&
+      row.exePath != null &&
+      !_inLibrary(row, games, libraryExes);
+
+  bool _sameGame(_ImportRow a, _ImportRow b) {
+    final ae = a.exePath;
+    final be = b.exePath;
+    if (ae != null && be != null && p.equals(realPath(ae), realPath(be))) {
+      return true;
+    }
+    return a.vn != null && a.vn!.id == b.vn?.id;
   }
-
-  bool _eligible(_ImportRow row, List<Game> games) =>
-      row.state != null && row.exePath != null && !_inLibrary(row, games);
-
-  bool _sameGame(_ImportRow a, _ImportRow b) =>
-      a.exePath == b.exePath || (a.vn != null && a.vn!.id == b.vn?.id);
 
   /// Which rows are added, and which are duplicates of an earlier added row.
   /// The first ticked row for a VNDB id or exe wins.
-  _Plan _plan(List<Game> games) {
+  _Plan _plan(List<Game> games, Set<String> libraryExes) {
     final selected = List.filled(_rows.length, false);
     final duplicate = List.filled(_rows.length, false);
     for (var i = 0; i < _rows.length; i++) {
       final row = _rows[i];
-      if (!_eligible(row, games)) continue;
+      if (!_eligible(row, games, libraryExes)) continue;
       for (var j = 0; j < i; j++) {
         if (selected[j] && _sameGame(_rows[j], row)) {
           duplicate[i] = true;
@@ -333,7 +341,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
 
   Future<void> _add() async {
     final games = ref.read(libraryProvider).value?.library.games ?? const [];
-    final plan = _plan(games);
+    final plan = _plan(games, libraryRealExePaths(games));
     final rows = [
       for (var i = 0; i < _rows.length; i++)
         if (plan.selected[i]) _rows[i],
@@ -403,7 +411,9 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     final games =
         ref.watch(libraryProvider).value?.library.games ?? const <Game>[];
     final pick = _pickIndex;
-    final plan = _plan(games);
+    // Resolved once per build so every row compares against the same set.
+    final libraryExes = libraryRealExePaths(games);
+    final plan = _plan(games, libraryExes);
     if (pick != null) {
       return DialogShell(
         autofocus: false,
@@ -423,16 +433,27 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       title: 'Select games to import',
       onClose: _close,
       closeKey: const Key('import-close'),
-      body: _listBody(context, games, plan),
+      body: _listBody(context, games, plan, libraryExes),
       footer: _listFooter(games, plan),
     );
   }
 
-  bool _hidden(int index, List<Game> games, _Plan plan) =>
+  bool _hidden(
+    int index,
+    List<Game> games,
+    _Plan plan,
+    Set<String> libraryExes,
+  ) =>
       _hideImported &&
-      (plan.duplicate[index] || _inLibrary(_rows[index], games));
+      (plan.duplicate[index] ||
+          _inLibrary(_rows[index], games, libraryExes));
 
-  Widget _listBody(BuildContext context, List<Game> games, _Plan plan) {
+  Widget _listBody(
+    BuildContext context,
+    List<Game> games,
+    _Plan plan,
+    Set<String> libraryExes,
+  ) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final muted = theme.textTheme.bodySmall?.copyWith(
@@ -441,11 +462,11 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     );
     final visible = [
       for (var i = 0; i < _rows.length; i++)
-        if (!_hidden(i, games, plan)) i,
+        if (!_hidden(i, games, plan, libraryExes)) i,
     ];
     final eligible = [
       for (final i in visible)
-        if (_eligible(_rows[i], games) && !plan.duplicate[i]) i,
+        if (_eligible(_rows[i], games, libraryExes) && !plan.duplicate[i]) i,
     ];
     final allChecked =
         eligible.isNotEmpty && eligible.every((i) => plan.selected[i]);
@@ -500,8 +521,13 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                       )
                     : ListView.builder(
                         itemCount: visible.length,
-                        itemBuilder: (context, position) =>
-                            _rowWidget(context, visible[position], games, plan),
+                        itemBuilder: (context, position) => _rowWidget(
+                          context,
+                          visible[position],
+                          games,
+                          plan,
+                          libraryExes,
+                        ),
                       ),
               ),
             ],
@@ -526,11 +552,12 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     int index,
     List<Game> games,
     _Plan plan,
+    Set<String> libraryExes,
   ) {
     final row = _rows[index];
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final inLibrary = _inLibrary(row, games);
+    final inLibrary = _inLibrary(row, games, libraryExes);
     final vn = row.state == ImportMatchState.matched ? row.vn : null;
     final canPick = !inLibrary && !_saving;
     final unmatched = vn == null;
@@ -559,7 +586,9 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                 key: Key('import-check-$index'),
                 value: plan.selected[index],
                 onChanged:
-                    _eligible(row, games) && !plan.duplicate[index] && !_saving
+                    _eligible(row, games, libraryExes) &&
+                            !plan.duplicate[index] &&
+                            !_saving
                     ? (value) => setState(() {
                         row.ticked = value ?? false;
                         row.tickTouched = true;

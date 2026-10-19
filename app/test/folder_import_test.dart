@@ -9,6 +9,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:tsumige/src/core/host_platform.dart';
+import 'package:tsumige/src/core/model.dart';
 import 'package:tsumige/src/core/vndb.dart';
 import 'package:tsumige/src/features/library/domain/folder_import.dart';
 
@@ -435,6 +436,124 @@ void main() {
       ]);
       expect(m.state, ImportMatchState.check);
       expect(m.vn!.id, 'v1');
+    });
+  });
+
+  group('already in library', () {
+    Game game(String title, String exe, {String? vndbId}) => Game(
+      id: title,
+      title: title,
+      vndbId: vndbId,
+      launch: LaunchOverrides(executable: exe),
+    );
+
+    test('a library exe seen through a symlink is in the library', () {
+      final real = Directory(p.join(temp.path, 'real'))..createSync();
+      _exe(real.path, p.join('Game', 'game.exe'));
+      Link(p.join(temp.path, 'link')).createSync(real.path);
+      final games = [game('Sym', p.join(real.path, 'Game', 'game.exe'))];
+      final exes = libraryRealExePaths(games);
+      expect(
+        importRowInLibrary(
+          folder: p.join(temp.path, 'link', 'Game'),
+          vndbId: null,
+          libraryExes: exes,
+          games: games,
+        ),
+        isTrue,
+      );
+    });
+
+    test('a different exe in the same folder counts as in library', () {
+      final folder = Directory(p.join(temp.path, 'Kana Okaeri'))
+        ..createSync();
+      _exe(folder.path, p.join('Game', 'KANAOKA.EXE'));
+      _exe(folder.path, 'Kana_Okaeri_setup.exe');
+      final games = [
+        game('Kana Okaeri', p.join(folder.path, 'Game', 'KANAOKA.EXE')),
+      ];
+      expect(
+        importRowInLibrary(
+          folder: folder.path,
+          vndbId: null,
+          libraryExes: libraryRealExePaths(games),
+          games: games,
+        ),
+        isTrue,
+      );
+    });
+
+    test('an unrelated folder is not in the library', () {
+      final folder = Directory(p.join(temp.path, 'Other'))..createSync();
+      _exe(folder.path, 'Other.exe');
+      final games = [game('Owned', p.join(temp.path, 'Game', 'game.exe'))];
+      expect(
+        importRowInLibrary(
+          folder: folder.path,
+          vndbId: null,
+          libraryExes: libraryRealExePaths(games),
+          games: games,
+        ),
+        isFalse,
+      );
+    });
+
+    test('a vndb id match still counts without any exe', () {
+      final games = [game('Owned', '', vndbId: 'v99')];
+      expect(
+        importRowInLibrary(
+          folder: p.join(temp.path, 'Missing'),
+          vndbId: 'v99',
+          libraryExes: libraryRealExePaths(games),
+          games: games,
+        ),
+        isTrue,
+      );
+    });
+
+    test('duplicateLibraryGame matches the same file through a symlink', () {
+      final real = Directory(p.join(temp.path, 'real'))..createSync();
+      _exe(real.path, p.join('DEMO', 'DEMO.exe'));
+      final link = Link(p.join(temp.path, 'link'));
+      link.createSync(real.path);
+      final games = [
+        game('Alpha', p.join(real.path, 'DEMO', 'DEMO.exe')),
+      ];
+      final hit = duplicateLibraryGame(
+        exe: p.join(link.path, 'DEMO', 'DEMO.exe'),
+        folder: p.join(link.path, 'DEMO'),
+        games: games,
+      );
+      expect(hit?.title, 'Alpha');
+    });
+
+    test('duplicateLibraryGame matches another exe in the folder', () {
+      final folder = Directory(p.join(temp.path, 'Kana Okaeri'))
+        ..createSync();
+      _exe(folder.path, p.join('Game', 'KANAOKA.EXE'));
+      final games = [
+        game('Kana Okaeri', p.join(folder.path, 'Game', 'KANAOKA.EXE')),
+      ];
+      final hit = duplicateLibraryGame(
+        exe: p.join(folder.path, 'Kana_Okaeri_setup.exe'),
+        folder: folder.path,
+        games: games,
+      );
+      expect(hit?.title, 'Kana Okaeri');
+    });
+
+    test('duplicateLibraryGame returns null for a new exe', () {
+      final folder = Directory(p.join(temp.path, 'New'))..createSync();
+      _exe(folder.path, 'New.exe');
+      final games = [game('Owned', p.join(temp.path, 'Old', 'old.exe'))];
+      expect(
+        duplicateLibraryGame(
+          exe: p.join(folder.path, 'New.exe'),
+          folder: folder.path,
+          games: games,
+        ),
+        isNull,
+      );
     });
   });
 

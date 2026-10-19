@@ -461,6 +461,86 @@ void main() {
     expect(h.repo.saves, 0);
   });
 
+  testWidgets('a game scanned through a symlink is hidden as imported', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 980);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final temp = Directory.systemTemp.createTempSync(
+      'tsumige_import_link_test_',
+    );
+    addTearDown(() => temp.deleteSync(recursive: true));
+    final real = Directory(p.join(temp.path, 'real'))..createSync();
+    _exe(real.path, 'Game/game.exe');
+    final link = Link(p.join(temp.path, 'link'));
+    link.createSync(real.path);
+    SharedPreferences.setMockInitialValues({});
+    final repo = _FakeRepository([
+      core.Game(
+        id: 'g1',
+        title: 'Owned',
+        launch: core.LaunchOverrides(
+          executable: p.join(real.path, 'Game', 'game.exe'),
+        ),
+      ),
+    ]);
+    final vndb = _Vndb(const {});
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(
+            await SharedPreferences.getInstance(),
+          ),
+          dataDirProvider.overrideWithValue(core.DataDir(temp.path)),
+          libraryRepositoryProvider.overrideWithValue(repo),
+          addGameHttpClientProvider.overrideWithValue(vndb.client),
+          pathPickerProvider.overrideWithValue(
+            ({String? initialDirectory, PathPickMode? mode}) async => link.path,
+          ),
+        ],
+        child: MaterialApp(
+          builder: FToastBuilder(),
+          home: Builder(
+            builder: (context) {
+              return Scaffold(
+                body: TextButton(
+                  onPressed: () => showImportFolderDialog(context),
+                  child: const Text('open'),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.text('open'));
+    await tester.pump();
+    for (var i = 0;
+        i < 200 && find.text('No games in this folder').evaluate().isEmpty;
+        i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(find.text('No games in this folder'), findsOneWidget);
+    expect(find.text('Game'), findsNothing);
+    await tester.tap(find.byKey(const Key('import-hide-imported')));
+    await tester.pump();
+    expect(find.text('Game'), findsOneWidget);
+    expect(
+      tester.widget<Checkbox>(find.byKey(const Key('import-check-0'))).onChanged,
+      isNull,
+    );
+    expect(repo.saves, 0);
+  });
+
   testWidgets('a duplicate in the batch is hidden, and disabled when shown', (
     tester,
   ) async {

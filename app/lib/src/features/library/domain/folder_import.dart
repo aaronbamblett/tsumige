@@ -10,6 +10,8 @@ import 'dart:math' as math;
 import 'package:path/path.dart' as p;
 
 import '../../../core/host_platform.dart';
+import '../../../core/model.dart';
+import '../../../core/paths.dart';
 import '../../../core/vndb.dart';
 
 /// One .exe found under a candidate folder.
@@ -363,6 +365,33 @@ List<ExeFile> _candidates(List<ExeFile> found) {
   return nonlauncher.isNotEmpty ? nonlauncher : candidates;
 }
 
+/// The library game that picking [exe] would duplicate: one whose resolved
+/// executable is the same file, or — when [folder] (the game folder the
+/// pick belongs to) holds one — the first such game. Null when it is new.
+Game? duplicateLibraryGame({
+  required String exe,
+  required String? folder,
+  required Iterable<Game> games,
+}) {
+  if (exe.isEmpty) return null;
+  final realExe = realPath(exe);
+  final realFolder = folder == null || folder.isEmpty ? null : realPath(folder);
+  Game? folderHit;
+  for (final game in games) {
+    final stored = game.launch.executable;
+    if (stored == null || stored.isEmpty) continue;
+    final realStored = realPath(stored);
+    if (p.equals(realStored, realExe)) return game;
+    if (folderHit == null &&
+        realFolder != null &&
+        (p.equals(realStored, realFolder) ||
+            p.isWithin(realFolder, realStored))) {
+      folderHit = game;
+    }
+  }
+  return folderHit;
+}
+
 /// The exe to launch for [folder]: top-level first, then the best title
 /// similarity to the folder name or [titles], then the largest file.
 ExeFile? chooseExe(ImportFolder folder, Iterable<String> titles) {
@@ -387,6 +416,33 @@ bool _keyBeats((bool, double, int) a, (bool, double, int) b) {
   if (a.$1 != b.$1) return a.$1;
   if (a.$2 != b.$2) return a.$2 > b.$2;
   return a.$3 > b.$3;
+}
+
+/// The resolved executable paths of [games], skipping empty ones. Computed
+/// once per scan so import rows each compare against the set.
+Set<String> libraryRealExePaths(Iterable<Game> games) => {
+  for (final game in games)
+    if (game.launch.executable != null &&
+        game.launch.executable!.isNotEmpty)
+      realPath(game.launch.executable!),
+};
+
+/// Whether the import row for [folder] is already in the library: a library
+/// game's resolved executable is that folder or inside it (so the same game
+/// picked through a different link, or through a different `.exe` in the
+/// same folder, still matches), or the VNDB id matches.
+bool importRowInLibrary({
+  required String folder,
+  required String? vndbId,
+  required Set<String> libraryExes,
+  required Iterable<Game> games,
+}) {
+  if (vndbId != null && games.any((g) => g.vndbId == vndbId)) return true;
+  if (libraryExes.isEmpty) return false;
+  final realFolder = realPath(folder);
+  return libraryExes.any(
+    (exe) => p.equals(exe, realFolder) || p.isWithin(realFolder, exe),
+  );
 }
 
 const _accentFolds = {
