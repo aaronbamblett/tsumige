@@ -53,7 +53,7 @@ class GroupSuggestionsDialog extends ConsumerWidget {
       shrinkToContent: true,
       size: dialogShellSize(context),
       eyebrow: 'Series',
-      title: 'Group these into one tile each?',
+      title: 'Group series',
       onClose: () => Navigator.of(context).pop(),
       body: ListView(
         shrinkWrap: true,
@@ -112,7 +112,7 @@ class _SuggestionCard extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '${suggestion.name} · ${suggestion.memberIds.length} entries',
+                    '${suggestion.name} · ${suggestion.memberIds.length} games',
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,

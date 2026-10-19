@@ -23,9 +23,8 @@ class GroupSuggestionNotice extends ConsumerWidget {
     final suggestions = ref.watch(visibleGroupSuggestionsProvider);
     if (suggestions.isEmpty) return const SizedBox.shrink();
     final text = suggestions.length == 1
-        ? '1 series in your library can be grouped into one tile.'
-        : '${suggestions.length} series in your library can be grouped '
-            'into one tile each.';
+        ? '1 series can be grouped'
+        : '${suggestions.length} series can be grouped';
     return Card(
       margin: const EdgeInsets.all(8),
       child: ListTile(

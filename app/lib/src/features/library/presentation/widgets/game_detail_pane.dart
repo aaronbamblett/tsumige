@@ -639,7 +639,7 @@ class _HeroControls extends ConsumerWidget {
             if (group != null)
               const PopupMenuItem(
                 value: 'split',
-                child: Text('Split into separate tiles'),
+                child: Text('Ungroup'),
               ),
             PopupMenuItem(
               value: 'adult',

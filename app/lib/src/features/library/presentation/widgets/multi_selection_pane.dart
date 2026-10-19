@@ -93,7 +93,7 @@ class MultiSelectionPane extends ConsumerWidget {
                     context: context,
                   );
             },
-            label: const Text('Combine into one tile…'),
+            label: const Text('Group…'),
           ),
           const SizedBox(height: 10),
           BrandGlassButton(
