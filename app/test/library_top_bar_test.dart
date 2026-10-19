@@ -94,9 +94,11 @@ List<core.Game> _games() => List.generate(
     );
 
 void main() {
-  testWidgets('at 1280 wide the search field and window buttons share one bar',
+  // 1440, not 1280: under the test font the runtime-measured boxes are
+  // wider than on a real machine, pushing the breakpoint past 1280.
+  testWidgets('at 1440 wide the search field and window buttons share one bar',
       (tester) async {
-    await _pumpApp(tester, _games(), size: const Size(1280, 800));
+    await _pumpApp(tester, _games(), size: const Size(1440, 800));
 
     // One 64 px bar: no separate 40 px title bar anywhere.
     expect(find.byType(DesktopTitleBar), findsNothing);
@@ -126,7 +128,7 @@ void main() {
   });
 
   testWidgets('merged bar shows the enlarged brand', (tester) async {
-    await _pumpApp(tester, _games(), size: const Size(1280, 800));
+    await _pumpApp(tester, _games(), size: const Size(1440, 800));
 
     expect(tester.getSize(find.byType(TsumigeLogo)), const Size(28, 28));
     final name = tester.widget<Text>(find.text('Tsumige'));

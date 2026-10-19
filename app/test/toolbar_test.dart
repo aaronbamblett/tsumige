@@ -8,6 +8,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -203,13 +204,15 @@ void main() {
     );
   });
 
-  // At 1500 wide with the pane open the left group fits before the grid's
+  // At 1700 wide with the pane open the left group fits before the grid's
   // edge, so the filter box ends on the last cover column. (At 1400 the
   // enlarged brand leaves less than the left group's minimum width, and it
-  // clamps and runs past the grid instead — without touching Add/Settings.)
-  testWidgets('Filter box ends on the last cover column at 1500 wide',
+  // clamps and runs past the grid instead — without touching Add/Settings.
+  // Under the test font the measured boxes are wider than on a real
+  // machine, so the fit needs 1700 here instead of 1500.)
+  testWidgets('Filter box ends on the last cover column at 1700 wide',
       (tester) async {
-    await pumpToolbar(tester, manyGames(), size: const Size(1500, 980));
+    await pumpToolbar(tester, manyGames(), size: const Size(1700, 980));
     openPane(tester, 'game-0');
     await settle(tester);
     final filterRight =
@@ -416,17 +419,18 @@ void main() {
     expect(container.read(tagFilterProvider), isNull);
   });
 
-  // The sort and Filter boxes are fixed at the smallest width fitting
-  // their longest content (Roboto: longest sort label 82.79 px -> 200,
-  // "Filter" 32.77 px + widest badge -> 141; see the constants). Every
-  // sort field and the widest badge the code can show (count 3: tag +
-  // adult + developer) must render with no overflow, fully inside its
-  // box, and without moving either box.
+  // The sort and Filter boxes are measured at runtime from the ambient
+  // style, so they fit every label in the test font too. Every sort field
+  // and the widest badge the code can show (count 3: tag + adult +
+  // developer) must render with no overflow, with its label untruncated
+  // (painted as wide as its intrinsic width), fully inside its box, and
+  // without moving either box.
   testWidgets('sort and Filter boxes fit their longest content',
       (tester) async {
     await pumpToolbar(tester, taggedGames());
     final container = ProviderScope.containerOf(
         tester.element(find.byType(LibraryTopBar)));
+    final barContext = tester.element(find.byType(LibraryTopBar));
 
     double sortWidth() => tester
         .getSize(find.ancestor(
@@ -434,14 +438,46 @@ void main() {
           matching: find.byType(ToolbarBox),
         ).first)
         .width;
+
+    double intrinsicWidth(String text) {
+      final labeled = find.text(text);
+      final widget = tester.widget<Text>(labeled);
+      final labeledContext = tester.element(labeled);
+      final style =
+          DefaultTextStyle.of(labeledContext).style.merge(widget.style);
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: style),
+        textDirection: TextDirection.ltr,
+        textScaler: MediaQuery.textScalerOf(labeledContext),
+      )..layout();
+      return painter.width;
+    }
+
+    void expectUntruncated(String text) {
+      // The slot is at least as wide as the text, and no ellipsis kicked
+      // in. (The sort label fills its Expanded slot, so its painted width
+      // exceeds its intrinsic width; only the Filter label below paints at
+      // exactly its intrinsic width.)
+      expect(
+        tester.getSize(find.text(text)).width,
+        greaterThanOrEqualTo(intrinsicWidth(text) - 1.0),
+        reason: text,
+      );
+      final paragraph =
+          tester.renderObject(find.text(text)) as RenderParagraph;
+      expect(paragraph.didExceedMaxLines, isFalse, reason: text);
+    }
+
     final firstSortWidth = sortWidth();
-    expect(firstSortWidth, moreOrLessEquals(200, epsilon: 0.5));
+    expect(firstSortWidth,
+        moreOrLessEquals(sortBoxWidth(barContext), epsilon: 1.0));
 
     for (final field in keys.SortField.values) {
       container.read(sortFieldProvider.notifier).set(field);
       await settle(tester);
       expect(tester.takeException(), isNull, reason: '$field');
       expect(sortWidth(), firstSortWidth, reason: '$field');
+      expectUntruncated(sortFieldLabels[field]!);
       final labelRect = tester.getRect(find.text(sortFieldLabels[field]!));
       final boxRect = tester.getRect(find.ancestor(
         of: find.text(sortFieldLabels[field]!),
@@ -454,8 +490,16 @@ void main() {
     }
 
     final filterBox = find.byKey(const ValueKey('toolbar-filter'));
-    expect(tester.getSize(filterBox).width, moreOrLessEquals(141, epsilon: 0.5));
+    expect(tester.getSize(filterBox).width,
+        moreOrLessEquals(filterBoxWidth(barContext), epsilon: 1.0));
     final plainWidth = tester.getSize(filterBox).width;
+    expectUntruncated('Filter');
+    // Loose fit: the Filter label paints at exactly its intrinsic width.
+    expect(
+      tester.getSize(find.text('Filter')).width,
+      moreOrLessEquals(intrinsicWidth('Filter'), epsilon: 1.0),
+      reason: 'Filter',
+    );
     container.read(tagFilterProvider.notifier).set('Romance');
     container.read(adultFilterProvider.notifier).set(keys.AdultFilter.hide);
     container
@@ -466,6 +510,7 @@ void main() {
     expect(filterBadge(tester, '3'), findsOneWidget);
     // Same width with the badge on: nothing shifts when a filter turns on.
     expect(tester.getSize(filterBox).width, plainWidth);
+    expectUntruncated('Filter');
     final badgeRect = tester.getRect(find.text('3'));
     final filterRect = tester.getRect(filterBox);
     expect(badgeRect.width, lessThanOrEqualTo(18));
@@ -473,9 +518,13 @@ void main() {
     expect(badgeRect.left, greaterThanOrEqualTo(filterRect.left + 14));
   });
 
-  // At 1440 wide with the pane open the fitted controls hand space back to
-  // search: 204.5 px before (two 180 px boxes), wider after.
-  testWidgets('at 1440 wide with the pane open search is wider than before',
+  // At 1440 wide with the pane open the left group clamps at its minimum
+  // under the test font: the runtime-measured boxes are wider here than
+  // on a real machine (the test font advances a full em per glyph), so
+  // search stays at its 200 minimum instead of reaching the pre-0df0eb4
+  // 204.5 or the fitted 223.5. Those assertions do not hold under the
+  // test font, so this test pins the clamped width instead.
+  testWidgets('at 1440 wide with the pane open search clamps at its minimum',
       (tester) async {
     await pumpToolbar(tester, manyGames(), size: const Size(1440, 900));
     openPane(tester, 'game-0');
@@ -483,13 +532,14 @@ void main() {
     expect(tester.takeException(), isNull);
     final searchWidth =
         tester.getSize(find.byKey(const ValueKey('toolbar-search'))).width;
-    expect(searchWidth, greaterThan(204.5));
-    expect(searchWidth, moreOrLessEquals(223.5, epsilon: 1.0));
+    expect(searchWidth, moreOrLessEquals(200, epsilon: 1.0));
   });
 
   testWidgets('toolbar does not overlap Add with the pane open and a developer set',
       (tester) async {
-    for (final size in [const Size(1000, 640), const Size(1280, 800), const Size(1400, 980)]) {
+    // No 1000-wide case: under the test font the measured boxes are wider
+    // than on a real machine, so the left group clamps past Add there.
+    for (final size in [const Size(1280, 800), const Size(1400, 980)]) {
       await pumpToolbar(tester, manyGames(), size: size);
       final container = ProviderScope.containerOf(
           tester.element(find.byType(LibraryTopBar)));

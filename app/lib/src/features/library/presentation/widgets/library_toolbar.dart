@@ -62,38 +62,76 @@ const double _kFilterBadgeGap = 4;
 /// lays out in is narrower by twice this.
 const double _kToolbarBorder = 1;
 
-/// Width of the sort control: the smallest fixed width fitting the longest
-/// label in [sortFieldLabels]. "VNDB Rating" measures 82.79 px in the
-/// toolbar's ambient style (Roboto 14, letter spacing 0.25), so 14 pad + 18
-/// icon + 10 gap + 82.79 label + 22 chevron + 10 pad, plus the 1 px divider,
-/// the 40 px direction toggle and 2 px of border: 199.79, rounded up to 200.
-/// Fixed across sort fields, so the control never jumps when the sort
-/// changes. Re-measure with e.g.
-/// `hb-shape Roboto-Regular.ttf --font-size 1400 --text "VNDB Rating"`
-/// (sum the advances, divide by 100, add 0.25 per character) if the labels,
-/// the ambient style or this chrome changes.
-const double _kSortWidth = 200;
+/// Chrome sizes inside the sort and Filter boxes.
+const double _kRowIconSize = 18;
+const double _kChevronSize = 22;
+const double _kDividerWidth = 1;
+const double _kBadgeSize = 18;
+
+/// Intrinsic width of [text] in the ambient style, including the text
+/// scaler: the same style the toolbar labels render with.
+double _labelWidth(BuildContext context, String text) {
+  final style = DefaultTextStyle.of(context).style;
+  final scaler = MediaQuery.textScalerOf(context);
+  final painter = TextPainter(
+    text: TextSpan(text: text, style: style),
+    textDirection: TextDirection.ltr,
+    textScaler: scaler,
+  )..layout();
+  return painter.width;
+}
+
+/// Width of the sort control: the smallest width fitting the longest label
+/// in [sortFieldLabels], measured at runtime so it fits the platform's
+/// default font. Fixed across sort fields, so the control never jumps when
+/// the sort changes.
+double sortBoxWidth(BuildContext context) {
+  var widest = 0.0;
+  for (final label in sortFieldLabels.values) {
+    widest = math.max(widest, _labelWidth(context, label));
+  }
+  return (_kSortPadLeft +
+          _kRowIconSize +
+          _kGap +
+          widest +
+          _kChevronSize +
+          _kSortPadRight +
+          _kDividerWidth +
+          _kControlHeight +
+          2 * _kToolbarBorder)
+      .ceilToDouble();
+}
 
 /// Width of the Filter control: icon, gap, "Filter", gap, badge, chevron
-/// and today's outer padding. "Filter" measures 32.77 px in the same style,
-/// so 14 pad + 18 icon + 10 gap + 32.77 label + 10 gap + 18 badge + 4 gap +
-/// 22 chevron + 10 pad, plus 2 px of border: 140.77, rounded up to 141. The
-/// badge slot is always reserved (an empty box while no filter is set), so
-/// the width never shifts when a filter turns on. The badge itself is a
-/// fixed 18 px circle; the widest count the code can show is 3 (one each
-/// for tag, adult and developer), formatted as '$count', so a single digit
-/// that always fits the circle.
-const double _kFilterWidth = 141;
+/// and the outer padding, measured at runtime. The badge slot is always
+/// reserved (an empty box while no filter is set), so the width never
+/// shifts when a filter turns on. The badge itself is a fixed 18 px circle;
+/// the widest count the code can show is 3 (one each for tag, adult and
+/// developer), formatted as '$count', so a single digit that always fits
+/// the circle.
+double filterBoxWidth(BuildContext context) {
+  return (_kFilterPadLeft +
+          _kRowIconSize +
+          _kGap +
+          _labelWidth(context, 'Filter') +
+          _kGap +
+          _kBadgeSize +
+          _kFilterBadgeGap +
+          _kChevronSize +
+          _kFilterPadRight +
+          2 * _kToolbarBorder)
+      .ceilToDouble();
+}
 
 /// Width of the right group: Add, a gap, then Settings.
 const double _kRightGroupWidth = _kAddWidth + _kGap + _kControlHeight;
 
 /// Width the left group needs with the search box at its minimum.
-const double _kLeftGroupMinWidth =
+double leftGroupMinWidth(BuildContext context) =>
     _kSearchMinWidth +
-    _kSortWidth +
+    sortBoxWidth(context) +
     _kSegmentsWidth +
-    _kFilterWidth +
+    filterBoxWidth(context) +
     3 * _kGap;
 
 /// Height of the merged title/toolbar bar: the toolbar's height.
@@ -125,10 +163,11 @@ double brandGroupWidth(BuildContext context) {
 /// (or the macOS traffic-lights inset), the left group's minimum, the right
 /// group, the window buttons (not macOS) and one [_kGap] between each part.
 double oneBarBreakpoint(BuildContext context, {required bool isMacOS}) {
+  final leftMin = leftGroupMinWidth(context);
   if (isMacOS) {
     return kMacOSTrafficLightsInset +
         _kGap * 2 +
-        _kLeftGroupMinWidth +
+        leftMin +
         _kGap +
         _kRightGroupWidth +
         _kRightInset;
@@ -136,7 +175,7 @@ double oneBarBreakpoint(BuildContext context, {required bool isMacOS}) {
   return LibraryGrid.horizontalPadding +
       brandGroupWidth(context) +
       _kGap * 2 +
-      _kLeftGroupMinWidth +
+      leftMin +
       _kGap +
       _kRightGroupWidth +
       _kGap +
@@ -160,13 +199,16 @@ class LibraryToolbar extends ConsumerWidget {
       height: 64,
       child: LayoutBuilder(
         builder: (context, constraints) {
+          final sortWidth = sortBoxWidth(context);
+          final filterWidth = filterBoxWidth(context);
+          final leftMin = leftGroupMinWidth(context);
           final leftEnd = math.min(
             gridRight,
             constraints.maxWidth - _kRightInset - _kRightGroupWidth - _kGap,
           );
           final leftWidth = math.max(
             leftEnd - LibraryGrid.horizontalPadding,
-            _kLeftGroupMinWidth,
+            leftMin,
           );
           return Stack(
             children: [
@@ -175,7 +217,10 @@ class LibraryToolbar extends ConsumerWidget {
                 top: 0,
                 bottom: 0,
                 width: leftWidth,
-                child: const _LeftGroup(),
+                child: _LeftGroup(
+                  sortWidth: sortWidth,
+                  filterWidth: filterWidth,
+                ),
               ),
               Positioned(
                 right: _kRightInset,
@@ -250,6 +295,9 @@ class _MergedLibraryBar extends ConsumerWidget {
           // What the right side reserves: Add/Settings plus the window
           // buttons on Linux/Windows, Add/Settings plus the edge inset on
           // macOS.
+          final sortWidth = sortBoxWidth(context);
+          final filterWidth = filterBoxWidth(context);
+          final leftMin = leftGroupMinWidth(context);
           final rightReserved = isMacOS
               ? _kRightInset + _kRightGroupWidth
               : kWindowButtonsWidth + _kGap + _kRightGroupWidth;
@@ -259,7 +307,7 @@ class _MergedLibraryBar extends ConsumerWidget {
           );
           final leftWidth = math.max(
             leftEnd - leftStart,
-            _kLeftGroupMinWidth,
+            leftMin,
           );
           return Stack(
             children: [
@@ -278,7 +326,10 @@ class _MergedLibraryBar extends ConsumerWidget {
                 top: 0,
                 bottom: 0,
                 width: leftWidth,
-                child: const _LeftGroup(),
+                child: _LeftGroup(
+                  sortWidth: sortWidth,
+                  filterWidth: filterWidth,
+                ),
               ),
               Positioned(
                 right: isMacOS ? _kRightInset : kWindowButtonsWidth + _kGap,
@@ -302,7 +353,10 @@ class _MergedLibraryBar extends ConsumerWidget {
 /// Search, sort, All/Favourites and Filter in one row; the search box absorbs
 /// any slack.
 class _LeftGroup extends ConsumerWidget {
-  const _LeftGroup();
+  const _LeftGroup({required this.sortWidth, required this.filterWidth});
+
+  final double sortWidth;
+  final double filterWidth;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -315,13 +369,14 @@ class _LeftGroup extends ConsumerWidget {
         const Expanded(child: _ToolbarSearchField()),
         const SizedBox(width: _kGap),
         ToolbarBox(
-          width: _kSortWidth,
+          width: sortWidth,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
                 child: _SortMenu(
                   field: field,
+                  menuMinWidth: sortWidth,
                   onSelected: (value) =>
                       ref.read(sortFieldProvider.notifier).set(value),
                 ),
@@ -384,7 +439,7 @@ class _LeftGroup extends ConsumerWidget {
           ),
         ),
         const SizedBox(width: _kGap),
-        const _FilterButton(),
+        _FilterButton(width: filterWidth),
       ],
     );
   }
@@ -477,17 +532,19 @@ class _ToolbarBoxState extends State<ToolbarBox> {
 }
 
 class _SortMenu extends StatelessWidget {
-  const _SortMenu({required this.field, required this.onSelected});
+  const _SortMenu(
+      {required this.field, required this.menuMinWidth, required this.onSelected});
 
   final keys.SortField field;
+  final double menuMinWidth;
   final ValueChanged<keys.SortField> onSelected;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return MenuAnchor(
-      style: const MenuStyle(
-        minimumSize: WidgetStatePropertyAll(Size(_kSortWidth, 0)),
+      style: MenuStyle(
+        minimumSize: WidgetStatePropertyAll(Size(menuMinWidth, 0)),
       ),
       menuChildren: [
         for (final entry in sortFieldLabels.entries)
@@ -533,7 +590,9 @@ class _SortMenu extends StatelessWidget {
 /// The Filter box: a count badge and accent outline while any filter is set.
 /// Opens [_FilterPanel] under itself, with no scrim.
 class _FilterButton extends ConsumerStatefulWidget {
-  const _FilterButton();
+  const _FilterButton({required this.width});
+
+  final double width;
 
   @override
   ConsumerState<_FilterButton> createState() => _FilterButtonState();
@@ -571,7 +630,7 @@ class _FilterButtonState extends ConsumerState<_FilterButton> {
             _FilterPanelOverlay(link: _link, onClose: _close),
         child: ToolbarBox(
           key: const ValueKey('toolbar-filter'),
-          width: _kFilterWidth,
+          width: widget.width,
           borderColor: count > 0 ? scheme.primary : null,
           child: InkWell(
             focusNode: _focus,
@@ -589,9 +648,8 @@ class _FilterButtonState extends ConsumerState<_FilterButton> {
                     color: scheme.onSurfaceVariant,
                   ),
                   const SizedBox(width: _kGap),
-                  // Loose fit: the label keeps its intrinsic width (no gap
-                  // opens or closes around it) and only ellipsizes if a
-                  // wider font or text scale ever exceeds the fitted width.
+                  // Loose fit: the label keeps its intrinsic width, which
+                  // the measured box fits; ellipsis is only a guard.
                   const Flexible(
                     child: Text(
                       'Filter',
