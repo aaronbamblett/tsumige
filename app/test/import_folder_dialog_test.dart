@@ -324,8 +324,9 @@ void main() {
       expect(find.text('Add games'), findsOneWidget);
       expect(find.text('DEMO'), findsOneWidget);
       expect(find.text('Rena-sensei to Pool Ryokou'), findsOneWidget);
-      expect(find.text('Solo Quest'), findsOneWidget);
-      expect(find.text('Solo Quest Remake'), findsNothing);
+      expect(find.text('Solo Quest'), findsNothing);
+      expect(find.text('Solo Quest Remake'), findsOneWidget);
+      expect(find.text('Best match'), findsOneWidget);
       expect(find.text('Nothing Here'), findsOneWidget);
       expect(find.text('Owned Game'), findsNothing);
       expect(find.text('Matched'), findsNothing);
@@ -441,7 +442,7 @@ void main() {
     await tester.tap(find.byKey(const Key('import-pick-cancel')));
     await _settle(tester);
     expect(find.text('Select games to import'), findsOneWidget);
-    expect(find.text('Solo Quest'), findsOneWidget);
+    expect(find.text('Solo Quest Remake'), findsOneWidget);
     expect(_checked(tester, 4), isFalse);
   });
 

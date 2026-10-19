@@ -558,7 +558,12 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final inLibrary = _inLibrary(row, games, libraryExes);
-    final vn = row.state == ImportMatchState.matched ? row.vn : null;
+    final vn =
+        row.state == ImportMatchState.matched ||
+            row.state == ImportMatchState.check
+        ? row.vn
+        : null;
+    final isCheck = row.state == ImportMatchState.check && vn != null;
     final canPick = !inLibrary && !_saving;
     final unmatched = vn == null;
     Widget nameText = Text(
@@ -617,14 +622,37 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
             const SizedBox(width: 12),
             Expanded(
               flex: 5,
-              child: InkWell(
-                key: Key('import-name-$index'),
-                borderRadius: BorderRadius.circular(6),
-                onTap: canPick ? () => _openPick(index) : null,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: nameText,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  InkWell(
+                    key: Key('import-name-$index'),
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: canPick ? () => _openPick(index) : null,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: nameText,
+                    ),
+                  ),
+                  if (isCheck)
+                    Container(
+                      height: 24,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: scheme.onSurface.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Best match',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
             const SizedBox(width: 12),
