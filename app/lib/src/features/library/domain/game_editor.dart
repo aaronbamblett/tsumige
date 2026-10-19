@@ -158,6 +158,43 @@ class GameEditor {
     _ref.invalidate(libraryProvider);
   }
 
+  /// Removes the group; its members become their own tiles again. When the
+  /// split group is open, the pane stays on the shown member.
+  Future<void> splitGroup(String groupId, {BuildContext? context}) async {
+    final loaded = _ref.read(libraryProvider).value;
+    if (loaded == null) return;
+    final index =
+        loaded.library.groups.indexWhere((gr) => gr.id == groupId);
+    if (index < 0) return;
+    Game? shown;
+    if (_ref.read(selectedGameIdProvider) == groupId) {
+      final byId = {for (final g in loaded.library.games) g.id: g};
+      shown = resolvePickedMember(loaded.library.groups[index], byId);
+    }
+    loaded.library.groups.removeAt(index);
+    try {
+      await _ref.read(libraryRepositoryProvider).save(loaded);
+    } on ChangedOnDisk {
+      _ref.invalidate(libraryProvider);
+      if (context?.mounted == false) return;
+      _tell(context, changedOnDiskMessage, error: false);
+      return;
+    } catch (e) {
+      _ref.invalidate(libraryProvider);
+      if (context?.mounted == false) return;
+      _tell(context, '$e', error: true);
+      return;
+    }
+    if (_ref.read(selectedGameIdProvider) == groupId) {
+      if (shown != null) {
+        _ref.read(selectedGameIdProvider.notifier).select(shown.id);
+      } else {
+        _ref.read(selectedGameIdProvider.notifier).clear();
+      }
+    }
+    _ref.invalidate(libraryProvider);
+  }
+
   void _tell(BuildContext? context, String message, {required bool error}) {
     if (context == null || !context.mounted) return;
     if (error) {
@@ -167,7 +204,6 @@ class GameEditor {
     }
   }
 }
-
 
 /// Cover picker seam: tests override this so no real dialog ever opens.
 @riverpod

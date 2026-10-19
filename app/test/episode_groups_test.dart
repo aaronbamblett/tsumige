@@ -178,4 +178,26 @@ void main() {
     expect(fake.loaded.library.groups.single.lastPickedId, 'ep2');
   });
 
+  testWidgets('split restores separate tiles and drops the group',
+      (tester) async {
+    final fake = await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
+    await tester.tap(find.text('Nine Nine'));
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Split into separate tiles'));
+    await tester.pump();
+    await tester.pump();
+    expect(fake.loaded.library.groups, isEmpty);
+    expect(find.byType(GameCoverTile), findsNWidgets(5));
+    Finder gridText(String text) => find.descendant(
+          of: find.byType(GameCoverTile),
+          matching: find.text(text),
+        );
+    expect(gridText('9-nine- Episode 1'), findsOneWidget);
+    expect(gridText('9-nine- Episode 2'), findsOneWidget);
+    expect(gridText('9-nine- NewEpisode'), findsOneWidget);
+    expect(paneText('9-nine- Episode 1'), findsOneWidget);
+  });
 }

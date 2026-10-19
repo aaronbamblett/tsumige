@@ -598,11 +598,23 @@ class _HeroControls extends ConsumerWidget {
                     );
               case 'delete':
                 _deleteGame(context, ref, game);
+              case 'split':
+                final splitGroup = group;
+                if (splitGroup != null) {
+                  ref
+                      .read(gameEditorProvider)
+                      .splitGroup(splitGroup.id, context: context);
+                }
             }
           },
           itemBuilder: (context) => [
             const PopupMenuItem(value: 'edit', child: Text('Edit…')),
             const PopupMenuItem(value: 'art', child: Text('Change art…')),
+            if (group != null)
+              const PopupMenuItem(
+                value: 'split',
+                child: Text('Split into separate tiles'),
+              ),
             PopupMenuItem(
               value: 'adult',
               child: Text(game.isAdult ? 'Mark as not adult' : 'Mark as adult'),
