@@ -568,6 +568,14 @@ void main() {
       expect(stripLanguageTag('GameEnglish'), 'Game');
     });
 
+    test('a lowercase word ending is not a tag', () {
+      expect(stripLanguageTag('Raven'), isNull);
+      expect(stripLanguageTag('Heaven'), isNull);
+      expect(stripLanguageTag('Eden'), isNull);
+      expect(stripLanguageTag('Kitchen'), isNull);
+      expect(stripLanguageTag('Heaven Eng'), 'Heaven');
+    });
+
     test('names without a tag stay whole', () {
       expect(stripLanguageTag('KANADE'), isNull);
       expect(stripLanguageTag('OPEN'), isNull);

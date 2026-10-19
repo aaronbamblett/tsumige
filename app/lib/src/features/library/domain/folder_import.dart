@@ -714,7 +714,8 @@ String? stripLanguageTag(String query) {
   for (final tag in _languageTags) {
     if (word.length > tag.length &&
         lower.endsWith(tag) &&
-        _isAsciiLower(word[word.length - tag.length - 1])) {
+        _isAsciiLower(word[word.length - tag.length - 1]) &&
+        _isAsciiUpper(word[word.length - tag.length])) {
       return word.substring(0, word.length - tag.length);
     }
   }
@@ -724,6 +725,11 @@ String? stripLanguageTag(String query) {
 bool _isAsciiLower(String char) {
   final code = char.codeUnitAt(0);
   return code >= 0x61 && code <= 0x7a;
+}
+
+bool _isAsciiUpper(String char) {
+  final code = char.codeUnitAt(0);
+  return code >= 0x41 && code <= 0x5a;
 }
 
 /// The queries to try for a cleaned folder name, in order: the name
