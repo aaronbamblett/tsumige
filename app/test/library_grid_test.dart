@@ -453,11 +453,11 @@ void main() {
     expect(container.read(settledCoverWidthProvider), 300);
   });
 
-  testWidgets('tiles show no VNDB Rating text', (tester) async {
+  testWidgets('tiles show no VNDB rating text', (tester) async {
     await pumpLibrary(tester, [
       core.Game(id: 'g1', title: 'Alpha', vndbRating: 75.0),
     ]);
-    expect(find.textContaining('VNDB Rating'), findsNothing);
+    expect(find.textContaining('VNDB rating'), findsNothing);
   });
 
   testWidgets('tile title area has no fill when selected or hovered', (

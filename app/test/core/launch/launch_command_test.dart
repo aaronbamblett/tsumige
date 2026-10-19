@@ -236,7 +236,7 @@ void main() {
     expect(
       () => build(game, overrideExe: '/games/suba/patcher.exe'),
       throwsA(isA<LaunchConfigError>().having((e) => e.message, 'message',
-          'Run .exe inside prefix needs Proton or Wine')),
+          'Run EXE inside prefix needs Proton or Wine')),
     );
   });
 
@@ -248,7 +248,7 @@ void main() {
     expect(
       () => build(game, overrideExe: '/games/suba/other.sh'),
       throwsA(isA<LaunchConfigError>().having((e) => e.message, 'message',
-          'Run .exe inside prefix needs Proton or Wine')),
+          'Run EXE inside prefix needs Proton or Wine')),
     );
   });
 
@@ -257,7 +257,7 @@ void main() {
     expect(
       () => build(game),
       throwsA(isA<LaunchConfigError>()
-          .having((e) => e.message, 'message', 'No executable set')),
+          .having((e) => e.message, 'message', 'No game file set')),
     );
   });
 

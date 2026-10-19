@@ -213,8 +213,8 @@ void main() {
     await pumpLaunch(tester, [nativeGame('g1', 'Alpha')]);
     await openPane(tester, 'Alpha');
     expect(tester.widget<BrandButton>(launchButton()).onPressed, isNull);
-    expect(launchTooltip(tester), 'No executable set');
-    expect(find.text('Run .exe inside prefix…'), findsNothing);
+    expect(launchTooltip(tester), 'No game file set');
+    expect(find.text('Run EXE inside prefix…'), findsNothing);
   });
 
   testWidgets('launch is disabled when the steam app id is missing',
@@ -236,9 +236,9 @@ void main() {
     await openPane(tester, 'Alpha');
     expect(tester.widget<BrandButton>(launchButton()).onPressed, isNull);
     expect(launchTooltip(tester), 'umu-run not found on PATH');
-    expect(find.text('Run .exe inside prefix…'), findsNothing);
+    expect(find.text('Run EXE inside prefix…'), findsNothing);
     await openLaunchTab(tester);
-    expect(find.text('Run .exe inside prefix…'), findsOneWidget);
+    expect(find.text('Run EXE inside prefix…'), findsOneWidget);
   });
 
   testWidgets('proton launch is enabled with umu-run', (tester) async {
@@ -259,9 +259,9 @@ void main() {
     ], umu: '/usr/bin/umu-run');
     await openPane(tester, 'Alpha');
     expect(tester.widget<BrandButton>(launchButton()).onPressed, isNotNull);
-    expect(find.text('Run .exe inside prefix…'), findsNothing);
+    expect(find.text('Run EXE inside prefix…'), findsNothing);
     await openLaunchTab(tester);
-    expect(find.text('Run .exe inside prefix…'), findsOneWidget);
+    expect(find.text('Run EXE inside prefix…'), findsOneWidget);
   });
 
   testWidgets('the footer holds only Play, not run-exe', (tester) async {
@@ -269,7 +269,7 @@ void main() {
         umu: '/usr/bin/umu-run');
     await openPane(tester, 'Alpha');
     expect(launchButton(), findsOneWidget);
-    expect(find.text('Run .exe inside prefix…'), findsNothing);
+    expect(find.text('Run EXE inside prefix…'), findsNothing);
   });
 
   testWidgets('pressing launch calls the runner once', (tester) async {
@@ -491,8 +491,8 @@ void main() {
         umu: '/usr/bin/umu-run', runner: runner, picker: noPick);
     await openPane(tester, 'Alpha');
     await openLaunchTab(tester);
-    await tester.ensureVisible(find.text('Run .exe inside prefix…'));
-    await tester.tap(find.text('Run .exe inside prefix…'));
+    await tester.ensureVisible(find.text('Run EXE inside prefix…'));
+    await tester.tap(find.text('Run EXE inside prefix…'));
     await tester.pump();
     await tester.pump();
     expect(runner.calls, isEmpty);
@@ -505,8 +505,8 @@ void main() {
         umu: '/usr/bin/umu-run', runner: runner, picker: pickPatch);
     await openPane(tester, 'Alpha');
     await openLaunchTab(tester);
-    await tester.ensureVisible(find.text('Run .exe inside prefix…'));
-    await tester.tap(find.text('Run .exe inside prefix…'));
+    await tester.ensureVisible(find.text('Run EXE inside prefix…'));
+    await tester.tap(find.text('Run EXE inside prefix…'));
     await tester.pump();
     await tester.pump();
     expect(runner.calls, hasLength(1));
@@ -578,13 +578,13 @@ void main() {
     // loop runs; alternate frames with short real-async windows.
     for (var i = 0;
         i < 50 &&
-            find.text('Recovered 1 play session(s)').evaluate().isEmpty;
+            find.text('Recovered 1 play session').evaluate().isEmpty;
         i++) {
       await tester.pump(const Duration(milliseconds: 100));
       await tester
           .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
     }
-    expect(find.text('Recovered 1 play session(s)'), findsOneWidget);
+    expect(find.text('Recovered 1 play session'), findsOneWidget);
     expect(File('${running.path}/g1.json').existsSync(), isFalse);
     await tester.pump(const Duration(seconds: 6));
   });

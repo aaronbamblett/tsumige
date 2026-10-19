@@ -108,7 +108,11 @@ class LibraryScreen extends HookConsumerWidget {
         if (recovered > 0) {
           ref.invalidate(libraryProvider);
           if (context.mounted) {
-            Toast(context).show('Recovered $recovered play session(s)');
+            Toast(context).show(
+              recovered == 1
+                  ? 'Recovered 1 play session'
+                  : 'Recovered $recovered play sessions',
+            );
           }
         }
         final loaded = ref.read(libraryProvider).value;

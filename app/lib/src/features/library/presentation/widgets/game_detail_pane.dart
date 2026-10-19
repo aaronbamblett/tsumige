@@ -383,7 +383,7 @@ class _MetaRow extends StatelessWidget {
           ),
           Flexible(
             child: Text(
-              votes == null ? 'VNDB Rating' : 'VNDB Rating · $votes votes',
+              votes == null ? 'VNDB rating' : 'VNDB rating · $votes votes',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: style,
@@ -767,7 +767,7 @@ class _Footer extends ConsumerWidget {
       if (game.launch.steamAppId == null) return 'Steam App ID is not set';
     } else {
       final exe = game.launch.executable;
-      if (exe == null || exe.isEmpty) return 'No executable set';
+      if (exe == null || exe.isEmpty) return 'No game file set';
       if (mode == LaunchMode.proton && ref.watch(umuRunPathProvider) == null) {
         return 'umu-run not found on PATH';
       }

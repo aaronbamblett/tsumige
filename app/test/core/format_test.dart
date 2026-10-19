@@ -27,6 +27,6 @@ void main() {
   });
 
   test('formatVndbRating', () {
-    expect(formatVndbRating(84.23), 'VNDB Rating 8.4');
+    expect(formatVndbRating(84.23), 'VNDB rating 8.4');
   });
 }

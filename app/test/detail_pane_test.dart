@@ -432,7 +432,7 @@ void main() {
     ]);
     await openPane(tester, 'Alpha');
     expect(find.text('★ 8.5'), findsOneWidget);
-    expect(find.text('VNDB Rating · 12 votes'), findsOneWidget);
+    expect(find.text('VNDB rating · 12 votes'), findsOneWidget);
     expect(find.text('2024-05-06'), findsOneWidget);
     expect(paneText(tester, 'Tags'), findsOneWidget);
     expect(paneText(tester, 'Action'), findsOneWidget);
@@ -837,7 +837,7 @@ void main() {
     final launchRect = tester.getRect(launch);
     expect(launchRect.top, greaterThanOrEqualTo(0));
     expect(launchRect.bottom, lessThanOrEqualTo(800));
-    expect(find.byTooltip('No executable set'), findsOneWidget);
+    expect(find.byTooltip('No game file set'), findsOneWidget);
   });
 
   testWidgets('run exe button is absent for a Native game', (tester) async {
@@ -849,7 +849,7 @@ void main() {
     ]);
     await openPane(tester, 'Alpha');
     expect(
-        find.widgetWithText(BrandGlassButton, 'Run .exe inside prefix…'),
+        find.widgetWithText(BrandGlassButton, 'Run EXE inside prefix…'),
         findsNothing);
     expect(find.widgetWithText(BrandButton, 'Play'), findsOneWidget);
   });
@@ -858,7 +858,7 @@ void main() {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
     expect(find.widgetWithText(BrandButton, 'Play'), findsOneWidget);
-    expect(find.text('Run .exe inside prefix…'), findsNothing);
+    expect(find.text('Run EXE inside prefix…'), findsNothing);
   });
 
   testWidgets('launch tab falls back to global defaults', (tester) async {
@@ -882,7 +882,7 @@ void main() {
     ]);
     await openPane(tester, 'Alpha');
     await openTab(tester, 'Launch');
-    expect(find.text('Steam app ID'), findsOneWidget);
+    expect(find.text('Steam App ID'), findsOneWidget);
     final appIdField = find.descendant(
       of: find.byKey(const Key('launch-steam-app-id')),
       matching: find.byType(TextField),
@@ -1020,7 +1020,7 @@ void main() {
       core.Game(id: 'g1', title: 'Alpha', vndbRating: 85.0),
     ]);
     await openPane(tester, 'Alpha');
-    expect(find.text('VNDB Rating'), findsOneWidget);
+    expect(find.text('VNDB rating'), findsOneWidget);
     expect(find.text('★ 8.5'), findsOneWidget);
     expect(find.textContaining('votes'), findsNothing);
   });
@@ -1045,7 +1045,7 @@ void main() {
     ]);
     await openPane(tester, 'Alpha');
     expect(find.text('2021-08-26'), findsOneWidget);
-    expect(find.text('VNDB Rating'), findsNothing);
+    expect(find.text('VNDB rating'), findsNothing);
   });
 
   testWidgets('description has no expand chevron when it fits four lines',
@@ -1082,7 +1082,7 @@ void main() {
     expect(tester.widget<TextField>(field).decoration?.hintText, 'No notes');
     expect(paneText(tester, 'Tags'), findsOneWidget);
     expect(paneText(tester, '+'), findsOneWidget);
-    expect(find.text('VNDB Rating'), findsNothing);
+    expect(find.text('VNDB rating'), findsNothing);
   });
 
   testWidgets('rating value divides by ten', (tester) async {
@@ -1480,11 +1480,6 @@ void main() {
     await pumpLibrary(tester, games);
     await openEditDetails(tester, 'My Name');
     expect(find.text('Use VNDB value'), findsOneWidget);
-    expect(
-      find.text(
-          'Your values are kept when Tsumige refreshes data from VNDB.'),
-      findsOneWidget,
-    );
     await tester.tap(find.text('Use VNDB value'));
     await tester.pump();
     expect(find.text('VNDB Name'), findsOneWidget);
@@ -1630,11 +1625,6 @@ void main() {
     await pumpLibrary(tester, games);
     await openEditDetails(tester, 'Gnosia');
     expect(find.text('Use VNDB value'), findsNothing);
-    expect(
-      find.text(
-          'Your values are kept when Tsumige refreshes data from VNDB.'),
-      findsNothing,
-    );
     await tester.enterText(
         find.byKey(const Key('edit-details-original-title')), 'グノーシア');
     await tester.tap(find.byKey(const Key('edit-details-save')));
@@ -1696,7 +1686,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Change art…'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('From file…'));
+      await tester.tap(find.text('Choose file…'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Save'));
       await tester.pump();
@@ -1786,7 +1776,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Change art…'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('From file…'));
+    await tester.tap(find.text('Choose file…'));
     await tester.pump();
     await tester.pump();
     expect(find.textContaining('Flatpak portal'), findsOneWidget);

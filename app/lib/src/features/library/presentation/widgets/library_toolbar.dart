@@ -31,7 +31,7 @@ const Map<keys.SortField, String> sortFieldLabels = {
   keys.SortField.title: 'Title',
   keys.SortField.lastPlayed: 'Last played',
   keys.SortField.playtime: 'Playtime',
-  keys.SortField.vndbRating: 'VNDB Rating',
+  keys.SortField.vndbRating: 'VNDB rating',
 };
 
 const Map<keys.AdultFilter, String> adultFilterLabels = {

@@ -159,7 +159,7 @@ void main() {
     expect(find.byKey(const Key('launch-mode-unavailable')),
         findsOneWidget);
     expect(find.text("Proton isn't available on macOS."), findsOneWidget);
-    expect(find.text('Run .exe inside prefix…'), findsNothing);
+    expect(find.text('Run EXE inside prefix…'), findsNothing);
 
     final play = tester.widget<Tooltip>(
         find.ancestor(of: find.text('Play'), matching: find.byType(Tooltip)).first);
@@ -203,7 +203,7 @@ void main() {
       expect(find.byKey(Key('mode-$key')), findsOneWidget);
     }
     expect(find.byKey(const Key('launch-mode-unavailable')), findsNothing);
-    expect(find.text('Run .exe inside prefix…'), findsOneWidget);
+    expect(find.text('Run EXE inside prefix…'), findsOneWidget);
   });
 
   testWidgets('mode switch hides and shows the right fields',
@@ -212,7 +212,7 @@ void main() {
     await openLaunch(tester, 'Alpha');
     expect(find.text('Proton version'), findsOneWidget);
     expect(find.text('Prefix'), findsOneWidget);
-    expect(find.text('Steam app ID'), findsNothing);
+    expect(find.text('Steam App ID'), findsNothing);
 
     await tester.tap(find.byKey(const Key('mode-native')));
     await tester.pumpAndSettle();
@@ -224,7 +224,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('mode-steam')));
     await tester.pumpAndSettle();
-    expect(find.text('Steam app ID'), findsOneWidget);
+    expect(find.text('Steam App ID'), findsOneWidget);
     expect(find.text('Game file'), findsNothing);
     expect(find.text('Arguments'), findsNothing);
 
@@ -232,7 +232,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Wine build'), findsOneWidget);
     expect(find.text('Prefix'), findsOneWidget);
-    expect(find.text('Steam app ID'), findsNothing);
+    expect(find.text('Steam App ID'), findsNothing);
   });
 
   testWidgets('text field saves on blur and Esc reverts', (tester) async {
@@ -410,15 +410,19 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('the args preview count is right', (tester) async {
+  testWidgets('the args footer shows only parse errors', (tester) async {
     await pumpLaunch(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openLaunch(tester, 'Alpha');
     await openAdvanced(tester);
-    expect(find.text('Splits into 0 arguments'), findsOneWidget);
+    expect(find.textContaining('Splits into'), findsNothing);
     await tester.enterText(
         find.byKey(const Key('launch-arguments')), '--foo "a b"');
     await tester.pump();
-    expect(find.text('Splits into 2 arguments'), findsOneWidget);
+    expect(find.textContaining('Splits into'), findsNothing);
+    await tester.enterText(
+        find.byKey(const Key('launch-arguments')), '--foo "unclosed');
+    await tester.pump();
+    expect(find.textContaining('Unclosed'), findsWidgets);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
   });
@@ -610,7 +614,7 @@ void main() {
     await openLaunch(tester, 'Alpha');
     final button = find.byKey(const Key('launch-run-exe'));
     expect(button, findsOneWidget);
-    expect(find.widgetWithText(OutlinedButton, 'Run .exe inside prefix…'),
+    expect(find.widgetWithText(OutlinedButton, 'Run EXE inside prefix…'),
         findsOneWidget);
     expect(tester.widget<OutlinedButton>(button).enabled, isTrue);
     final prefixBottom =
@@ -629,7 +633,7 @@ void main() {
     );
     await openLaunch(tester, 'Alpha');
     expect(find.byKey(const Key('launch-run-exe')), findsNothing);
-    expect(find.text('Run .exe inside prefix…'), findsNothing);
+    expect(find.text('Run EXE inside prefix…'), findsNothing);
   });
 
   testWidgets('run exe is disabled while the game is running',
