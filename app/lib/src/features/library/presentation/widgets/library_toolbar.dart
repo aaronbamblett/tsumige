@@ -699,6 +699,69 @@ int activeFilterCount(
     (adult != keys.AdultFilter.all ? 1 : 0) +
     (developer != null ? 1 : 0);
 
+void clearAllFilters(WidgetRef ref) {
+  ref.read(tagFilterProvider.notifier).set(null);
+  ref.read(adultFilterProvider.notifier).set(keys.AdultFilter.all);
+  ref.read(developerFilterProvider.notifier).set(null);
+}
+
+class ActiveFilterChips extends ConsumerWidget {
+  const ActiveFilterChips({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tag = ref.watch(tagFilterProvider);
+    final adult = ref.watch(adultFilterProvider);
+    final developer = ref.watch(developerFilterProvider);
+    if (tag == null && adult == keys.AdultFilter.all && developer == null) {
+      return const SizedBox.shrink();
+    }
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        LibraryGrid.horizontalPadding,
+        4,
+        LibraryGrid.horizontalPadding,
+        4,
+      ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (developer != null)
+            TagChip(
+              label: 'Developer: ${developer.name}',
+              onRemove: () =>
+                  ref.read(developerFilterProvider.notifier).set(null),
+            ),
+          if (tag != null)
+            TagChip(
+              // Stored VNDB filters carry a `vndb:` prefix; show the bare name.
+              label: tag.startsWith(vndbTagPrefix)
+                  ? tag.substring(vndbTagPrefix.length)
+                  : tag,
+              onRemove: () => ref.read(tagFilterProvider.notifier).set(null),
+            ),
+          if (adult != keys.AdultFilter.all)
+            TagChip(
+              label: adultFilterLabels[adult]!,
+              onRemove: () => ref
+                  .read(adultFilterProvider.notifier)
+                  .set(keys.AdultFilter.all),
+            ),
+          TextButton(
+            key: const ValueKey('active-filters-clear'),
+            style: TextButton.styleFrom(foregroundColor: scheme.primary),
+            onPressed: () => clearAllFilters(ref),
+            child: const Text('Clear all'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _FilterPanelOverlay extends StatelessWidget {
   const _FilterPanelOverlay({required this.link, required this.onClose});
 
@@ -763,11 +826,7 @@ class _FilterPanelState extends ConsumerState<_FilterPanel> {
     super.dispose();
   }
 
-  void _clearAll() {
-    ref.read(tagFilterProvider.notifier).set(null);
-    ref.read(adultFilterProvider.notifier).set(keys.AdultFilter.all);
-    ref.read(developerFilterProvider.notifier).set(null);
-  }
+  void _clearAll() => clearAllFilters(ref);
 
   @override
   Widget build(BuildContext context) {

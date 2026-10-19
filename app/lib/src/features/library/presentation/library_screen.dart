@@ -180,6 +180,9 @@ class LibraryScreen extends HookConsumerWidget {
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 const GroupSuggestionNotice(),
+                                const ActiveFilterChips(
+                                  key: ValueKey('active-filter-chips'),
+                                ),
                                 Expanded(
                                   child: LibraryGrid(tiles: tiles),
                                 ),

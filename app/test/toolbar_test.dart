@@ -407,7 +407,7 @@ void main() {
         .set(core.Developer(id: 'p1', name: 'Azarashi Soft'));
     await tester.pumpAndSettle();
     expect(filterBadge(tester, '3'), findsOneWidget);
-    await tester.tap(find.text('Clear all'));
+    await tester.tap(find.widgetWithText(BrandGlassButton, 'Clear all'));
     await tester.pumpAndSettle();
     expect(container.read(tagFilterProvider), isNull);
     expect(container.read(adultFilterProvider), keys.AdultFilter.all);
@@ -553,6 +553,73 @@ void main() {
     final searchWidth =
         tester.getSize(find.byKey(const ValueKey('toolbar-search'))).width;
     expect(searchWidth, moreOrLessEquals(200, epsilon: 1.0));
+  });
+
+  testWidgets('developer filter shows a removable chip above the grid',
+      (tester) async {
+    await pumpToolbar(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        developers: [core.Developer(id: 'p1', name: 'Azarashi Soft')],
+      ),
+      core.Game(id: 'g2', title: 'Beta'),
+    ]);
+    expect(find.text('Developer: Azarashi Soft'), findsNothing);
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(LibraryTopBar)));
+    container
+        .read(developerFilterProvider.notifier)
+        .set(core.Developer(id: 'p1', name: 'Azarashi Soft'));
+    await tester.pumpAndSettle();
+    expect(find.text('Developer: Azarashi Soft'), findsOneWidget);
+    expect(find.text('Beta'), findsNothing);
+    expect(filterBadge(tester), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Developer: Azarashi Soft')).dx,
+      moreOrLessEquals(20.0 + 11.0, epsilon: 1.0),
+    );
+    await tester.tap(find.byTooltip('Remove Developer: Azarashi Soft'));
+    await tester.pumpAndSettle();
+    expect(find.text('Developer: Azarashi Soft'), findsNothing);
+    expect(find.text('Beta'), findsOneWidget);
+    expect(filterBadge(tester), findsNothing);
+  });
+
+  testWidgets('tag and adult filters show chips above the grid',
+      (tester) async {
+    await pumpToolbar(tester, taggedGames());
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(LibraryTopBar)));
+    container.read(tagFilterProvider.notifier).set('Romance');
+    container.read(adultFilterProvider.notifier).set(keys.AdultFilter.hide);
+    await tester.pumpAndSettle();
+    expect(find.text('Romance'), findsOneWidget);
+    expect(find.text('Hide adult'), findsOneWidget);
+    expect(filterBadge(tester, '2'), findsOneWidget);
+  });
+
+  testWidgets('Clear all above the grid clears every filter', (tester) async {
+    await pumpToolbar(tester, taggedGames());
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(LibraryTopBar)));
+    container.read(tagFilterProvider.notifier).set('Romance');
+    container.read(adultFilterProvider.notifier).set(keys.AdultFilter.hide);
+    container
+        .read(developerFilterProvider.notifier)
+        .set(core.Developer(id: 'p1', name: 'Azarashi Soft'));
+    await tester.pumpAndSettle();
+    expect(find.text('No games match'), findsOneWidget);
+    expect(find.text('Clear all'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('active-filters-clear')));
+    await tester.pumpAndSettle();
+    expect(container.read(tagFilterProvider), isNull);
+    expect(container.read(adultFilterProvider), keys.AdultFilter.all);
+    expect(container.read(developerFilterProvider), isNull);
+    expect(find.text('Clear all'), findsNothing);
+    expect(find.text('Romance'), findsNothing);
+    expect(filterBadge(tester), findsNothing);
+    expect(find.text('Beta'), findsOneWidget);
   });
 
   testWidgets('toolbar does not overlap Add with the pane open and a developer set',
