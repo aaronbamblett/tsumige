@@ -471,6 +471,30 @@ void main() {
     expect(fake.loaded.library.groups.single.name, 'Renamed');
   });
 
+  testWidgets('the name field is focused, selected, and Enter saves',
+      (tester) async {
+    final fake = await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
+    await tester.tap(find.text('9-nine-'));
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rename group…'));
+    await tester.pumpAndSettle();
+    final field = tester.widget<TextField>(groupNameField());
+    expect(tester.binding.focusManager.primaryFocus, field.focusNode);
+    expect(
+      field.controller!.selection,
+      const TextSelection(baseOffset: 0, extentOffset: 7),
+    );
+    await tester.enterText(groupNameField(), 'X');
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(find.text('X'), findsOneWidget);
+    expect(fake.loaded.library.groups.single.name, 'X');
+  });
+
   testWidgets('split restores separate tiles and drops the group',
       (tester) async {
     final fake = await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
