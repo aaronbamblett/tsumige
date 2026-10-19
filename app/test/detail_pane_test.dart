@@ -1402,7 +1402,14 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(TextButton, 'Delete'));
       await tester.pumpAndSettle();
-    }, () => Directory(p.join(temp.path, 'trash')).existsSync());
+    }, () {
+      if (games.length != 1) return false;
+      final trash = Directory(p.join(temp.path, 'trash'));
+      if (!trash.existsSync()) return false;
+      final folders = trash.listSync().whereType<Directory>().toList();
+      if (folders.length != 1) return false;
+      return File(p.join(folders.single.path, 'game.json')).existsSync();
+    });
     expect(find.byType(GameDetailPane), findsNothing);
     expect(games, hasLength(1));
     final trash = Directory(p.join(temp.path, 'trash'));
