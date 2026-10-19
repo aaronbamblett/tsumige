@@ -56,9 +56,13 @@ class _EditDetailsDialogState extends ConsumerState<EditDetailsDialog> {
   late final String _heading;
   late final String _initialTitle;
   late final String? _initialOriginalTitle;
+  late final String _initialOriginalTitleText;
   late final String? _initialReleased;
+  late final String _initialReleasedText;
   late final List<Developer> _initialDevelopers;
+  late final String _initialDevelopersText;
   late final List<Map<String, Object?>> _initialDevelopersJson;
+  late final List<Developer> _originalDevelopers;
   late final Map<String, Object?> _originals;
 
   String? _releaseError;
@@ -72,15 +76,19 @@ class _EditDetailsDialogState extends ConsumerState<EditDetailsDialog> {
     _heading = game.title;
     _initialTitle = game.title;
     _initialOriginalTitle = game.vndbOriginalTitle;
+    _initialOriginalTitleText = game.vndbOriginalTitle ?? '';
     _initialReleased = game.released;
+    _initialReleasedText = game.released ?? '';
     _initialDevelopers = [...game.developers];
+    _initialDevelopersText = _developerNames(_initialDevelopers);
     _initialDevelopersJson = _developersJson(_initialDevelopers);
     _originals = {...game.vndbOriginals};
+    _originalDevelopers = _developersFromJson(_originals[vndbDevelopersKey]);
     _name = TextEditingController(text: game.title);
-    _originalTitle = TextEditingController(text: game.vndbOriginalTitle ?? '');
-    _developers = TextEditingController(text: _developerNames(_initialDevelopers));
-    _released = TextEditingController(text: game.released ?? '');
-    _releaseError = _validateRelease(_released.text);
+    _originalTitle = TextEditingController(text: _initialOriginalTitleText);
+    _developers = TextEditingController(text: _initialDevelopersText);
+    _released = TextEditingController(text: _initialReleasedText);
+    _releaseError = _releaseErrorFor(_released.text);
     _name.addListener(_sync);
     _released.addListener(_sync);
   }
@@ -96,8 +104,11 @@ class _EditDetailsDialogState extends ConsumerState<EditDetailsDialog> {
 
   void _sync() {
     if (!mounted) return;
-    setState(() => _releaseError = _validateRelease(_released.text));
+    setState(() => _releaseError = _releaseErrorFor(_released.text));
   }
+
+  String? _releaseErrorFor(String text) =>
+      text == _initialReleasedText ? null : _validateRelease(text);
 
   void _close() {
     if (_saving) return;
@@ -112,30 +123,40 @@ class _EditDetailsDialogState extends ConsumerState<EditDetailsDialog> {
     final title = _name.text.trim();
     final originalTitle = _nullIfEmpty(_originalTitle.text);
     final released = _nullIfEmpty(_released.text);
-    final developers = _parseDevelopers(_developers.text, _initialDevelopers);
     await ref.read(gameEditorProvider).update(
       widget.game.id,
       (game) {
-        _write(game, vndbTitleKey, _initialTitle, title, () {
-          game.title = title;
-        });
-        _write(
-          game,
-          vndbOriginalTitleKey,
-          _initialOriginalTitle,
-          originalTitle,
-          () => game.vndbOriginalTitle = originalTitle,
-        );
-        _write(game, vndbReleasedKey, _initialReleased, released, () {
-          game.released = released;
-        });
-        _write(
-          game,
-          vndbDevelopersKey,
-          _initialDevelopersJson,
-          _developersJson(developers),
-          () => game.developers = developers,
-        );
+        if (_name.text != _initialTitle) {
+          _write(game, vndbTitleKey, _initialTitle, title, () {
+            game.title = title;
+          });
+        }
+        if (_originalTitle.text != _initialOriginalTitleText) {
+          _write(
+            game,
+            vndbOriginalTitleKey,
+            _initialOriginalTitle,
+            originalTitle,
+            () => game.vndbOriginalTitle = originalTitle,
+          );
+        }
+        if (_released.text != _initialReleasedText) {
+          _write(game, vndbReleasedKey, _initialReleased, released, () {
+            game.released = released;
+          });
+        }
+        if (_developers.text != _initialDevelopersText) {
+          final developers =
+              _parseDevelopers(_developers.text, _initialDevelopers,
+                  _originalDevelopers);
+          _write(
+            game,
+            vndbDevelopersKey,
+            _initialDevelopersJson,
+            _developersJson(developers),
+            () => game.developers = developers,
+          );
+        }
       },
       context: context,
     );
@@ -157,7 +178,8 @@ class _EditDetailsDialogState extends ConsumerState<EditDetailsDialog> {
         game.vndbOriginals[key] = initial;
       }
       if (game.vndbOriginals.containsKey(key) &&
-          _same(game.vndbOriginals[key], value)) {
+          _same(_normalized(key, game.vndbOriginals[key]),
+              _normalized(key, value))) {
         game.vndbOriginals.remove(key);
       }
     }
@@ -336,6 +358,19 @@ String? _nullIfEmpty(String text) {
 
 bool _same(Object? a, Object? b) => jsonEncode(a) == jsonEncode(b);
 
+/// Developer lists compare by their fields, not by which optional keys the
+/// stored JSON happened to include.
+Object? _normalized(String key, Object? value) {
+  if (key != vndbDevelopersKey) return value;
+  return _developersJson(_developersFromJson(value));
+}
+
+List<Developer> _developersFromJson(Object? raw) => [
+      if (raw is List)
+        for (final entry in raw)
+          if (entry is Map && entry['id'] is String) Developer.fromJson(entry),
+    ];
+
 String _developerNames(List<Developer> developers) => [
   for (final developer in developers)
     if (developer.name.trim().isNotEmpty) developer.name.trim(),
@@ -353,14 +388,17 @@ List<Map<String, Object?>> _developersJson(List<Developer> developers) => [
   for (final developer in developers) developer.toJson(),
 ];
 
-/// Comma-separated names. A name that matches one of the game's developers
-/// keeps that developer's VNDB id; a new name gets no VNDB id.
-List<Developer> _parseDevelopers(String raw, List<Developer> existing) {
-  final byName = {
-    for (final developer in existing)
-      if (developer.name.trim().isNotEmpty)
-        developer.name.trim().toLowerCase(): developer,
-  };
+/// Comma-separated names. A name that matches VNDB's developers or one of the
+/// game's own keeps that developer's VNDB id; a new name gets no VNDB id.
+List<Developer> _parseDevelopers(
+    String raw, List<Developer> existing, List<Developer> vndb) {
+  final byName = <String, Developer>{};
+  for (final developer in [...vndb, ...existing]) {
+    final name = developer.name.trim();
+    if (name.isNotEmpty) {
+      byName.putIfAbsent(name.toLowerCase(), () => developer);
+    }
+  }
   final seen = <String>{};
   final out = <Developer>[];
   for (final part in raw.split(',')) {
@@ -371,10 +409,11 @@ List<Developer> _parseDevelopers(String raw, List<Developer> existing) {
   return out;
 }
 
-/// Accepts `YYYY`, `YYYY-MM` and `YYYY-MM-DD`, with a real month and day.
+/// Accepts `YYYY`, `YYYY-MM` and `YYYY-MM-DD`, with a real month and day,
+/// plus `TBA`, which VNDB uses for an unspecified future date.
 String? _validateRelease(String raw) {
   final text = raw.trim();
-  if (text.isEmpty) return null;
+  if (text.isEmpty || text == 'TBA') return null;
   final match = RegExp(r'^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$').firstMatch(text);
   if (match == null) return _releaseErrorText;
   final month = match.group(2);

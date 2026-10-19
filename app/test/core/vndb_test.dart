@@ -331,6 +331,39 @@ void main() {
     expect(game.developers.single.name, 'Studio');
   });
 
+  test('a refresh keeps edited developers and updates their VNDB original',
+      () async {
+    final loaded = _library([(_uuids[0], 'v1')]);
+    final game = _byVndb(loaded, 'v1');
+    game
+      ..developers = [const Developer(id: '', name: 'Mine')]
+      ..vndbOriginals[vndbDevelopersKey] = [
+        const Developer(id: 'p0', name: 'Old Studio').toJson(),
+      ];
+    final client = _routed(
+      vn: (body) => _ok([
+        {
+          'id': 'v1',
+          'title': 'New Name',
+          'alttitle': 'New Alt',
+          'released': '2021-04-02',
+          'developers': [
+            {'id': 'p1', 'name': 'Studio'},
+          ],
+          'rating': 80,
+          'votecount': 4,
+        },
+      ]),
+    );
+    await refreshVndbData(loaded, client, now: _now, gap: Duration.zero);
+    expect([for (final developer in game.developers) developer.name], ['Mine']);
+    expect(
+      [for (final developer in game.vndbOriginalDevelopers) developer.name],
+      ['Studio'],
+    );
+    expect(game.vndbOriginalDevelopers.single.id, 'p1');
+  });
+
   test('refresh counts notFound', () async {
     final loaded = _library([(_uuids[0], 'v900017'), (_uuids[1], 'v404')]);
     final client = _routed(

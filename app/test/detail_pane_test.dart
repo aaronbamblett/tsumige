@@ -1494,6 +1494,101 @@ void main() {
     expect(games.single.vndbOriginals, isEmpty);
   });
 
+  testWidgets('saving only the name leaves the other fields alone',
+      (tester) async {
+    final games = [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        vndbId: 'v1',
+        vndbOriginalTitle: '',
+        released: '',
+        developers: const [core.Developer(id: 'p1', name: 'Foo, Inc.')],
+      ),
+    ];
+    await pumpLibrary(tester, games);
+    await openEditDetails(tester, 'Alpha');
+    await tester.enterText(
+        find.byKey(const Key('edit-details-name')), 'Alpha Plus');
+    await tester.tap(find.byKey(const Key('edit-details-save')));
+    await tester.pumpAndSettle();
+    expect(games.single.title, 'Alpha Plus');
+    expect(games.single.developers, hasLength(1));
+    expect(games.single.developers.single.name, 'Foo, Inc.');
+    expect(games.single.developers.single.id, 'p1');
+    expect(games.single.vndbOriginalTitle, '');
+    expect(games.single.released, '');
+    expect(games.single.vndbOriginals.keys, [core.vndbTitleKey]);
+    for (final key in [
+      core.vndbOriginalTitleKey,
+      core.vndbDevelopersKey,
+      core.vndbReleasedKey,
+    ]) {
+      expect(games.single.vndbOriginals.containsKey(key), isFalse, reason: key);
+    }
+  });
+
+  testWidgets('a TBA release date opens without an error and saves',
+      (tester) async {
+    final games = [
+      core.Game(id: 'g1', title: 'Alpha', released: 'TBA'),
+    ];
+    await pumpLibrary(tester, games);
+    await openEditDetails(tester, 'Alpha');
+    expect(find.text('Enter a valid release date.'), findsNothing);
+    final save = find.byKey(const Key('edit-details-save'));
+    expect(tester.widget<BrandButton>(save).onPressed, isNotNull);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(games.single.released, 'TBA');
+    expect(games.single.vndbOriginals, isEmpty);
+  });
+
+  testWidgets('Use VNDB value restores developers with their VNDB ids',
+      (tester) async {
+    final games = [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        vndbId: 'v1',
+        developers: const [core.Developer(id: '', name: 'Mine')],
+        vndbOriginals: {
+          core.vndbDevelopersKey: [
+            const core.Developer(id: 'p1', name: 'Studio').toJson(),
+          ],
+        },
+      ),
+    ];
+    await pumpLibrary(tester, games);
+    await openEditDetails(tester, 'Alpha');
+    await tester.tap(find.text('Use VNDB value'));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('edit-details-save')));
+    await tester.pumpAndSettle();
+    expect(games.single.developers.single.name, 'Studio');
+    expect(games.single.developers.single.id, 'p1');
+    expect(games.single.vndbOriginals, isEmpty);
+  });
+
+  testWidgets('typing the VNDB value back removes the key', (tester) async {
+    final games = [
+      core.Game(
+        id: 'g1',
+        title: 'My Name',
+        vndbId: 'v1',
+        vndbOriginals: {core.vndbTitleKey: 'VNDB Name'},
+      ),
+    ];
+    await pumpLibrary(tester, games);
+    await openEditDetails(tester, 'My Name');
+    await tester.enterText(
+        find.byKey(const Key('edit-details-name')), 'VNDB Name');
+    await tester.tap(find.byKey(const Key('edit-details-save')));
+    await tester.pumpAndSettle();
+    expect(games.single.title, 'VNDB Name');
+    expect(games.single.vndbOriginals, isEmpty);
+  });
+
   testWidgets('a bad release date shows an error and disables Save',
       (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
