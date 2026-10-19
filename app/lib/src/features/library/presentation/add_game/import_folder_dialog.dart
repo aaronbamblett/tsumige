@@ -45,6 +45,17 @@ Future<ImportFolderResult?> showImportFolderDialog(
 
 String _games(int count) => count == 1 ? '1 game' : '$count games';
 
+/// The gap between VNDB requests from one import. Overridden with zero
+/// in tests so matching runs without real waiting.
+final importVndbGapProvider = Provider<Duration>(
+  (_) => const Duration(milliseconds: 1600),
+);
+
+/// How long a throttled (429) request waits before its retry.
+final importVndbRetryWaitProvider = Provider<Duration>(
+  (_) => const Duration(seconds: 60),
+);
+
 typedef _Plan = ({List<bool> selected, List<bool> duplicate});
 
 class _ImportRow {
@@ -80,6 +91,19 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   bool _saving = false;
   int _done = 0;
   int _total = 0;
+
+  VndbRequestQueue? _queue;
+
+  /// Every VNDB request from this dialog, paced through one queue.
+  VndbRequestQueue get _vndb {
+    final queue = _queue;
+    if (queue != null) return queue;
+    return _queue = VndbRequestQueue(
+      search: ref.read(vndbSearchClientProvider).search,
+      gap: ref.read(importVndbGapProvider),
+      retryWait: ref.read(importVndbRetryWaitProvider),
+    );
+  }
 
   int? _pickIndex;
   VnSearchResult? _pickSelected;
@@ -222,9 +246,6 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     for (var i = 0; i < fresh.length; i++) {
       if (!mounted || token != _scanToken) return;
       await _match(fresh[i], token);
-      if (i + 1 < fresh.length) {
-        await Future<void>.delayed(const Duration(seconds: 1));
-      }
     }
   }
 
@@ -250,7 +271,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       match = await lookupFolderMatch(
         query: query,
         parentQueries: parents,
-        search: ref.read(vndbSearchClientProvider).search,
+        search: _vndb.search,
       );
     } catch (e) {
       error = '$e';
@@ -307,10 +328,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     });
     List<VnSearchResult> results;
     try {
-      results = rankSearchResults(
-        await ref.read(vndbSearchClientProvider).search(query),
-        query,
-      );
+      results = rankSearchResults(await _vndb.search(query), query);
     } catch (e) {
       if (!mounted || token != _pickToken) return;
       setState(() {

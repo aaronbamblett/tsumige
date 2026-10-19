@@ -4,6 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -764,6 +765,62 @@ List<String> parentFolderQueries({
     dir = parent;
   }
   return out;
+}
+
+/// Every VNDB request from one import, through one queue: at most one
+/// request starts per [gap] (200 requests per 5 minutes is one per
+/// 1.5 s), and a 429 waits [retryWait] and retries the same request, up
+/// to [maxRetries] times. [now] and [delay] are injectable for tests.
+class VndbRequestQueue {
+  VndbRequestQueue({
+    required Future<List<VnSearchResult>> Function(String query) search,
+    this.gap = const Duration(milliseconds: 1600),
+    this.maxRetries = 3,
+    this.retryWait = const Duration(seconds: 60),
+    DateTime Function()? now,
+    Future<void> Function(Duration)? delay,
+  }) : _search = search,
+       _now = now ?? DateTime.now,
+       _delay = delay ?? Future.delayed;
+
+  final Future<List<VnSearchResult>> Function(String query) _search;
+  final Duration gap;
+  final int maxRetries;
+  final Duration retryWait;
+  final DateTime Function() _now;
+  final Future<void> Function(Duration) _delay;
+
+  Future<void> _tail = Future<void>.value();
+  DateTime? _lastStart;
+
+  /// Runs [query] through the queue, serialized with the other queued
+  /// requests.
+  Future<List<VnSearchResult>> search(String query) {
+    final done = Completer<List<VnSearchResult>>();
+    _tail = _tail
+        .then((_) => _run(query))
+        .then(done.complete, onError: done.completeError);
+    return done.future;
+  }
+
+  Future<List<VnSearchResult>> _run(String query) async {
+    final last = _lastStart;
+    if (last != null) {
+      final wait = last.add(gap).difference(_now());
+      if (!wait.isNegative) await _delay(wait);
+    }
+    var retries = 0;
+    for (;;) {
+      _lastStart = _now();
+      try {
+        return await _search(query);
+      } on VndbException catch (e) {
+        if (e.statusCode != 429 || retries >= maxRetries) rethrow;
+        retries++;
+        await _delay(retryWait);
+      }
+    }
+  }
 }
 
 /// Searches VNDB for each query variant in order (the cleaned name, its

@@ -721,4 +721,87 @@ void main() {
       },
     );
   });
+
+  group('VndbRequestQueue', () {
+    late DateTime now;
+    late List<Duration> waits;
+
+    setUp(() {
+      now = DateTime.utc(2026, 1, 1);
+      waits = [];
+    });
+
+    VndbRequestQueue queueWith(
+      Future<List<VnSearchResult>> Function(String) search,
+    ) => VndbRequestQueue(
+      search: search,
+      now: () => now,
+      delay: (wait) async {
+        waits.add(wait);
+        now = now.add(wait);
+      },
+    );
+
+    test('requests start at least 1.6 s apart', () async {
+      final started = <DateTime>[];
+      final queue = queueWith((query) async {
+        started.add(now);
+        return const [];
+      });
+      await Future.wait([
+        queue.search('a'),
+        queue.search('b'),
+        queue.search('c'),
+      ]);
+      expect(started, hasLength(3));
+      expect(
+        started[1].difference(started[0]),
+        greaterThanOrEqualTo(const Duration(milliseconds: 1600)),
+      );
+      expect(
+        started[2].difference(started[1]),
+        greaterThanOrEqualTo(const Duration(milliseconds: 1600)),
+      );
+    });
+
+    test('a 429 waits 60 s and retries the same request', () async {
+      var calls = 0;
+      final queue = queueWith((query) async {
+        calls++;
+        if (calls <= 2) {
+          throw const VndbException('HTTP 429', statusCode: 429);
+        }
+        return [_vn('v1', 'DEMO')];
+      });
+      final results = await queue.search('DEMO');
+      expect(results.single.id, 'v1');
+      expect(calls, 3);
+      expect(waits, const [
+        Duration(seconds: 60),
+        Duration(seconds: 60),
+      ]);
+    });
+
+    test('after 3 retries the error is rethrown', () async {
+      var calls = 0;
+      final queue = queueWith((query) async {
+        calls++;
+        throw const VndbException('HTTP 429', statusCode: 429);
+      });
+      await expectLater(queue.search('DEMO'), throwsA(isA<VndbException>()));
+      expect(calls, 4);
+      expect(waits, hasLength(3));
+    });
+
+    test('other errors are not retried', () async {
+      var calls = 0;
+      final queue = queueWith((query) async {
+        calls++;
+        throw const VndbException('HTTP 500', statusCode: 500);
+      });
+      await expectLater(queue.search('DEMO'), throwsA(isA<VndbException>()));
+      expect(calls, 1);
+      expect(waits, isEmpty);
+    });
+  });
 }

@@ -223,6 +223,8 @@ Future<_Harness> _open(
         dataDirProvider.overrideWithValue(core.DataDir(temp.path)),
         libraryRepositoryProvider.overrideWithValue(repo),
         addGameHttpClientProvider.overrideWithValue(vndb.client),
+        importVndbGapProvider.overrideWithValue(Duration.zero),
+        importVndbRetryWaitProvider.overrideWithValue(Duration.zero),
         pathPickerProvider.overrideWithValue(
           ({String? initialDirectory, PathPickMode? mode}) async =>
               picker != null ? picker.future : root,
