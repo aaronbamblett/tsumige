@@ -1901,7 +1901,40 @@ void main() {
     );
   });
 
-  testWidgets('the pane cover fallback draws the saved cover position',
+  testWidgets('the pane cover fallback draws the saved background position',
+      (tester) async {
+    late Directory temp;
+    final bytes = Uint8List.fromList(
+        img.encodePng(img.Image(width: 16, height: 16)));
+    await pumpLibrary(
+      tester,
+      [
+        core.Game(
+          id: 'g1',
+          title: 'Alpha',
+          cover: 'g1.png',
+          coverAlignment: const Alignment(0.5, 0.5),
+          backgroundAlignment: const Alignment(-0.5, 0.5),
+        )
+      ],
+      exposeTemp: (dir) {
+        temp = dir;
+        Directory(p.join(dir.path, 'covers', 'original'))
+            .createSync(recursive: true);
+        File(p.join(dir.path, 'covers', 'original', 'g1.png'))
+            .writeAsBytesSync(bytes);
+      },
+      exists: (path) => File(path).existsSync(),
+    );
+    await openPane(tester, 'Alpha');
+    final coverPath = p.join(temp.path, 'covers', 'original', 'g1.png');
+    expect(
+      tester.widget<Image>(_paneFileImage(coverPath)).alignment,
+      const Alignment(-0.5, 0.5),
+    );
+  });
+
+  testWidgets('the pane cover fallback ignores the saved cover position',
       (tester) async {
     late Directory temp;
     final bytes = Uint8List.fromList(
@@ -1929,7 +1962,7 @@ void main() {
     final coverPath = p.join(temp.path, 'covers', 'original', 'g1.png');
     expect(
       tester.widget<Image>(_paneFileImage(coverPath)).alignment,
-      const Alignment(-0.5, 0.5),
+      Alignment.topCenter,
     );
   });
 

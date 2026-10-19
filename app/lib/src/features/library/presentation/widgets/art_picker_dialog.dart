@@ -129,6 +129,10 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
       _coverPick = pick;
       // A new image starts at the default position.
       _coverAlignment = kLibraryCoverAlignment;
+      // With no background the pane shows the cover, so its position changes too.
+      if (!_hasBackground && _backgroundPick == null) {
+        _backgroundAlignment = kDetailPaneArtAlignment;
+      }
     } else {
       _backgroundPick = pick;
       if (pick is! _ClearPick) {
@@ -137,18 +141,23 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
     }
   });
 
-  /// Null when the working position matches the library default, so saving a
-  /// repositioned-then-centred image writes no key.
+  static bool _near(Alignment a, Alignment b) =>
+      (a.x - b.x).abs() <= 0.001 && (a.y - b.y).abs() <= 0.001;
+
+  /// Null when the working position is within tolerance of the default, so
+  /// saving a repositioned-then-centred image writes no key.
   static Alignment? _storedOrNull(Alignment working, Alignment def) =>
-      working == def ? null : working;
+      _near(working, def) ? null : working;
 
-  bool get _coverMoved =>
-      _coverAlignment !=
-      (widget.game.coverAlignment ?? kLibraryCoverAlignment);
+  bool get _coverMoved => !_near(
+    _coverAlignment,
+    widget.game.coverAlignment ?? kLibraryCoverAlignment,
+  );
 
-  bool get _backgroundMoved =>
-      _backgroundAlignment !=
-      (widget.game.backgroundAlignment ?? kDetailPaneArtAlignment);
+  bool get _backgroundMoved => !_near(
+    _backgroundAlignment,
+    widget.game.backgroundAlignment ?? kDetailPaneArtAlignment,
+  );
 
   bool get _canSave =>
       _coverPick != null ||
@@ -200,6 +209,8 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
     final game = widget.game;
     final coverMoved = _coverMoved;
     final backgroundMoved = _backgroundMoved;
+    final resetsBackground =
+        cover != null && !_hasBackground && background == null;
     if (cover == null && background == null && !coverMoved && !backgroundMoved) {
       _close();
       return;
@@ -247,7 +258,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
           _sourceOf(background),
           _storedOrNull(_backgroundAlignment, kDetailPaneArtAlignment),
         );
-      } else if (backgroundMoved) {
+      } else if (backgroundMoved || resetsBackground) {
         await ref
             .read(gameEditorProvider)
             .update(
@@ -644,26 +655,27 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
     final scheme = Theme.of(context).colorScheme;
     final game = widget.game;
     final pick = _backgroundPick;
+    // Without a background the pane shows the cover, so the preview shows the
+    // cover the pane will show after Save.
+    final shown = switch (pick) {
+      _ClearPick() || null => _coverPick,
+      _ => pick,
+    };
     final ImageProvider? provider;
     var aspect = 0.0;
-    // Without a background the pane falls back to the cover, so the preview
-    // repositions the cover there too.
-    var showingBackground = true;
-    if (pick is _RemotePick) {
-      provider = NetworkImage(pick.art.thumbnail);
-      aspect = _candidateAspect(pick.art);
-    } else if (pick is _FilePick) {
-      provider = _fileProvider(pick.path);
-    } else if (pick == null && _hasBackground) {
+    if (pick == null && _hasBackground) {
       provider = _fileProvider(
         p.join(dir.coversBackground.path, game.background!),
       );
+    } else if (shown is _RemotePick) {
+      provider = NetworkImage(shown.art.thumbnail);
+      aspect = _candidateAspect(shown.art);
+    } else if (shown is _FilePick) {
+      provider = _fileProvider(shown.path);
     } else if (game.cover != null && game.cover!.isNotEmpty) {
       provider = _fileProvider(p.join(dir.coversOriginal.path, game.cover!));
-      showingBackground = false;
     } else {
       provider = null;
-      showingBackground = false;
     }
     final picked =
         (pick != null && pick is! _ClearPick) ||
@@ -695,16 +707,8 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
                   key: const ValueKey('background-reposition'),
                   provider: provider,
                   aspect: aspect,
-                  alignment: showingBackground
-                      ? _backgroundAlignment
-                      : _coverAlignment,
-                  onAlignment: (a) => setState(() {
-                    if (showingBackground) {
-                      _backgroundAlignment = a;
-                    } else {
-                      _coverAlignment = a;
-                    }
-                  }),
+                  alignment: _backgroundAlignment,
+                  onAlignment: (a) => setState(() => _backgroundAlignment = a),
                 ),
               IgnorePointer(
                 child: Stack(
@@ -879,6 +883,8 @@ class _RepositionableArtState extends State<_RepositionableArt> {
   ImageStreamListener? _listener;
   Size? _intrinsic;
   var _dragging = false;
+  var _dragFrom = Alignment.center;
+  var _dragged = Offset.zero;
 
   @override
   void initState() {
@@ -934,27 +940,27 @@ class _RepositionableArtState extends State<_RepositionableArt> {
     return size.width / size.height;
   }
 
-  void _move(DragUpdateDetails details, Size box) {
+  void _move(Size box) {
     final aspect = _aspect;
     if (aspect <= 0 || box.isEmpty) return;
     // Cover scale for an aspect-wide, 1-tall image in this box.
     final scale = max(box.width / aspect, box.height);
     final overflowX = aspect * scale - box.width;
     final overflowY = scale - box.height;
-    final dx = details.delta.dx;
-    final dy = details.delta.dy;
-    var next = widget.alignment;
+    // Measured from the drag start so an overshoot past the edge is clamped,
+    // not banked: the image moves back only once the pointer returns.
+    var next = _dragFrom;
     // The image follows the pointer: dragging right reveals the left side.
-    if (overflowX > 0.5 && dx != 0) {
+    if (overflowX > 0.5) {
       next = Alignment(
-        (next.x - dx / (overflowX / 2)).clamp(-1.0, 1.0),
+        (_dragFrom.x - _dragged.dx / (overflowX / 2)).clamp(-1.0, 1.0),
         next.y,
       );
     }
-    if (overflowY > 0.5 && dy != 0) {
+    if (overflowY > 0.5) {
       next = Alignment(
         next.x,
-        (next.y - dy / (overflowY / 2)).clamp(-1.0, 1.0),
+        (_dragFrom.y - _dragged.dy / (overflowY / 2)).clamp(-1.0, 1.0),
       );
     }
     if (next != widget.alignment) widget.onAlignment(next);
@@ -970,10 +976,17 @@ class _RepositionableArtState extends State<_RepositionableArt> {
               ? SystemMouseCursors.grabbing
               : SystemMouseCursors.grab,
           child: GestureDetector(
-            onPanStart: (_) => setState(() => _dragging = true),
+            onPanStart: (_) => setState(() {
+              _dragging = true;
+              _dragFrom = widget.alignment;
+              _dragged = Offset.zero;
+            }),
             onPanEnd: (_) => setState(() => _dragging = false),
             onPanCancel: () => setState(() => _dragging = false),
-            onPanUpdate: (details) => _move(details, box),
+            onPanUpdate: (details) {
+              _dragged += details.delta;
+              _move(box);
+            },
             child: Image(
               image: widget.provider,
               fit: BoxFit.cover,

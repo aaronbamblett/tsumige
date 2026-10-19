@@ -294,6 +294,13 @@ void _seedStored(core.DataDir dir, {Uint8List? cover, Uint8List? background}) {
   }
 }
 
+Image _previewImage(WidgetTester tester, String key) => tester.widget<Image>(
+  find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(Image)),
+);
+
+Uint8List _pngSized(int width, int height) =>
+    Uint8List.fromList(img.encodePng(img.Image(width: width, height: height)));
+
 Uint8List _tallPng() =>
     Uint8List.fromList(img.encodePng(img.Image(width: 16, height: 64)));
 
@@ -899,6 +906,211 @@ void main() {
       expect(find.byType(ArtPickerDialog), findsNothing);
       expect(harness.game.coverAlignment?.y, greaterThan(0));
       expect(harness.game.backgroundAlignment?.y, greaterThan(-1));
+    });
+  });
+
+  group('reposition drags and resets', () {
+    testWidgets('a Cover drag sideways on a wide image saves the cover only',
+        (tester) async {
+      final harness = await _pumpDialogReal(
+        tester,
+        cover: 'g1.png',
+        seed: (dir) => _seedStored(dir, cover: _pngSized(64, 16)),
+      );
+      await tester.drag(
+        find.byKey(const ValueKey('cover-reposition')),
+        const Offset(-50, 0),
+      );
+      await tester.pump();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ArtPickerDialog), findsNothing);
+      expect(harness.game.coverAlignment?.x, greaterThan(0));
+      expect(harness.game.backgroundAlignment, isNull);
+    });
+
+    testWidgets('with no background the Background preview starts at topCenter',
+        (tester) async {
+      await _pumpDialogReal(
+        tester,
+        cover: 'g1.png',
+        seed: (dir) => _seedStored(dir, cover: _tallPng()),
+        backgroundTab: true,
+      );
+      expect(
+        _previewImage(tester, 'background-reposition').alignment,
+        Alignment.topCenter,
+      );
+    });
+
+    testWidgets(
+      'with no background a Background drag saves the background position only',
+      (tester) async {
+        final harness = await _pumpDialogReal(
+          tester,
+          cover: 'g1.png',
+          seed: (dir) => _seedStored(dir, cover: _tallPng()),
+          backgroundTab: true,
+        );
+        await tester.drag(
+          find.byKey(const ValueKey('background-reposition')),
+          const Offset(0, -40),
+        );
+        await tester.pump();
+        await tester.tap(find.text('Save'));
+        await tester.pumpAndSettle();
+        expect(find.byType(ArtPickerDialog), findsNothing);
+        expect(harness.game.backgroundAlignment, isNotNull);
+        expect(harness.game.backgroundAlignment!.y, greaterThan(-1));
+        expect(harness.game.coverAlignment, isNull);
+        expect(harness.game.background, isNull);
+      },
+    );
+
+    testWidgets(
+      'with no background and a pending cover pick the Background preview shows it',
+      (tester) async {
+        await _pumpDialogReal(
+          tester,
+          cover: 'g1.png',
+          seed: (dir) => _seedStored(dir, cover: _tallPng()),
+        );
+        await tester.tap(_tile(_main['url'] as String));
+        await tester.pump();
+        await tester.tap(find.text('Background'));
+        await tester.pump();
+        final provider = _previewImage(tester, 'background-reposition').image;
+        expect(provider, isA<NetworkImage>());
+        expect((provider as NetworkImage).url, _main['thumbnail']);
+      },
+    );
+
+    testWidgets(
+      'picking a cover with no background resets the Background position',
+      (tester) async {
+        final harness = await _pumpDialogReal(
+          tester,
+          game: core.Game(
+            id: 'g1',
+            title: 'Sample Game',
+            vndbId: 'v900016',
+            cover: 'g1.png',
+            backgroundAlignment: const Alignment(0.5, 0.5),
+          ),
+          seed: (dir) => _seedStored(dir, cover: _tallPng()),
+        );
+        await tester.tap(_tile(_main['url'] as String));
+        await tester.pump();
+        await tester.tap(find.text('Background'));
+        await tester.pump();
+        expect(
+          _previewImage(tester, 'background-reposition').alignment,
+          Alignment.topCenter,
+        );
+        await tester.tap(find.text('Cover'));
+        await tester.pump();
+        final thumb = core.thumbPath(harness.dir, 'g1', 512);
+        await runRealFlow(
+          tester,
+          () async {
+            await tester.tap(find.text('Save'));
+            await tester.pump();
+          },
+          () =>
+              harness.game.coverSource == _main['url'] &&
+              harness.game.backgroundAlignment == null &&
+              File(thumb).existsSync(),
+        );
+        expect(find.byType(ArtPickerDialog), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'an overshoot clamps at the edge and moves back only with the pointer',
+      (tester) async {
+        final harness = await _pumpDialogReal(
+          tester,
+          cover: 'g1.png',
+          seed: (dir) => _seedStored(dir, cover: _pngSized(30, 50)),
+        );
+        final gesture = await tester.startGesture(
+          tester.getCenter(find.byKey(const ValueKey('cover-reposition'))),
+        );
+        await gesture.moveBy(const Offset(0, -200));
+        await tester.pump();
+        await gesture.moveBy(const Offset(0, 20));
+        await tester.pump();
+        await gesture.up();
+        await tester.pump();
+        expect(_saveButton(tester).onPressed, isNotNull);
+        await tester.tap(find.text('Save'));
+        await tester.pumpAndSettle();
+        expect(harness.game.coverAlignment?.y, 1);
+      },
+    );
+
+    testWidgets('a drag of half the vertical overflow moves y by one',
+        (tester) async {
+      final harness = await _pumpDialogReal(
+        tester,
+        game: core.Game(
+          id: 'g1',
+          title: 'Sample Game',
+          vndbId: 'v900016',
+          cover: 'g1.png',
+          coverAlignment: const Alignment(0.5, -1),
+        ),
+        seed: (dir) => _seedStored(dir, cover: _pngSized(30, 50)),
+      );
+      await tester.drag(
+        find.byKey(const ValueKey('cover-reposition')),
+        const Offset(0, -18.33),
+      );
+      await tester.pump();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(harness.game.coverAlignment!.x, 0.5);
+      expect(harness.game.coverAlignment!.y, closeTo(0, 0.01));
+    });
+
+    testWidgets('a drag of half the horizontal overflow moves x by one',
+        (tester) async {
+      final harness = await _pumpDialogReal(
+        tester,
+        game: core.Game(
+          id: 'g1',
+          title: 'Sample Game',
+          vndbId: 'v900016',
+          cover: 'g1.png',
+          coverAlignment: const Alignment(-1, 0.5),
+        ),
+        seed: (dir) => _seedStored(dir, cover: _pngSized(64, 16)),
+      );
+      await tester.drag(
+        find.byKey(const ValueKey('cover-reposition')),
+        const Offset(-550, 0),
+      );
+      await tester.pump();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(harness.game.coverAlignment!.x, closeTo(0, 0.01));
+      expect(harness.game.coverAlignment!.y, 0.5);
+    });
+
+    testWidgets('a drag that returns to the start leaves Save disabled',
+        (tester) async {
+      await _pumpDialogReal(
+        tester,
+        cover: 'g1.png',
+        seed: (dir) => _seedStored(dir, cover: _tallPng()),
+      );
+      final preview = find.byKey(const ValueKey('cover-reposition'));
+      await tester.drag(preview, const Offset(0, -50));
+      await tester.pump();
+      expect(_saveButton(tester).onPressed, isNotNull);
+      await tester.drag(preview, const Offset(0, 50));
+      await tester.pump();
+      expect(_saveButton(tester).onPressed, isNull);
     });
   });
 }
