@@ -416,6 +416,77 @@ void main() {
     expect(container.read(tagFilterProvider), isNull);
   });
 
+  // The sort and Filter boxes are fixed at the smallest width fitting
+  // their longest content (Roboto: longest sort label 82.79 px -> 200,
+  // "Filter" 32.77 px + widest badge -> 141; see the constants). Every
+  // sort field and the widest badge the code can show (count 3: tag +
+  // adult + developer) must render with no overflow, fully inside its
+  // box, and without moving either box.
+  testWidgets('sort and Filter boxes fit their longest content',
+      (tester) async {
+    await pumpToolbar(tester, taggedGames());
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(LibraryTopBar)));
+
+    double sortWidth() => tester
+        .getSize(find.ancestor(
+          of: find.text(sortFieldLabels[container.read(sortFieldProvider)]!),
+          matching: find.byType(ToolbarBox),
+        ).first)
+        .width;
+    final firstSortWidth = sortWidth();
+    expect(firstSortWidth, moreOrLessEquals(200, epsilon: 0.5));
+
+    for (final field in keys.SortField.values) {
+      container.read(sortFieldProvider.notifier).set(field);
+      await settle(tester);
+      expect(tester.takeException(), isNull, reason: '$field');
+      expect(sortWidth(), firstSortWidth, reason: '$field');
+      final labelRect = tester.getRect(find.text(sortFieldLabels[field]!));
+      final boxRect = tester.getRect(find.ancestor(
+        of: find.text(sortFieldLabels[field]!),
+        matching: find.byType(ToolbarBox),
+      ).first);
+      // The label ends before the 22 px chevron and 10 px right padding.
+      expect(labelRect.right,
+          lessThanOrEqualTo(boxRect.right - 32 + 1.0),
+          reason: '$field');
+    }
+
+    final filterBox = find.byKey(const ValueKey('toolbar-filter'));
+    expect(tester.getSize(filterBox).width, moreOrLessEquals(141, epsilon: 0.5));
+    final plainWidth = tester.getSize(filterBox).width;
+    container.read(tagFilterProvider.notifier).set('Romance');
+    container.read(adultFilterProvider.notifier).set(keys.AdultFilter.hide);
+    container
+        .read(developerFilterProvider.notifier)
+        .set(core.Developer(id: 'p1', name: 'Azarashi Soft'));
+    await settle(tester);
+    expect(tester.takeException(), isNull);
+    expect(filterBadge(tester, '3'), findsOneWidget);
+    // Same width with the badge on: nothing shifts when a filter turns on.
+    expect(tester.getSize(filterBox).width, plainWidth);
+    final badgeRect = tester.getRect(find.text('3'));
+    final filterRect = tester.getRect(filterBox);
+    expect(badgeRect.width, lessThanOrEqualTo(18));
+    expect(badgeRect.right, lessThanOrEqualTo(filterRect.right - 10 - 22 + 1.0));
+    expect(badgeRect.left, greaterThanOrEqualTo(filterRect.left + 14));
+  });
+
+  // At 1440 wide with the pane open the fitted controls hand space back to
+  // search: 204.5 px before (two 180 px boxes), wider after.
+  testWidgets('at 1440 wide with the pane open search is wider than before',
+      (tester) async {
+    await pumpToolbar(tester, manyGames(), size: const Size(1440, 900));
+    openPane(tester, 'game-0');
+    await settle(tester);
+    expect(tester.takeException(), isNull);
+    final searchWidth =
+        tester.getSize(find.byKey(const ValueKey('toolbar-search'))).width;
+    expect(searchWidth, greaterThan(204.5));
+    expect(searchWidth, moreOrLessEquals(223.5, epsilon: 1.0));
+  });
+
   testWidgets('toolbar does not overlap Add with the pane open and a developer set',
       (tester) async {
     for (final size in [const Size(1000, 640), const Size(1280, 800), const Size(1400, 980)]) {

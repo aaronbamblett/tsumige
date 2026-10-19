@@ -42,13 +42,48 @@ const Map<keys.AdultFilter, String> adultFilterLabels = {
 
 const double _kControlHeight = 40;
 const double _kGap = 10;
-const double _kSortWidth = 180;
 const double _kSegmentsWidth = 170;
-const double _kFilterWidth = 180;
 const double _kSearchMinWidth = 200;
 const double _kAddWidth = 104;
 const double _kRightInset = 12;
 const double _kPanelWidth = 360;
+
+/// Sort menu chrome: the left/right padding around its row.
+const double _kSortPadLeft = 14;
+const double _kSortPadRight = 10;
+
+/// Filter box chrome: the left/right padding around its row, and the gap
+/// between the badge and the chevron.
+const double _kFilterPadLeft = 14;
+const double _kFilterPadRight = 10;
+const double _kFilterBadgeGap = 4;
+
+/// Outline width [ToolbarBox] paints inside its box; the interior the row
+/// lays out in is narrower by twice this.
+const double _kToolbarBorder = 1;
+
+/// Width of the sort control: the smallest fixed width fitting the longest
+/// label in [sortFieldLabels]. "VNDB Rating" measures 82.79 px in the
+/// toolbar's ambient style (Roboto 14, letter spacing 0.25), so 14 pad + 18
+/// icon + 10 gap + 82.79 label + 22 chevron + 10 pad, plus the 1 px divider,
+/// the 40 px direction toggle and 2 px of border: 199.79, rounded up to 200.
+/// Fixed across sort fields, so the control never jumps when the sort
+/// changes. Re-measure with e.g.
+/// `hb-shape Roboto-Regular.ttf --font-size 1400 --text "VNDB Rating"`
+/// (sum the advances, divide by 100, add 0.25 per character) if the labels,
+/// the ambient style or this chrome changes.
+const double _kSortWidth = 200;
+
+/// Width of the Filter control: icon, gap, "Filter", gap, badge, chevron
+/// and today's outer padding. "Filter" measures 32.77 px in the same style,
+/// so 14 pad + 18 icon + 10 gap + 32.77 label + 10 gap + 18 badge + 4 gap +
+/// 22 chevron + 10 pad, plus 2 px of border: 140.77, rounded up to 141. The
+/// badge slot is always reserved (an empty box while no filter is set), so
+/// the width never shifts when a filter turns on. The badge itself is a
+/// fixed 18 px circle; the widest count the code can show is 3 (one each
+/// for tag, adult and developer), formatted as '$count', so a single digit
+/// that always fits the circle.
+const double _kFilterWidth = 141;
 
 /// Width of the right group: Add, a gap, then Settings.
 const double _kRightGroupWidth = _kAddWidth + _kGap + _kControlHeight;
@@ -427,6 +462,7 @@ class _ToolbarBoxState extends State<ToolbarBox> {
           color: scheme.surfaceContainer,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
+            width: _kToolbarBorder,
             color:
                 widget.borderColor ??
                 (_hovered
@@ -466,7 +502,10 @@ class _SortMenu extends StatelessWidget {
       builder: (context, controller, _) => InkWell(
         onTap: () => controller.isOpen ? controller.close() : controller.open(),
         child: Padding(
-          padding: const EdgeInsets.only(left: 14, right: 10),
+          padding: const EdgeInsets.only(
+            left: _kSortPadLeft,
+            right: _kSortPadRight,
+          ),
           child: Row(
             children: [
               Icon(
@@ -538,7 +577,10 @@ class _FilterButtonState extends ConsumerState<_FilterButton> {
             focusNode: _focus,
             onTap: () => _controller.isShowing ? _close() : _controller.show(),
             child: Padding(
-              padding: const EdgeInsets.only(left: 14, right: 10),
+              padding: const EdgeInsets.only(
+                left: _kFilterPadLeft,
+                right: _kFilterPadRight,
+              ),
               child: Row(
                 children: [
                   Icon(
@@ -547,8 +589,18 @@ class _FilterButtonState extends ConsumerState<_FilterButton> {
                     color: scheme.onSurfaceVariant,
                   ),
                   const SizedBox(width: _kGap),
-                  const Expanded(child: Text('Filter', maxLines: 1)),
-                  if (count > 0) ...[
+                  // Loose fit: the label keeps its intrinsic width (no gap
+                  // opens or closes around it) and only ellipsizes if a
+                  // wider font or text scale ever exceeds the fitted width.
+                  const Flexible(
+                    child: Text(
+                      'Filter',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: _kGap),
+                  if (count > 0)
                     Container(
                       width: 18,
                       height: 18,
@@ -565,9 +617,10 @@ class _FilterButtonState extends ConsumerState<_FilterButton> {
                           color: scheme.onPrimary,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                  ],
+                    )
+                  else
+                    const SizedBox(width: 18),
+                  const SizedBox(width: _kFilterBadgeGap),
                   const Icon(Icons.arrow_drop_down_rounded, size: 22),
                 ],
               ),
