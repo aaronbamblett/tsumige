@@ -19,7 +19,10 @@ const String vndbApi = 'https://api.vndb.org/kana';
 class VndbException implements Exception {
   final String message;
 
-  const VndbException(this.message);
+  /// The HTTP status when the failure is one, so callers can spot a 429.
+  final int? statusCode;
+
+  const VndbException(this.message, {this.statusCode});
 
   @override
   String toString() => 'VndbException: $message';
@@ -286,7 +289,10 @@ class VndbClient {
       }
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw VndbException('HTTP ${response.statusCode}');
+      throw VndbException(
+        'HTTP ${response.statusCode}',
+        statusCode: response.statusCode,
+      );
     }
     return response;
   }
@@ -343,7 +349,10 @@ class VndbClient {
       throw VndbException('request failed: $e');
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw VndbException('HTTP ${response.statusCode}');
+      throw VndbException(
+        'HTTP ${response.statusCode}',
+        statusCode: response.statusCode,
+      );
     }
     final Object? decoded;
     try {

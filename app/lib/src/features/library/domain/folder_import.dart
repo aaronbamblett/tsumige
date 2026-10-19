@@ -4,12 +4,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:path/path.dart' as p;
 
 import '../../../core/host_platform.dart';
+import '../../../core/model.dart';
+import '../../../core/paths.dart';
 import '../../../core/vndb.dart';
 
 /// One .exe found under a candidate folder.
@@ -49,7 +52,7 @@ class ImportFolder {
   final List<String> skipped;
 }
 
-enum ImportMatchState { matched, check, none }
+enum ImportMatchState { matched, check, none, error }
 
 class FolderMatch {
   const FolderMatch(this.state, this.vn);
@@ -363,6 +366,33 @@ List<ExeFile> _candidates(List<ExeFile> found) {
   return nonlauncher.isNotEmpty ? nonlauncher : candidates;
 }
 
+/// The library game that picking [exe] would duplicate: one whose resolved
+/// executable is the same file, or — when [folder] (the game folder the
+/// pick belongs to) holds one — the first such game. Null when it is new.
+Game? duplicateLibraryGame({
+  required String exe,
+  required String? folder,
+  required Iterable<Game> games,
+}) {
+  if (exe.isEmpty) return null;
+  final realExe = realPath(exe);
+  final realFolder = folder == null || folder.isEmpty ? null : realPath(folder);
+  Game? folderHit;
+  for (final game in games) {
+    final stored = game.launch.executable;
+    if (stored == null || stored.isEmpty) continue;
+    final realStored = realPath(stored);
+    if (p.equals(realStored, realExe)) return game;
+    if (folderHit == null &&
+        realFolder != null &&
+        (p.equals(realStored, realFolder) ||
+            p.isWithin(realFolder, realStored))) {
+      folderHit = game;
+    }
+  }
+  return folderHit;
+}
+
 /// The exe to launch for [folder]: top-level first, then the best title
 /// similarity to the folder name or [titles], then the largest file.
 ExeFile? chooseExe(ImportFolder folder, Iterable<String> titles) {
@@ -387,6 +417,30 @@ bool _keyBeats((bool, double, int) a, (bool, double, int) b) {
   if (a.$1 != b.$1) return a.$1;
   if (a.$2 != b.$2) return a.$2 > b.$2;
   return a.$3 > b.$3;
+}
+
+/// The resolved executable paths of [games], skipping empty ones. Computed
+/// once per scan so import rows each compare against the set.
+Set<String> libraryRealExePaths(Iterable<Game> games) => {
+  for (final game in games)
+    if (game.launch.executable != null &&
+        game.launch.executable!.isNotEmpty)
+      realPath(game.launch.executable!),
+};
+
+/// Whether the import row for a folder whose resolved path is [realFolder] is
+/// already in the library: a library game's resolved executable is that
+/// folder or inside it (so the same game picked through a different link, or
+/// through a different `.exe` in the same folder, still matches). A matching
+/// VNDB id alone only warns, it doesn't count as imported.
+bool importRowInLibrary({
+  required String realFolder,
+  required Set<String> libraryExes,
+}) {
+  if (libraryExes.isEmpty) return false;
+  return libraryExes.any(
+    (exe) => p.equals(exe, realFolder) || p.isWithin(realFolder, exe),
+  );
 }
 
 const _accentFolds = {
@@ -618,4 +672,201 @@ Future<List<VnSearchResult>> lookupFolder(
   if (results.isNotEmpty) return results;
   final shortened = shortenedQuery(folder);
   return shortened == null ? results : search(shortened);
+}
+
+/// Splits CamelCase at lower-to-Upper boundaries: `MakingLovers` becomes
+/// `Making Lovers`. Null when there is no such boundary, so `KANADE`
+/// stays whole.
+String? splitCamelQuery(String query) {
+  final split = query
+      .replaceAllMapped(RegExp('(?<=[a-z])(?=[A-Z])'), (_) => ' ')
+      .split(RegExp(r'\s+'))
+      .where((w) => w.isNotEmpty)
+      .join(' ');
+  return split == query || split.isEmpty ? null : split;
+}
+
+const _languageTags = {
+  'japanese',
+  'english',
+  'eng',
+  'jpn',
+  'jp',
+  'en',
+};
+
+/// Drops a trailing language tag (`ENG`, `EN`, `JP`, `JPN`, `English` or
+/// `Japanese`): as a separate word, or as a CamelCase suffix as in
+/// `PhantomENG`, which becomes `Phantom`. Null when there is none.
+String? stripLanguageTag(String query) {
+  final trimmed = query.trim();
+  if (trimmed.isEmpty) return null;
+  final words = trimmed.split(RegExp(r'\s+'));
+  if (words.length > 1) {
+    if (_languageTags.contains(words.last.toLowerCase())) {
+      return words.sublist(0, words.length - 1).join(' ');
+    }
+    return null;
+  }
+  final word = words.single;
+  final lower = word.toLowerCase();
+  for (final tag in _languageTags) {
+    if (word.length > tag.length &&
+        lower.endsWith(tag) &&
+        _isAsciiLower(word[word.length - tag.length - 1]) &&
+        _isAsciiUpper(word[word.length - tag.length])) {
+      return word.substring(0, word.length - tag.length);
+    }
+  }
+  return null;
+}
+
+bool _isAsciiLower(String char) {
+  final code = char.codeUnitAt(0);
+  return code >= 0x61 && code <= 0x7a;
+}
+
+bool _isAsciiUpper(String char) {
+  final code = char.codeUnitAt(0);
+  return code >= 0x41 && code <= 0x5a;
+}
+
+/// The queries to try for a cleaned folder name, in order: the name
+/// itself, its CamelCase split, and each of those with a trailing
+/// language tag dropped.
+List<String> folderQueryVariants(String cleaned) {
+  final out = <String>[cleaned];
+  final split = splitCamelQuery(cleaned);
+  if (split != null) out.add(split);
+  for (final base in [...out]) {
+    final stripped = stripLanguageTag(base);
+    if (stripped != null &&
+        stripped.isNotEmpty &&
+        !out.contains(stripped)) {
+      out.add(stripped);
+    }
+  }
+  return out;
+}
+
+/// The cleaned names of the folders between [exeDir] (the folder holding
+/// the row's exe) and the scanned [root], nearest first. Empty when
+/// [root] is unknown: without it there is no scope to search upwards in.
+List<String> parentFolderQueries({
+  required String exeDir,
+  required String? root,
+}) {
+  if (root == null || root.isEmpty) return const [];
+  final stop = p.normalize(root);
+  final out = <String>[];
+  var dir = p.dirname(p.normalize(exeDir));
+  while (!p.equals(dir, stop) && p.isWithin(stop, dir)) {
+    final cleaned = cleanFolderName(p.basename(dir));
+    if (cleaned.isNotEmpty && !out.contains(cleaned)) out.add(cleaned);
+    final parent = p.dirname(dir);
+    if (parent == dir) break;
+    dir = parent;
+  }
+  return out;
+}
+
+/// Every VNDB request from one import, through one queue: at most one
+/// request starts per [gap] (200 requests per 5 minutes is one per
+/// 1.5 s), and a 429 waits [retryWait] and retries the same request, up
+/// to [maxRetries] times. [now] and [delay] are injectable for tests.
+class VndbRequestQueue {
+  VndbRequestQueue({
+    required this.search,
+    this.gap = const Duration(milliseconds: 1600),
+    this.maxRetries = 3,
+    this.retryWait = const Duration(seconds: 60),
+    DateTime Function()? now,
+    Future<void> Function(Duration)? delay,
+  }) : _now = now ?? DateTime.now,
+       _delay = delay ?? Future.delayed;
+
+  final Future<List<VnSearchResult>> Function(String query) search;
+  final Duration gap;
+  final int maxRetries;
+  final Duration retryWait;
+  final DateTime Function() _now;
+  final Future<void> Function(Duration) _delay;
+
+  Future<void> _tail = Future<void>.value();
+  DateTime? _lastStart;
+  bool _cancelled = false;
+
+  /// Stops this queue: requests not yet sent, and any retry not yet
+  /// waited out, complete with [VndbCancelled]. Requests made afterwards
+  /// fail the same way.
+  void cancel() => _cancelled = true;
+
+  /// Runs [query] through the queue, serialized with the other queued
+  /// requests.
+  Future<List<VnSearchResult>> run(String query) {
+    final done = Completer<List<VnSearchResult>>();
+    _tail = _tail
+        .then((_) => _execute(query))
+        .then(done.complete, onError: done.completeError);
+    return done.future;
+  }
+
+  Future<List<VnSearchResult>> _execute(String query) async {
+    if (_cancelled) throw const VndbCancelled();
+    final last = _lastStart;
+    if (last != null) {
+      final wait = last.add(gap).difference(_now());
+      if (!wait.isNegative) await _delay(wait);
+    }
+    var retries = 0;
+    for (;;) {
+      if (_cancelled) throw const VndbCancelled();
+      _lastStart = _now();
+      try {
+        return await search(query);
+      } on VndbException catch (e) {
+        if (e.statusCode != 429 || retries >= maxRetries) rethrow;
+        retries++;
+        if (_cancelled) throw const VndbCancelled();
+        await _delay(retryWait);
+      }
+    }
+  }
+}
+
+class VndbCancelled implements Exception {
+  const VndbCancelled();
+}
+
+/// Searches VNDB for each query variant in order (the cleaned name, its
+/// CamelCase split, language tags dropped, then the parent folders
+/// nearest first), each with its [shortenedQuery] retry. Stops at the
+/// first matched; otherwise keeps the first check. A variant that fails
+/// is skipped; the first failure is rethrown only when no check was found.
+Future<FolderMatch> lookupFolderMatch({
+  required String query,
+  required List<String> parentQueries,
+  required Future<List<VnSearchResult>> Function(String query) search,
+}) async {
+  FolderMatch? check;
+  ({Object error, StackTrace stack})? failure;
+  final tried = <String>{};
+  for (final candidate in [...folderQueryVariants(query), ...parentQueries]) {
+    if (candidate.isEmpty || !tried.add(candidate)) continue;
+    var match = const FolderMatch(ImportMatchState.none, null);
+    try {
+      final results = await lookupFolder(candidate, search);
+      match = matchFolder(candidate, results);
+    } catch (error, stack) {
+      failure ??= (error: error, stack: stack);
+      continue;
+    }
+    if (match.state == ImportMatchState.matched) return match;
+    if (check == null && match.state == ImportMatchState.check) {
+      check = match;
+    }
+  }
+  if (check != null) return check;
+  if (failure != null) Error.throwWithStackTrace(failure.error, failure.stack);
+  return const FolderMatch(ImportMatchState.none, null);
 }

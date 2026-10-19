@@ -8,6 +8,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -63,11 +64,21 @@ class _FakeRepository implements LibraryRepository {
 
 /// Fake VNDB keyed by search query. Cover URLs containing "fail" return 404.
 class _Vndb {
-  _Vndb(this.byQuery, {this.gateQuery, this.gate});
+  _Vndb(this.byQuery, {this.gateQuery, this.gate, this.holds = const {}});
 
   final Map<String, List<Map<String, Object?>>> byQuery;
   final String? gateQuery;
   final Completer<void>? gate;
+
+  /// Requests for these queries wait until their completer completes.
+  final Map<String, Completer<void>> holds;
+
+  final List<String> heldQueries = [];
+
+  /// Queries that fail this many times with a 500 before succeeding.
+  final Map<String, int> failCounts = {};
+
+  int searches = 0;
 
   MockClient get client => MockClient((request) async {
     if (request.method == 'POST') {
@@ -75,7 +86,17 @@ class _Vndb {
       final filters = body['filters'] as List;
       if (filters.first == 'search') {
         final query = filters[2] as String;
+        searches++;
         if (query == gateQuery) await gate!.future;
+        final hold = holds[query];
+        if (hold != null) {
+          heldQueries.add(query);
+          await hold.future;
+        }
+        if ((failCounts[query] ?? 0) > 0) {
+          failCounts[query] = failCounts[query]! - 1;
+          return http.Response('boom', 500);
+        }
         return http.Response(
           jsonEncode({'results': byQuery[query] ?? [], 'more': false}),
           200,
@@ -168,10 +189,11 @@ String _fixture(Directory temp, {bool duplicate = false, bool macos = false}) {
 }
 
 class _Harness {
-  _Harness(this.repo, this.root);
+  _Harness(this.repo, this.root, this.vndb);
 
   final _FakeRepository repo;
   final String root;
+  final _Vndb vndb;
   ImportFolderResult? result;
 }
 
@@ -181,13 +203,17 @@ core.Game _ownedGame() => core.Game(id: 'g1', title: 'Owned', vndbId: 'v99');
 Future<_Harness> _open(
   WidgetTester tester, {
   List<core.Game>? games,
+  List<core.Game> Function(String root)? gamesForRoot,
   Map<String, List<Map<String, Object?>>>? results,
   Size surface = const Size(1400, 980),
   bool duplicate = false,
   Completer<void>? gate,
   String? gateQuery,
+  Map<String, Completer<void>> holds = const {},
+  List<String> appended = const [],
   Completer<String?>? picker,
   HostPlatform? platform,
+  Map<String, int>? failCounts,
 }) async {
   tester.view.physicalSize = surface;
   tester.view.devicePixelRatio = 1.0;
@@ -204,16 +230,23 @@ Future<_Harness> _open(
     duplicate: duplicate,
     macos: platform?.isMacOS ?? false,
   );
+  final appendRoot = p.join(temp.path, 'More games');
+  for (final name in appended) {
+    _exe(appendRoot, '$name/$name.exe');
+  }
+  var picks = 0;
   SharedPreferences.setMockInitialValues({});
   final repo = _FakeRepository([
-    ...(games ?? [_ownedGame()]),
+    ...(games ?? gamesForRoot?.call(root) ?? [_ownedGame()]),
   ]);
   final vndb = _Vndb(
     results ?? _defaultResults(),
     gate: gate,
     gateQuery: gateQuery,
+    holds: holds,
   );
-  final harness = _Harness(repo, root);
+  if (failCounts != null) vndb.failCounts.addAll(failCounts);
+  final harness = _Harness(repo, root, vndb);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -223,9 +256,14 @@ Future<_Harness> _open(
         dataDirProvider.overrideWithValue(core.DataDir(temp.path)),
         libraryRepositoryProvider.overrideWithValue(repo),
         addGameHttpClientProvider.overrideWithValue(vndb.client),
+        importVndbGapProvider.overrideWithValue(Duration.zero),
+        importVndbRetryWaitProvider.overrideWithValue(Duration.zero),
         pathPickerProvider.overrideWithValue(
-          ({String? initialDirectory, PathPickMode? mode}) async =>
-              picker != null ? picker.future : root,
+          ({String? initialDirectory, PathPickMode? mode}) async {
+            if (picker != null) return picker.future;
+            picks++;
+            return picks > 1 && appended.isNotEmpty ? appendRoot : root;
+          },
         ),
         if (platform != null) hostPlatformProvider.overrideWithValue(platform),
       ],
@@ -254,8 +292,8 @@ Future<_Harness> _open(
 }
 
 /// Opens the dialog and waits for the disk scan and the VNDB matching. The
-/// scan reads real files, so poll with real time; each VNDB query waits a
-/// second of fake time.
+/// scan reads real files, so poll with real time; the VNDB pacing is
+/// overridden to zero so matching runs without real waiting.
 Future<_Harness> _openAndMatch(
   WidgetTester tester, {
   List<core.Game>? games,
@@ -264,14 +302,18 @@ Future<_Harness> _openAndMatch(
   bool duplicate = false,
   int folders = 5,
   HostPlatform? platform,
+  Map<String, int>? failCounts,
+  List<core.Game> Function(String root)? gamesForRoot,
 }) async {
   final harness = await _open(
     tester,
     games: games,
+    gamesForRoot: gamesForRoot,
     results: results,
     surface: surface,
     duplicate: duplicate,
     platform: platform,
+    failCounts: failCounts,
   );
   for (var i = 0; i < 200; i++) {
     if (find.byKey(const Key('import-check-0')).evaluate().isNotEmpty) break;
@@ -308,12 +350,30 @@ Future<void> _waitForSave(WidgetTester tester, _FakeRepository fake) async {
   await tester.pump();
 }
 
+Future<void> _waitFor(WidgetTester tester, bool Function() done) async {
+  for (var i = 0; i < 200 && !done(); i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump();
+  }
+}
+
 // FToast dismisses on a 3-second timer that outlives the test body.
 Future<void> _drainToast(WidgetTester tester) =>
     tester.pump(const Duration(seconds: 6));
 
 bool _checked(WidgetTester tester, int index) =>
     tester.widget<Checkbox>(find.byKey(Key('import-check-$index'))).value!;
+
+/// The dialog title, not the picker's search-box hint (both read
+/// "Search VNDB").
+Finder _dialogTitle(String title) => find.byWidgetPredicate(
+  (widget) =>
+      widget is Text &&
+      widget.data == title &&
+      widget.style?.fontSize == 20,
+);
 
 void main() {
   testWidgets(
@@ -324,10 +384,12 @@ void main() {
       expect(find.text('Add games'), findsOneWidget);
       expect(find.text('DEMO'), findsOneWidget);
       expect(find.text('Rena-sensei to Pool Ryokou'), findsOneWidget);
-      expect(find.text('Solo Quest'), findsOneWidget);
-      expect(find.text('Solo Quest Remake'), findsNothing);
+      expect(find.text('Solo Quest'), findsNothing);
+      expect(find.text('Solo Quest Remake'), findsOneWidget);
+      expect(find.text('Best match'), findsOneWidget);
       expect(find.text('Nothing Here'), findsOneWidget);
-      expect(find.text('Owned Game'), findsNothing);
+      expect(find.text('Owned Game'), findsOneWidget);
+      expect(find.text('Same VNDB entry as Owned'), findsOneWidget);
       expect(find.text('Matched'), findsNothing);
       expect(find.text('Check match'), findsNothing);
       expect(find.text('Pick the game file'), findsNothing);
@@ -344,26 +406,23 @@ void main() {
     },
   );
 
-  testWidgets('the hide imported checkbox shows library rows disabled', (
-    tester,
-  ) async {
+  testWidgets('a library VNDB id warns instead of hiding', (tester) async {
     await _openAndMatch(
       tester,
-      games: [core.Game(id: 'g1', title: 'Owned', vndbId: 'v99')],
+      games: [core.Game(id: 'g1', title: 'Alpha', vndbId: 'v99')],
     );
-    expect(find.byKey(const Key('import-check-2')), findsNothing);
-    await tester.tap(find.byKey(const Key('import-hide-imported')));
-    await tester.pump();
-    expect(find.text('Owned Game'), findsOneWidget);
+    expect(find.byKey(const Key('import-check-2')), findsOneWidget);
+    expect(find.text('Same VNDB entry as Alpha'), findsOneWidget);
+    expect(_checked(tester, 2), isFalse);
     expect(
       tester
           .widget<Checkbox>(find.byKey(const Key('import-check-2')))
           .onChanged,
-      isNull,
+      isNotNull,
     );
     await tester.tap(find.byKey(const Key('import-check-2')));
     await tester.pump();
-    expect(find.text('Add Games'), findsOneWidget);
+    expect(_checked(tester, 2), isTrue);
   });
 
   testWidgets('Scan Folder does not list a folder twice', (tester) async {
@@ -395,7 +454,7 @@ void main() {
     await _openAndMatch(tester);
     await tester.tap(find.byKey(const Key('import-name-4')));
     await tester.pump();
-    expect(find.text('Select item'), findsOneWidget);
+    expect(_dialogTitle('Search VNDB'), findsOneWidget);
     expect(find.text('Solo Quest'), findsWidgets);
     expect(
       find.text('Search by title, or paste a VNDB link or ID (v12345).'),
@@ -413,7 +472,7 @@ void main() {
     expect(find.text('Selected'), findsOneWidget);
     await tester.tap(find.byKey(const Key('import-pick-select')));
     await _settle(tester);
-    expect(find.text('Select item'), findsNothing);
+    expect(_dialogTitle('Search VNDB'), findsNothing);
     expect(find.text('Solo Quest Remaster'), findsOneWidget);
     expect(_checked(tester, 4), isTrue);
   });
@@ -428,7 +487,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
     await tester.tap(find.text('Solo Quest Remaster'));
     await _settle(tester);
-    expect(find.text('Select item'), findsNothing);
+    expect(_dialogTitle('Search VNDB'), findsNothing);
     expect(find.text('Solo Quest Remaster'), findsOneWidget);
   });
 
@@ -441,17 +500,110 @@ void main() {
     await tester.tap(find.byKey(const Key('import-pick-cancel')));
     await _settle(tester);
     expect(find.text('Select games to import'), findsOneWidget);
-    expect(find.text('Solo Quest'), findsOneWidget);
+    expect(find.text('Solo Quest Remake'), findsOneWidget);
     expect(_checked(tester, 4), isFalse);
   });
 
-  testWidgets('In library rows are disabled and never added', (tester) async {
+  testWidgets('a check row shows its candidate with Change…', (tester) async {
+    await _openAndMatch(tester);
+    expect(find.text('Solo Quest Remake'), findsOneWidget);
+    expect(find.text('Best match'), findsOneWidget);
+    expect(find.byKey(const Key('import-change-4')), findsOneWidget);
+    expect(_checked(tester, 4), isFalse);
+  });
+
+  testWidgets('a matched row shows Change… on hover', (tester) async {
+    await _openAndMatch(tester);
+    expect(find.byKey(const Key('import-change-0')), findsNothing);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.moveTo(
+      tester.getCenter(find.byKey(const Key('import-name-0'))),
+    );
+    await tester.pump();
+    expect(find.byKey(const Key('import-change-0')), findsOneWidget);
+  });
+
+  testWidgets('a row with no match shows Choose…', (tester) async {
+    await _openAndMatch(tester);
+    expect(find.text('No matches on VNDB'), findsOneWidget);
+    expect(find.byKey(const Key('import-choose-1')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('import-choose-1')));
+    await tester.pump();
+    expect(_dialogTitle('Search VNDB'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('import-pick-search')))
+          .controller!
+          .text,
+      'Nothing Here',
+    );
+  });
+
+  testWidgets('a failed row shows Try again and retries', (tester) async {
+    await _openAndMatch(tester, failCounts: {'Nothing Here': 1});
+    expect(find.text('VNDB search failed'), findsOneWidget);
+    expect(find.byKey(const Key('import-retry-1')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('import-retry-1')));
+    await _settle(tester);
+    expect(find.text('VNDB search failed'), findsNothing);
+    expect(find.text('No matches on VNDB'), findsOneWidget);
+    expect(find.byKey(const Key('import-choose-1')), findsOneWidget);
+  });
+
+  testWidgets('matching shows progress until every row is finished', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    await _open(tester, gate: gate, gateQuery: 'Solo Quest');
+    for (
+      var i = 0;
+      i < 200 &&
+          find.text('Matching with VNDB… 4 of 5').evaluate().isEmpty;
+      i++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(find.text('Matching with VNDB… 4 of 5'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    gate.complete();
+    for (
+      var i = 0;
+      i < 200 &&
+          find.textContaining('Matching with VNDB').evaluate().isNotEmpty;
+      i++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(find.textContaining('Matching with VNDB'), findsNothing);
+    expect(find.text('Solo Quest Remake'), findsOneWidget);
+  });
+
+  testWidgets('a folder holding a library game stays hidden and disabled', (
+    tester,
+  ) async {
     final h = await _openAndMatch(
       tester,
-      games: [core.Game(id: 'g1', title: 'Owned', vndbId: 'v99')],
+      gamesForRoot: (root) => [
+        core.Game(
+          id: 'g1',
+          title: 'Owned',
+          launch: core.LaunchOverrides(
+            executable: p.join(root, 'Owned Game', 'Owned.exe'),
+          ),
+        ),
+      ],
     );
+    expect(find.byKey(const Key('import-check-2')), findsNothing);
     await tester.tap(find.byKey(const Key('import-hide-imported')));
     await tester.pump();
+    expect(find.text('Owned Game'), findsOneWidget);
     expect(
       tester
           .widget<Checkbox>(find.byKey(const Key('import-check-2')))
@@ -461,19 +613,100 @@ void main() {
     expect(h.repo.saves, 0);
   });
 
-  testWidgets('a duplicate in the batch is hidden, and disabled when shown', (
+  testWidgets('a game scanned through a symlink is hidden as imported', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 980);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final temp = Directory.systemTemp.createTempSync(
+      'tsumige_import_link_test_',
+    );
+    addTearDown(() => temp.deleteSync(recursive: true));
+    final real = Directory(p.join(temp.path, 'real'))..createSync();
+    _exe(real.path, 'Game/game.exe');
+    final link = Link(p.join(temp.path, 'link'));
+    link.createSync(real.path);
+    SharedPreferences.setMockInitialValues({});
+    final repo = _FakeRepository([
+      core.Game(
+        id: 'g1',
+        title: 'Owned',
+        launch: core.LaunchOverrides(
+          executable: p.join(real.path, 'Game', 'game.exe'),
+        ),
+      ),
+    ]);
+    final vndb = _Vndb(const {});
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(
+            await SharedPreferences.getInstance(),
+          ),
+          dataDirProvider.overrideWithValue(core.DataDir(temp.path)),
+          libraryRepositoryProvider.overrideWithValue(repo),
+          addGameHttpClientProvider.overrideWithValue(vndb.client),
+          pathPickerProvider.overrideWithValue(
+            ({String? initialDirectory, PathPickMode? mode}) async => link.path,
+          ),
+        ],
+        child: MaterialApp(
+          builder: FToastBuilder(),
+          home: Builder(
+            builder: (context) {
+              return Scaffold(
+                body: TextButton(
+                  onPressed: () => showImportFolderDialog(context),
+                  child: const Text('open'),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.text('open'));
+    await tester.pump();
+    for (var i = 0;
+        i < 200 && find.text('No games in this folder').evaluate().isEmpty;
+        i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(find.text('No games in this folder'), findsOneWidget);
+    expect(find.text('Game'), findsNothing);
+    await tester.tap(find.byKey(const Key('import-hide-imported')));
+    await tester.pump();
+    expect(find.text('Game'), findsOneWidget);
+    expect(
+      tester.widget<Checkbox>(find.byKey(const Key('import-check-0'))).onChanged,
+      isNull,
+    );
+    expect(repo.saves, 0);
+  });
+
+  testWidgets('a repeated VNDB id in the batch warns on the later row', (
     tester,
   ) async {
     await _openAndMatch(tester, duplicate: true, folders: 6);
-    expect(find.byKey(const Key('import-check-1')), findsNothing);
-    await tester.tap(find.byKey(const Key('import-hide-imported')));
-    await tester.pump();
+    expect(find.byKey(const Key('import-check-0')), findsOneWidget);
     expect(find.byKey(const Key('import-check-1')), findsOneWidget);
+    expect(_checked(tester, 0), isTrue);
+    expect(_checked(tester, 1), isFalse);
+    expect(find.text('Same VNDB entry as DEMO'), findsOneWidget);
     expect(
       tester
           .widget<Checkbox>(find.byKey(const Key('import-check-1')))
           .onChanged,
-      isNull,
+      isNotNull,
     );
   });
 
@@ -559,6 +792,121 @@ void main() {
       for (final g in _added(h)) g.launch.mode,
     ], everyElement(core.LaunchMode.native));
     await _drainToast(tester);
+  });
+
+  testWidgets('hovering a row and ticking one resolve no paths again', (
+    tester,
+  ) async {
+    await _openAndMatch(
+      tester,
+      gamesForRoot: (root) => [
+        core.Game(
+          id: 'g2',
+          title: 'Alpha',
+          launch: core.LaunchOverrides(
+            executable: p.join(root, 'Rena sensei', 'RenaPool.exe'),
+          ),
+        ),
+      ],
+    );
+    final resolved = <String>[];
+    core.onRealPath = resolved.add;
+    addTearDown(() => core.onRealPath = null);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+    await mouse.moveTo(
+      tester.getCenter(find.byKey(const Key('import-name-0'))),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('import-check-1')));
+    await tester.pump();
+    expect(resolved, isEmpty);
+  });
+
+  testWidgets('an appended scan finishes the rows still matching', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    final h = await _open(
+      tester,
+      gate: gate,
+      gateQuery: 'DEMO',
+      appended: const ['Alpha', 'Beta'],
+    );
+    await _waitFor(tester, () => h.vndb.searches > 0);
+    await tester.tap(find.byKey(const Key('import-scan')));
+    await tester.pump();
+    gate.complete();
+    await _waitFor(
+      tester,
+      () =>
+          find.byKey(const Key('import-check-6')).evaluate().isNotEmpty &&
+          find.textContaining('Matching with VNDB').evaluate().isEmpty,
+    );
+    expect(find.byKey(const Key('import-check-6')), findsOneWidget);
+    expect(find.textContaining('Matching with VNDB'), findsNothing);
+  });
+
+  testWidgets('a manual pick survives the late VNDB result of its row', (
+    tester,
+  ) async {
+    final nothing = Completer<void>();
+    final owned = Completer<void>();
+    final results = _defaultResults()..remove('Owned Game');
+    final h = await _open(
+      tester,
+      results: results,
+      holds: {'Nothing Here': nothing, 'Owned': owned},
+    );
+    await _waitFor(tester, () => h.vndb.heldQueries.contains('Nothing Here'));
+    await tester.tap(find.byKey(const Key('import-name-2')));
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const Key('import-pick-search')),
+      'Solo Quest',
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    nothing.complete();
+    await _waitFor(
+      tester,
+      () =>
+          h.vndb.heldQueries.contains('Owned') &&
+          find.text('Solo Quest Remake').evaluate().isNotEmpty,
+    );
+    await tester.tap(find.text('Solo Quest Remake'));
+    await _settle(tester);
+    expect(find.text('Selected'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('import-pick-select')));
+    await _settle(tester);
+    owned.complete();
+    await _settle(tester);
+    expect(_dialogTitle('Search VNDB'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('import-name-2')),
+        matching: find.text('Solo Quest Remake'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('closing the dialog mid-lookup sends no more VNDB searches', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    final h = await _open(tester, gate: gate, gateQuery: 'DEMO');
+    for (var i = 0; i < 200 && h.vndb.searches == 0; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(h.vndb.searches, 1);
+    await tester.pumpWidget(const SizedBox());
+    gate.complete();
+    await _settle(tester);
+    expect(h.vndb.searches, 1);
   });
 
   testWidgets('close is blocked while saving', (tester) async {
@@ -736,7 +1084,7 @@ Future<_Harness> _openAddDialog(
   SharedPreferences.setMockInitialValues({});
   final repo = _FakeRepository([]);
   final vndb = _Vndb(_defaultResults());
-  final harness = _Harness(repo, root);
+  final harness = _Harness(repo, root, vndb);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [

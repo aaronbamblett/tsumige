@@ -119,6 +119,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     _steamAppId = TextEditingController();
     _tagFocus = FocusNode();
     _mode = defaultLaunchMode(ref.read(hostPlatformProvider));
+    _exe.addListener(_onExeChanged);
     final folder = widget.folder;
     if (folder != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -127,9 +128,47 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     }
   }
 
+  /// Refreshes the setup step's duplicate warning while the exe is edited.
+  void _onExeChanged() {
+    if (!mounted || _step != _AddStep.setup) return;
+    setState(() {});
+  }
+
+  List<Game>? _dupGamesKey;
+  String _dupExeKey = '';
+  String? _dupFolderKey;
+  LaunchMode? _dupModeKey;
+  Game? _dupValue;
+  bool _dupSet = false;
+
+  /// The library game the picked exe would duplicate, if any. Steam games
+  /// need no exe, so they never count. Resolved paths are cached per
+  /// inputs so builds don't re-resolve symlinks on every rebuild.
+  Game? _duplicate(List<Game> games) {
+    final exe = _exe.text.trim();
+    if (_dupSet &&
+        identical(games, _dupGamesKey) &&
+        exe == _dupExeKey &&
+        _folder == _dupFolderKey &&
+        _mode == _dupModeKey) {
+      return _dupValue;
+    }
+    final value = _mode == LaunchMode.steam
+        ? null
+        : duplicateLibraryGame(exe: exe, folder: _folder, games: games);
+    _dupGamesKey = games;
+    _dupExeKey = exe;
+    _dupFolderKey = _folder;
+    _dupModeKey = _mode;
+    _dupValue = value;
+    _dupSet = true;
+    return value;
+  }
+
   @override
   void dispose() {
     _debounce?.cancel();
+    _exe.removeListener(_onExeChanged);
     _query.dispose();
     _title.dispose();
     _description.dispose();
@@ -374,7 +413,8 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
   Future<void> _chooseExe() async {
     final picked = await _pickGameFile();
     if (picked == null) return;
-    _exe.text = picked;
+    if (!mounted) return;
+    setState(() => _exe.text = picked);
   }
 
   Future<void> _openImport({List<String> roots = const []}) async {
@@ -411,6 +451,15 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     final exe = _exe.text.trim();
     if (_mode != LaunchMode.steam && exe.isEmpty) {
       setState(() => _formError = 'Pick the game file');
+      return;
+    }
+    final duplicate = _duplicate(
+      ref.read(libraryProvider).value?.library.games ?? const <Game>[],
+    );
+    if (duplicate != null) {
+      setState(
+        () => _formError = 'Already in your library as ${duplicate.title}.',
+      );
       return;
     }
     if (exe.isNotEmpty && isPortalPath(exe)) {
@@ -931,47 +980,57 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
           owned: owned,
           selected: _picked?.id == result.id,
           badge: result.id == _bestId ? 'Best match' : null,
-          onPick: owned ? null : () => _pick(result),
+          onPick: () => _pick(result),
         );
       },
     );
   }
 
-  Widget _setupFooter() => Padding(
-    padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-    child: Row(
-      children: [
-        BrandGlassButton(
-          key: const Key('add-game-back'),
-          height: 40,
-          expand: false,
-          onPressed: _saving ? null : () => setState(() => _step = _setupBack),
-          label: const Text('Back'),
-        ),
-        const Spacer(),
-        BrandGlassButton(
-          key: const Key('add-game-cancel'),
-          height: 40,
-          expand: false,
-          onPressed: _saving ? null : _close,
-          label: const Text('Cancel'),
-        ),
-        const SizedBox(width: 10),
-        BrandButton(
-          key: const Key('add-game-add'),
-          height: 40,
-          expand: false,
-          onPressed: _saving ? null : _add,
-          label: const Text('Add'),
-        ),
-      ],
-    ),
-  );
+  Widget _setupFooter() {
+    final games =
+        ref.watch(libraryProvider).value?.library.games ?? const <Game>[];
+    final duplicate = _duplicate(games);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+      child: Row(
+        children: [
+          BrandGlassButton(
+            key: const Key('add-game-back'),
+            height: 40,
+            expand: false,
+            onPressed: _saving
+                ? null
+                : () => setState(() => _step = _setupBack),
+            label: const Text('Back'),
+          ),
+          const Spacer(),
+          BrandGlassButton(
+            key: const Key('add-game-cancel'),
+            height: 40,
+            expand: false,
+            onPressed: _saving ? null : _close,
+            label: const Text('Cancel'),
+          ),
+          const SizedBox(width: 10),
+          BrandButton(
+            key: const Key('add-game-add'),
+            height: 40,
+            expand: false,
+            onPressed: _saving || duplicate != null ? null : _add,
+            label: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _setupStep(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final picked = _manual ? null : _picked;
+    final games =
+        ref.watch(libraryProvider).value?.library.games ?? const <Game>[];
+    final duplicate = _duplicate(games);
     final rating = picked?.rating == null
         ? null
         : '★ ${(picked!.rating! / 10).toStringAsFixed(1)}';
@@ -1082,6 +1141,16 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                       ),
                     ],
                   ),
+                  if (duplicate != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Already in your library as ${duplicate.title}.',
+                      key: const Key('add-game-duplicate'),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: scheme.error,
+                      ),
+                    ),
+                  ],
                 ],
                 const SizedBox(height: 14),
                 launchFieldLabel(context, 'Mode', false),

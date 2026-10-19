@@ -9,8 +9,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:path/path.dart' as p;
 
 import '../../../../core/model.dart';
+import '../../../../core/paths.dart';
 import '../../../../core/vndb.dart';
 import '../../../../utils/platform/platform_runtime.dart';
 import '../../../../utils/theme/brand.dart';
@@ -43,20 +45,39 @@ Future<ImportFolderResult?> showImportFolderDialog(
 
 String _games(int count) => count == 1 ? '1 game' : '$count games';
 
+/// The gap between VNDB requests from one import. Overridden with zero
+/// in tests so matching runs without real waiting.
+final importVndbGapProvider = Provider<Duration>(
+  (_) => const Duration(milliseconds: 1600),
+);
+
+/// How long a throttled (429) request waits before its retry.
+final importVndbRetryWaitProvider = Provider<Duration>(
+  (_) => const Duration(seconds: 60),
+);
+
 typedef _Plan = ({List<bool> selected, List<bool> duplicate});
 
 class _ImportRow {
-  _ImportRow(this.folder);
+  _ImportRow(this.folder) : realFolder = realPath(folder.path);
 
   final ImportFolder folder;
+  final String realFolder;
 
   /// Null while the VNDB lookup is pending.
   ImportMatchState? state;
   VnSearchResult? vn;
   String? error;
   String? exePath;
+  String? realExe;
   bool ticked = false;
   bool tickTouched = false;
+
+  /// Set by a manual pick so a late VNDB result does not replace it.
+  bool picked = false;
+
+  Set<String>? libraryExes;
+  bool inLibrary = false;
 }
 
 class ImportFolderDialog extends ConsumerStatefulWidget {
@@ -75,9 +96,40 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   bool _scanning = false;
   List<_ImportRow> _rows = const [];
   int _scanToken = 0;
+  int _generation = 0;
+  int? _matchingGeneration;
   bool _saving = false;
   int _done = 0;
   int _total = 0;
+
+  VndbRequestQueue? _queue;
+
+  /// Every VNDB request from this dialog, paced through one queue.
+  VndbRequestQueue get _vndb {
+    final queue = _queue;
+    if (queue != null) return queue;
+    return _queue = VndbRequestQueue(
+      search: ref.read(vndbSearchClientProvider).search,
+      gap: ref.read(importVndbGapProvider),
+      retryWait: ref.read(importVndbRetryWaitProvider),
+    );
+  }
+
+  int? _hoveredRow;
+
+  /// The resolved library exe paths for the current library value,
+  /// recomputed only when the games list instance changes so a rebuild
+  /// per matched row stays cheap.
+  List<Game>? _cachedGames;
+  Set<String> _cachedLibraryExes = const {};
+
+  Set<String> _libraryExes(List<Game> games) {
+    if (!identical(games, _cachedGames)) {
+      _cachedGames = games;
+      _cachedLibraryExes = libraryRealExePaths(games);
+    }
+    return _cachedLibraryExes;
+  }
 
   int? _pickIndex;
   VnSearchResult? _pickSelected;
@@ -105,6 +157,8 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   @override
   void dispose() {
     _scanToken++;
+    _generation++;
+    _queue?.cancel();
     _pickDebounce?.cancel();
     _pickQuery.dispose();
     super.dispose();
@@ -117,30 +171,66 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     _pop(ImportFolderResult.cancel);
   }
 
-  bool _inLibrary(_ImportRow row, List<Game> games) {
-    final exe = row.exePath;
-    final id = row.vn?.id;
-    return games.any(
-      (g) =>
-          (exe != null && g.launch.executable == exe) ||
-          (id != null && g.vndbId == id),
-    );
+  bool _inLibrary(_ImportRow row, Set<String> libraryExes) {
+    if (!identical(row.libraryExes, libraryExes)) {
+      row.libraryExes = libraryExes;
+      row.inLibrary = importRowInLibrary(
+        realFolder: row.realFolder,
+        libraryExes: libraryExes,
+      );
+    }
+    return row.inLibrary;
   }
 
-  bool _eligible(_ImportRow row, List<Game> games) =>
-      row.state != null && row.exePath != null && !_inLibrary(row, games);
+  bool _eligible(_ImportRow row, Set<String> libraryExes) =>
+      row.state != null &&
+      row.exePath != null &&
+      !_inLibrary(row, libraryExes);
 
-  bool _sameGame(_ImportRow a, _ImportRow b) =>
-      a.exePath == b.exePath || (a.vn != null && a.vn!.id == b.vn?.id);
+  /// Two rows with the same real exe path stay deduplicated. A repeated
+  /// VNDB id only warns, it doesn't deduplicate.
+  bool _sameGame(_ImportRow a, _ImportRow b) {
+    final ae = a.realExe;
+    final be = b.realExe;
+    return ae != null && be != null && p.equals(ae, be);
+  }
+
+  /// The warning when a row repeats a VNDB entry: the library game's
+  /// title, or the earlier row's folder name. Null when it repeats
+  /// nothing.
+  String? _repeatWarning(int index, List<Game> games) {
+    final id = _rows[index].vn?.id;
+    if (id == null) return null;
+    for (final game in games) {
+      if (game.vndbId == id) return 'Same VNDB entry as ${game.title}';
+    }
+    for (var j = 0; j < index; j++) {
+      if (_rows[j].vn?.id == id) {
+        return 'Same VNDB entry as ${_rows[j].folder.name}';
+      }
+    }
+    return null;
+  }
+
+  /// Whether [id] already names a library game or an earlier row's entry.
+  /// Such rows are unticked by default, but still tickable.
+  bool _vndbRepeats(String id, _ImportRow? except, List<Game> games) {
+    if (games.any((game) => game.vndbId == id)) return true;
+    for (final other in _rows) {
+      if (identical(other, except)) break;
+      if (other.vn?.id == id) return true;
+    }
+    return false;
+  }
 
   /// Which rows are added, and which are duplicates of an earlier added row.
-  /// The first ticked row for a VNDB id or exe wins.
-  _Plan _plan(List<Game> games) {
+  /// The first ticked row for an exe wins.
+  _Plan _plan(Set<String> libraryExes) {
     final selected = List.filled(_rows.length, false);
     final duplicate = List.filled(_rows.length, false);
     for (var i = 0; i < _rows.length; i++) {
       final row = _rows[i];
-      if (!_eligible(row, games)) continue;
+      if (!_eligible(row, libraryExes)) continue;
       for (var j = 0; j < i; j++) {
         if (selected[j] && _sameGame(_rows[j], row)) {
           duplicate[i] = true;
@@ -154,10 +244,12 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
 
   void _applyExe(_ImportRow row) {
     final vn = row.vn;
-    row.exePath = chooseExe(
+    final exe = chooseExe(
       row.folder,
       vn == null ? const [] : vnTitles(vn),
     )?.path;
+    row.exePath = exe;
+    row.realExe = exe == null ? null : realPath(exe);
   }
 
   Future<void> _browse({bool append = false}) async {
@@ -179,6 +271,11 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   Future<void> _scanRoots(List<String> roots, {required bool append}) async {
     final token = ++_scanToken;
     final platform = ref.read(hostPlatformProvider);
+    if (!append) {
+      _generation++;
+      _queue?.cancel();
+      _queue = null;
+    }
     setState(() {
       _scanning = true;
       if (!append) {
@@ -211,39 +308,74 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       }
       _scanning = false;
     });
-    for (var i = 0; i < fresh.length; i++) {
-      if (!mounted || token != _scanToken) return;
-      await _match(fresh[i], token);
-      if (i + 1 < fresh.length) {
-        await Future<void>.delayed(const Duration(seconds: 1));
-      }
-    }
+    await _matchPending();
   }
 
-  Future<void> _match(_ImportRow row, int token) async {
+  /// Matches every row still waiting for a result, in order. Only one loop
+  /// runs per generation, so an appended scan's rows join the running loop.
+  Future<void> _matchPending() async {
+    final generation = _generation;
+    if (_matchingGeneration == generation) return;
+    _matchingGeneration = generation;
+    while (mounted && generation == _generation) {
+      final index = _rows.indexWhere((row) => row.state == null);
+      if (index == -1) break;
+      await _match(_rows[index], generation);
+    }
+    if (_matchingGeneration == generation) _matchingGeneration = null;
+  }
+
+  String? _rootFor(String path) {
+    for (final root in _roots) {
+      if (p.equals(root, path) || p.isWithin(root, path)) return root;
+    }
+    return null;
+  }
+
+  Future<void> _match(_ImportRow row, int generation) async {
     final query = cleanFolderName(row.folder.name);
-    var results = const <VnSearchResult>[];
+    final exeDir = row.exePath == null
+        ? row.folder.path
+        : p.dirname(row.exePath!);
+    final parents = parentFolderQueries(
+      exeDir: exeDir,
+      root: _rootFor(row.folder.path),
+    );
+    var match = const FolderMatch(ImportMatchState.none, null);
     String? error;
     try {
-      results = await lookupFolder(
-        query,
-        ref.read(vndbSearchClientProvider).search,
+      match = await lookupFolderMatch(
+        query: query,
+        parentQueries: parents,
+        search: _vndb.run,
       );
     } catch (e) {
       error = '$e';
+      match = const FolderMatch(ImportMatchState.error, null);
     }
-    if (!mounted || token != _scanToken) return;
+    if (!mounted || generation != _generation || row.picked) return;
+    final games = ref.read(libraryProvider).value?.library.games ?? const [];
     setState(() {
-      final match = matchFolder(query, results);
       row.state = match.state;
       row.vn = match.vn;
       row.error = error;
       _applyExe(row);
       if (!row.tickTouched) {
+        final vn = match.vn;
         row.ticked =
-            match.state == ImportMatchState.matched && row.exePath != null;
+            match.state == ImportMatchState.matched &&
+            row.exePath != null &&
+            (vn == null || !_vndbRepeats(vn.id, row, games));
       }
     });
+  }
+
+  void _retryRow(_ImportRow row) {
+    setState(() {
+      row.state = null;
+      row.error = null;
+    });
+    unawaited(_matchPending());
   }
 
   void _openPick(int index) {
@@ -285,10 +417,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     });
     List<VnSearchResult> results;
     try {
-      results = rankSearchResults(
-        await ref.read(vndbSearchClientProvider).search(query),
-        query,
-      );
+      results = rankSearchResults(await _vndb.run(query), query);
     } catch (e) {
       if (!mounted || token != _pickToken) return;
       setState(() {
@@ -320,12 +449,15 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     final index = _pickIndex;
     if (vn == null || index == null) return;
     final row = _rows[index];
+    final games = ref.read(libraryProvider).value?.library.games ?? const [];
     setState(() {
+      row.picked = true;
       row.vn = vn;
       row.state = ImportMatchState.matched;
       row.error = null;
       _applyExe(row);
-      row.ticked = row.exePath != null;
+      row.ticked =
+          row.exePath != null && !_vndbRepeats(vn.id, row, games);
       _pickIndex = null;
       _pickSelected = null;
     });
@@ -333,7 +465,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
 
   Future<void> _add() async {
     final games = ref.read(libraryProvider).value?.library.games ?? const [];
-    final plan = _plan(games);
+    final plan = _plan(libraryRealExePaths(games));
     final rows = [
       for (var i = 0; i < _rows.length; i++)
         if (plan.selected[i]) _rows[i],
@@ -403,13 +535,16 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     final games =
         ref.watch(libraryProvider).value?.library.games ?? const <Game>[];
     final pick = _pickIndex;
-    final plan = _plan(games);
+    // Resolved once per library value so every row compares against the
+    // same set without re-resolving symlinks on every rebuild.
+    final libraryExes = _libraryExes(games);
+    final plan = _plan(libraryExes);
     if (pick != null) {
       return DialogShell(
         autofocus: false,
         size: dialogShellSize(context),
         eyebrow: _rows[pick].folder.name,
-        title: 'Select item',
+        title: 'Search VNDB',
         onClose: _close,
         closeKey: const Key('import-close'),
         body: _pickBody(context, games),
@@ -423,16 +558,22 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       title: 'Select games to import',
       onClose: _close,
       closeKey: const Key('import-close'),
-      body: _listBody(context, games, plan),
+      body: _listBody(context, games, plan, libraryExes),
       footer: _listFooter(games, plan),
     );
   }
 
-  bool _hidden(int index, List<Game> games, _Plan plan) =>
+  bool _hidden(int index, _Plan plan, Set<String> libraryExes) =>
       _hideImported &&
-      (plan.duplicate[index] || _inLibrary(_rows[index], games));
+      (plan.duplicate[index] ||
+          _inLibrary(_rows[index], libraryExes));
 
-  Widget _listBody(BuildContext context, List<Game> games, _Plan plan) {
+  Widget _listBody(
+    BuildContext context,
+    List<Game> games,
+    _Plan plan,
+    Set<String> libraryExes,
+  ) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final muted = theme.textTheme.bodySmall?.copyWith(
@@ -441,11 +582,11 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     );
     final visible = [
       for (var i = 0; i < _rows.length; i++)
-        if (!_hidden(i, games, plan)) i,
+        if (!_hidden(i, plan, libraryExes)) i,
     ];
     final eligible = [
       for (final i in visible)
-        if (_eligible(_rows[i], games) && !plan.duplicate[i]) i,
+        if (_eligible(_rows[i], libraryExes) && !plan.duplicate[i]) i,
     ];
     final allChecked =
         eligible.isNotEmpty && eligible.every((i) => plan.selected[i]);
@@ -488,6 +629,21 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                 ),
               ),
               if (_scanning) const LinearProgressIndicator(),
+              if (_matching case (done: final done, total: final total))
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      LinearProgressIndicator(value: done / total),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Matching with VNDB… $done of $total',
+                        style: muted,
+                      ),
+                    ],
+                  ),
+                ),
               Expanded(
                 child: visible.isEmpty
                     ? Center(
@@ -500,8 +656,13 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                       )
                     : ListView.builder(
                         itemCount: visible.length,
-                        itemBuilder: (context, position) =>
-                            _rowWidget(context, visible[position], games, plan),
+                        itemBuilder: (context, position) => _rowWidget(
+                          context,
+                          visible[position],
+                          games,
+                          plan,
+                          libraryExes,
+                        ),
                       ),
               ),
             ],
@@ -509,6 +670,14 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
         ),
       ),
     );
+  }
+
+  /// Finished and total rows while matching runs. Null once every row
+  /// has a result (or there is nothing to match), which hides the bar.
+  ({int done, int total})? get _matching {
+    if (_rows.isEmpty) return null;
+    final done = _rows.where((row) => row.state != null).length;
+    return done < _rows.length ? (done: done, total: _rows.length) : null;
   }
 
   void _setAllTicked(List<int> indices, bool ticked) {
@@ -526,15 +695,20 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     int index,
     List<Game> games,
     _Plan plan,
+    Set<String> libraryExes,
   ) {
     final row = _rows[index];
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final inLibrary = _inLibrary(row, games);
-    final vn = row.state == ImportMatchState.matched ? row.vn : null;
+    final inLibrary = _inLibrary(row, libraryExes);
+    final vn =
+        row.state == ImportMatchState.matched ||
+            (!inLibrary && row.state == ImportMatchState.check)
+        ? row.vn
+        : null;
     final canPick = !inLibrary && !_saving;
     final unmatched = vn == null;
-    Widget nameText = Text(
+    final nameText = Text(
       vn?.title ?? row.folder.name,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
@@ -544,75 +718,233 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
         color: unmatched ? scheme.onSurfaceVariant : null,
       ),
     );
-    if (row.error != null) {
-      nameText = Tooltip(message: row.error!, child: nameText);
+    Widget cover;
+    if (row.state == null) {
+      cover = Container(
+        width: 36,
+        height: 48,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainer,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: scheme.outlineVariant),
+        ),
+        child: const SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    } else if (vn != null) {
+      cover = VnCoverThumb(
+        imageUrl: vn.imageUrl,
+        sexual: vn.imageSexual,
+        width: 36,
+        height: 48,
+        radius: 4,
+      );
+    } else {
+      cover = Container(
+        width: 36,
+        height: 48,
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainer,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: scheme.outlineVariant),
+        ),
+      );
     }
     return Opacity(
       opacity: inLibrary || plan.duplicate[index] ? 0.55 : 1,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 40,
-              child: Checkbox(
-                key: Key('import-check-$index'),
-                value: plan.selected[index],
-                onChanged:
-                    _eligible(row, games) && !plan.duplicate[index] && !_saving
-                    ? (value) => setState(() {
-                        row.ticked = value ?? false;
-                        row.tickTouched = true;
-                      })
-                    : null,
-              ),
-            ),
-            if (vn != null)
-              VnCoverThumb(
-                imageUrl: vn.imageUrl,
-                sexual: vn.imageSexual,
-                width: 36,
-                height: 48,
-                radius: 4,
-              )
-            else
-              Container(
-                width: 36,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainer,
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: scheme.outlineVariant),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hoveredRow = index),
+        onExit: (_) => setState(() => _hoveredRow = null),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 40,
+                child: Checkbox(
+                  key: Key('import-check-$index'),
+                  value: plan.selected[index],
+                  onChanged:
+                      _eligible(row, libraryExes) &&
+                              !plan.duplicate[index] &&
+                              !_saving
+                      ? (value) => setState(() {
+                          row.ticked = value ?? false;
+                          row.tickTouched = true;
+                        })
+                      : null,
                 ),
               ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 5,
-              child: InkWell(
-                key: Key('import-name-$index'),
-                borderRadius: BorderRadius.circular(6),
-                onTap: canPick ? () => _openPick(index) : null,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: nameText,
+              cover,
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 5,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    InkWell(
+                      key: Key('import-name-$index'),
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: canPick ? () => _openPick(index) : null,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: nameText,
+                      ),
+                    ),
+                    _statusRow(
+                      context,
+                      index,
+                      row,
+                      inLibrary,
+                      _repeatWarning(index, games),
+                    ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 6,
-              child: MiddleEllipsisText(
-                text: row.exePath ?? '',
-                style: TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 12,
-                  color: scheme.outline,
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 6,
+                child: MiddleEllipsisText(
+                  text: row.exePath ?? '',
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    color: scheme.outline,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  /// The muted status line under a row's name, with its small text button.
+  /// Library rows keep their old look and show nothing here. A repeated
+  /// VNDB entry reads in place of the other status text, with the badge
+  /// and button staying as for the row's state.
+  Widget _statusRow(
+    BuildContext context,
+    int index,
+    _ImportRow row,
+    bool inLibrary,
+    String? repeatWarning,
+  ) {
+    if (inLibrary) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      fontSize: 12.5,
+      color: scheme.onSurfaceVariant,
+    );
+    Widget statusText(String text) => Flexible(
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: muted,
+      ),
+    );
+    switch (row.state) {
+      case null:
+        return const SizedBox.shrink();
+      case ImportMatchState.none:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            statusText(repeatWarning ?? 'No matches on VNDB'),
+            _statusButton(
+              key: Key('import-choose-$index'),
+              label: 'Choose…',
+              onPressed: _saving ? null : () => _openPick(index),
+            ),
+          ],
+        );
+      case ImportMatchState.check:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _bestMatchBadge(context),
+            if (repeatWarning != null) statusText(repeatWarning),
+            _statusButton(
+              key: Key('import-change-$index'),
+              label: 'Change…',
+              onPressed: _saving ? null : () => _openPick(index),
+            ),
+          ],
+        );
+      case ImportMatchState.error:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            statusText(repeatWarning ?? 'VNDB search failed'),
+            _statusButton(
+              key: Key('import-retry-$index'),
+              label: 'Try again',
+              onPressed: _saving ? null : () => _retryRow(row),
+            ),
+          ],
+        );
+      case ImportMatchState.matched:
+        if (repeatWarning == null && _hoveredRow != index) {
+          return const SizedBox.shrink();
+        }
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (repeatWarning != null) statusText(repeatWarning),
+            if (_hoveredRow == index)
+              _statusButton(
+                key: Key('import-change-$index'),
+                label: 'Change…',
+                onPressed: _saving ? null : () => _openPick(index),
+              ),
+          ],
+        );
+    }
+  }
+
+  Widget _bestMatchBadge(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      height: 24,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: scheme.onSurface.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        'Best match',
+        style: TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w600,
+          color: scheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  Widget _statusButton({
+    required Key key,
+    required String label,
+    required VoidCallback? onPressed,
+  }) {
+    return TextButton(
+      key: key,
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        minimumSize: const Size(0, 28),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+      ),
+      onPressed: onPressed,
+      child: Text(label, style: const TextStyle(fontSize: 12.5)),
     );
   }
 

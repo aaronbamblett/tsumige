@@ -14,6 +14,7 @@ import '../../../../../core/launch/detect.dart';
 import '../../../../../core/launch/env.dart';
 import '../../../../../core/launch/launch_modes.dart';
 import '../../../../../core/model.dart';
+import '../../../../../core/paths.dart';
 import '../../../../../utils/platform/platform_runtime.dart';
 import '../../../../../utils/prefs/app_prefs.dart';
 import '../../../../../utils/theme/brand.dart';
@@ -511,7 +512,8 @@ class _ExecutableField extends ConsumerWidget {
                 isPath: true,
                 onSave: (editor, id, text) => editor.update(
                   id,
-                  (g) => g.launch.executable = text.isEmpty ? null : text,
+                  (g) =>
+                      g.launch.executable = text.isEmpty ? null : realPath(text),
                 ),
               ),
             ),
@@ -544,7 +546,7 @@ class _ExecutableField extends ConsumerWidget {
     }
     await ref
         .read(gameEditorProvider)
-        .update(game.id, (g) => g.launch.executable = picked);
+        .update(game.id, (g) => g.launch.executable = realPath(picked));
   }
 }
 

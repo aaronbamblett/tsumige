@@ -299,7 +299,7 @@ void main() {
     expect(find.text('★ 8.5'), findsWidgets);
   });
 
-  testWidgets('an In library result cannot be picked', (tester) async {
+  testWidgets('an In library result warns but can be picked', (tester) async {
     final (_, http, _) = await _pump(
       tester,
       games: [core.Game(id: 'g1', title: 'Owned', vndbId: 'v900017')],
@@ -311,9 +311,6 @@ void main() {
     await _search(tester, 'DEMO', http);
     expect(find.text('In library'), findsOneWidget);
     await tester.tap(_resultRow('DEMO'));
-    await tester.pumpAndSettle();
-    expect(find.text('Set it up'), findsNothing);
-    await tester.tap(_resultRow('Other Game'));
     await tester.pumpAndSettle();
     await _next(tester);
     expect(find.text('Set it up'), findsOneWidget);
@@ -921,6 +918,44 @@ void main() {
     await _pump(tester, rows: [_row('v900017', 'DEMO', imageUrl: null)]);
     expect(find.text('Selected'), findsOneWidget);
     expect(find.text('Sample Studio'), findsWidgets);
+  });
+
+  testWidgets('picking a library exe through a symlink blocks Add', (
+    tester,
+  ) async {
+    final temp = Directory.systemTemp.createTempSync('tsumige_add_dup_test_');
+    addTearDown(() => temp.deleteSync(recursive: true));
+    final real = Directory(p.join(temp.path, 'real'))..createSync();
+    final alphaExe = p.join(real.path, 'Alpha.exe');
+    File(alphaExe).writeAsBytesSync([0, 1, 2]);
+    Link(p.join(temp.path, 'link')).createSync(real.path);
+    final (fake, _, _) = await _pump(
+      tester,
+      games: [
+        core.Game(
+          id: 'a',
+          title: 'Alpha',
+          launch: core.LaunchOverrides(executable: alphaExe),
+        ),
+      ],
+    );
+    await tester.tap(find.byKey(const Key('add-game-manual')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('add-game-title')),
+      'Alpha copy',
+    );
+    await tester.enterText(
+      find.byKey(const Key('add-game-exe')),
+      p.join(temp.path, 'link', 'Alpha.exe'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Already in your library as Alpha.'), findsOneWidget);
+    final add = tester.widget<BrandButton>(
+      find.byKey(const Key('add-game-add')),
+    );
+    expect(add.onPressed, isNull);
+    expect(fake.saves, 0);
   });
 
   testWidgets('a dropped folder on the start step opens the match step',

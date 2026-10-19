@@ -9,6 +9,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:tsumige/src/core/host_platform.dart';
+import 'package:tsumige/src/core/model.dart';
+import 'package:tsumige/src/core/paths.dart';
 import 'package:tsumige/src/core/vndb.dart';
 import 'package:tsumige/src/features/library/domain/folder_import.dart';
 
@@ -438,6 +440,285 @@ void main() {
     });
   });
 
+  group('already in library', () {
+    Game game(String title, String exe, {String? vndbId}) => Game(
+      id: title,
+      title: title,
+      vndbId: vndbId,
+      launch: LaunchOverrides(executable: exe),
+    );
+
+    test('a library exe seen through a symlink is in the library', () {
+      final real = Directory(p.join(temp.path, 'real'))..createSync();
+      _exe(real.path, p.join('Game', 'game.exe'));
+      Link(p.join(temp.path, 'link')).createSync(real.path);
+      final games = [game('Sym', p.join(real.path, 'Game', 'game.exe'))];
+      final exes = libraryRealExePaths(games);
+      expect(
+        importRowInLibrary(
+          realFolder: realPath(p.join(temp.path, 'link', 'Game')),
+          libraryExes: exes,
+        ),
+        isTrue,
+      );
+    });
+
+    test('a different exe in the same folder counts as in library', () {
+      final folder = Directory(p.join(temp.path, 'Kana Okaeri'))
+        ..createSync();
+      _exe(folder.path, p.join('Game', 'KANAOKA.EXE'));
+      _exe(folder.path, 'Kana_Okaeri_setup.exe');
+      final games = [
+        game('Kana Okaeri', p.join(folder.path, 'Game', 'KANAOKA.EXE')),
+      ];
+      expect(
+        importRowInLibrary(
+          realFolder: realPath(folder.path),
+          libraryExes: libraryRealExePaths(games),
+        ),
+        isTrue,
+      );
+    });
+
+    test('an unrelated folder is not in the library', () {
+      final folder = Directory(p.join(temp.path, 'Other'))..createSync();
+      _exe(folder.path, 'Other.exe');
+      final games = [game('Owned', p.join(temp.path, 'Game', 'game.exe'))];
+      expect(
+        importRowInLibrary(
+          realFolder: realPath(folder.path),
+          libraryExes: libraryRealExePaths(games),
+        ),
+        isFalse,
+      );
+    });
+
+    test('a vndb id match alone is not in the library', () {
+      final games = [game('Owned', '', vndbId: 'v99')];
+      expect(
+        importRowInLibrary(
+          realFolder: realPath(p.join(temp.path, 'Missing')),
+          libraryExes: libraryRealExePaths(games),
+        ),
+        isFalse,
+      );
+    });
+
+    test('duplicateLibraryGame matches the same file through a symlink', () {
+      final real = Directory(p.join(temp.path, 'real'))..createSync();
+      _exe(real.path, p.join('DEMO', 'DEMO.exe'));
+      final link = Link(p.join(temp.path, 'link'));
+      link.createSync(real.path);
+      final games = [
+        game('Alpha', p.join(real.path, 'DEMO', 'DEMO.exe')),
+      ];
+      final hit = duplicateLibraryGame(
+        exe: p.join(link.path, 'DEMO', 'DEMO.exe'),
+        folder: p.join(link.path, 'DEMO'),
+        games: games,
+      );
+      expect(hit?.title, 'Alpha');
+    });
+
+    test('duplicateLibraryGame matches another exe in the folder', () {
+      final folder = Directory(p.join(temp.path, 'Kana Okaeri'))
+        ..createSync();
+      _exe(folder.path, p.join('Game', 'KANAOKA.EXE'));
+      final games = [
+        game('Kana Okaeri', p.join(folder.path, 'Game', 'KANAOKA.EXE')),
+      ];
+      final hit = duplicateLibraryGame(
+        exe: p.join(folder.path, 'Kana_Okaeri_setup.exe'),
+        folder: folder.path,
+        games: games,
+      );
+      expect(hit?.title, 'Kana Okaeri');
+    });
+
+    test('duplicateLibraryGame returns null for a new exe', () {
+      final folder = Directory(p.join(temp.path, 'New'))..createSync();
+      _exe(folder.path, 'New.exe');
+      final games = [game('Owned', p.join(temp.path, 'Old', 'old.exe'))];
+      expect(
+        duplicateLibraryGame(
+          exe: p.join(folder.path, 'New.exe'),
+          folder: folder.path,
+          games: games,
+        ),
+        isNull,
+      );
+    });
+  });
+
+  group('query variants', () {
+    test('a CamelCase name splits at lower-to-Upper boundaries', () {
+      expect(splitCamelQuery('MakingLovers'), 'Making Lovers');
+      expect(splitCamelQuery('PhantomENG'), 'Phantom ENG');
+    });
+
+    test('an all-caps name stays whole', () {
+      expect(splitCamelQuery('KANADE'), isNull);
+      expect(splitCamelQuery('Making Lovers'), isNull);
+    });
+
+    test('a trailing language tag is dropped', () {
+      expect(stripLanguageTag('PhantomENG'), 'Phantom');
+      expect(stripLanguageTag('Game ENG'), 'Game');
+      expect(stripLanguageTag('Game Japanese'), 'Game');
+      expect(stripLanguageTag('GameJp'), 'Game');
+      expect(stripLanguageTag('GameEnglish'), 'Game');
+    });
+
+    test('a lowercase word ending is not a tag', () {
+      expect(stripLanguageTag('Raven'), isNull);
+      expect(stripLanguageTag('Heaven'), isNull);
+      expect(stripLanguageTag('Eden'), isNull);
+      expect(stripLanguageTag('Kitchen'), isNull);
+      expect(stripLanguageTag('Heaven Eng'), 'Heaven');
+    });
+
+    test('names without a tag stay whole', () {
+      expect(stripLanguageTag('KANADE'), isNull);
+      expect(stripLanguageTag('OPEN'), isNull);
+      expect(stripLanguageTag('Making Lovers'), isNull);
+    });
+
+    test('variants run cleaned, split, then untagged', () {
+      expect(folderQueryVariants('MakingLovers'), [
+        'MakingLovers',
+        'Making Lovers',
+      ]);
+      expect(folderQueryVariants('PhantomENG'), [
+        'PhantomENG',
+        'Phantom ENG',
+        'Phantom',
+      ]);
+      expect(folderQueryVariants('KANADE'), ['KANADE']);
+    });
+
+    test('parent folders run nearest first', () {
+      final exeDir = p.join(
+        'Lib',
+        'Phantom of Inferno Nitro Archive',
+        'PhantomENG',
+      );
+      expect(
+        parentFolderQueries(exeDir: exeDir, root: 'Lib'),
+        ['Phantom of Inferno Nitro Archive'],
+      );
+      expect(parentFolderQueries(exeDir: exeDir, root: null), isEmpty);
+    });
+  });
+
+  group('lookupFolderMatch', () {
+    test('a split name finds what the glued name misses', () async {
+      final asked = <String>[];
+      final match = await lookupFolderMatch(
+        query: 'MakingLovers',
+        parentQueries: const [],
+        search: (query) async {
+          asked.add(query);
+          return query == 'Making Lovers' ? [_vn('v21552', 'Making Lovers')] : const [];
+        },
+      );
+      expect(asked, ['MakingLovers', 'Making Lovers']);
+      expect(match.state, ImportMatchState.matched);
+      expect(match.vn!.id, 'v21552');
+    });
+
+    test('a parent folder finds what the exe folder misses', () async {
+      final asked = <String>[];
+      final match = await lookupFolderMatch(
+        query: 'PhantomENG',
+        parentQueries: ['Phantom of Inferno Nitro Archive'],
+        search: (query) async {
+          asked.add(query);
+          if (query == 'Phantom of Inferno Nitro Archive') {
+            return [_vn('v45', 'Phantom of Inferno')];
+          }
+          return const <VnSearchResult>[];
+        },
+      );
+      expect(asked.last, 'Phantom of Inferno Nitro Archive');
+      expect(match.state, ImportMatchState.matched);
+      expect(match.vn!.id, 'v45');
+    });
+
+    test('stops at the first matched', () async {
+      final asked = <String>[];
+      final match = await lookupFolderMatch(
+        query: 'DEMO',
+        parentQueries: ['Parent'],
+        search: (query) async {
+          asked.add(query);
+          return [_vn('v1', 'DEMO')];
+        },
+      );
+      expect(asked, ['DEMO']);
+      expect(match.state, ImportMatchState.matched);
+    });
+
+    test('otherwise keeps the first check', () async {
+      final match = await lookupFolderMatch(
+        query: 'Solo Quest',
+        parentQueries: const [],
+        search: (query) async => [
+          _vn('v7', 'Solo Quest Remake'),
+          _vn('v8', 'Solo Quest Remaster'),
+        ],
+      );
+      expect(match.state, ImportMatchState.check);
+      expect(match.vn!.id, 'v7');
+    });
+
+    test('a failing variant keeps an earlier check', () async {
+      final match = await lookupFolderMatch(
+        query: 'Solo Quest',
+        parentQueries: const ['Parent A', 'Parent B'],
+        search: (query) async {
+          if (query == 'Parent B') {
+            throw const VndbException('HTTP 500', statusCode: 500);
+          }
+          if (query == 'Parent A') return const [];
+          return [
+            _vn('v7', 'Solo Quest Remake'),
+            _vn('v8', 'Solo Quest Remaster'),
+          ];
+        },
+      );
+      expect(match.state, ImportMatchState.check);
+      expect(match.vn!.id, 'v7');
+    });
+
+    test('a failure with no check is rethrown', () async {
+      await expectLater(
+        lookupFolderMatch(
+          query: 'Solo Quest',
+          parentQueries: const ['Parent A'],
+          search: (query) async {
+            if (query == 'Parent A') return const [];
+            throw const VndbException('HTTP 500', statusCode: 500);
+          },
+        ),
+        throwsA(isA<VndbException>()),
+      );
+    });
+
+    test('each variant keeps its shortened retry', () async {
+      final asked = <String>[];
+      final match = await lookupFolderMatch(
+        query: 'Game Title - Subtitle Here',
+        parentQueries: const [],
+        search: (query) async {
+          asked.add(query);
+          return query == 'Game Title' ? [_vn('v1', 'Game Title')] : const [];
+        },
+      );
+      expect(asked, ['Game Title - Subtitle Here', 'Game Title']);
+      expect(match.state, ImportMatchState.matched);
+    });
+  });
+
   group('shortenedQuery and lookupFolder', () {
     test('drops a subtitle after " - " or a colon', () {
       expect(shortenedQuery('Game Title - Subtitle Here'), 'Game Title');
@@ -473,5 +754,102 @@ void main() {
         expect(asked, ['Game Title - Subtitle Here']);
       },
     );
+  });
+
+  group('VndbRequestQueue', () {
+    late DateTime now;
+    late List<Duration> waits;
+
+    setUp(() {
+      now = DateTime.utc(2026, 1, 1);
+      waits = [];
+    });
+
+    VndbRequestQueue queueWith(
+      Future<List<VnSearchResult>> Function(String) search,
+    ) => VndbRequestQueue(
+      search: search,
+      now: () => now,
+      delay: (wait) async {
+        waits.add(wait);
+        now = now.add(wait);
+      },
+    );
+
+    test('requests start at least 1.6 s apart', () async {
+      final started = <DateTime>[];
+      final queue = queueWith((query) async {
+        started.add(now);
+        return const [];
+      });
+      await Future.wait([
+        queue.run('a'),
+        queue.run('b'),
+        queue.run('c'),
+      ]);
+      expect(started, hasLength(3));
+      expect(
+        started[1].difference(started[0]),
+        greaterThanOrEqualTo(const Duration(milliseconds: 1600)),
+      );
+      expect(
+        started[2].difference(started[1]),
+        greaterThanOrEqualTo(const Duration(milliseconds: 1600)),
+      );
+    });
+
+    test('a 429 waits 60 s and retries the same request', () async {
+      var calls = 0;
+      final queue = queueWith((query) async {
+        calls++;
+        if (calls <= 2) {
+          throw const VndbException('HTTP 429', statusCode: 429);
+        }
+        return [_vn('v1', 'DEMO')];
+      });
+      final results = await queue.run('DEMO');
+      expect(results.single.id, 'v1');
+      expect(calls, 3);
+      expect(waits, const [
+        Duration(seconds: 60),
+        Duration(seconds: 60),
+      ]);
+    });
+
+    test('after 3 retries the error is rethrown', () async {
+      var calls = 0;
+      final queue = queueWith((query) async {
+        calls++;
+        throw const VndbException('HTTP 429', statusCode: 429);
+      });
+      await expectLater(queue.run('DEMO'), throwsA(isA<VndbException>()));
+      expect(calls, 4);
+      expect(waits, hasLength(3));
+    });
+
+    test('cancel stops a retry before its wait and any later request', () async {
+      late final VndbRequestQueue queue;
+      var calls = 0;
+      queue = queueWith((query) async {
+        calls++;
+        queue.cancel();
+        throw const VndbException('HTTP 429', statusCode: 429);
+      });
+      await expectLater(queue.run('a'), throwsA(isA<VndbCancelled>()));
+      await expectLater(queue.run('b'), throwsA(isA<VndbCancelled>()));
+      expect(calls, 1);
+      expect(waits, isEmpty);
+    });
+
+    test('other errors are not retried', () async {
+      var calls = 0;
+      final queue = queueWith((query) async {
+        calls++;
+        throw const VndbException('HTTP 500', statusCode: 500);
+      });
+      await expectLater(queue.run('DEMO'), throwsA(isA<VndbException>()));
+      expect(calls, 1);
+      expect(waits, isEmpty);
+    });
   });
 }

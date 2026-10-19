@@ -327,6 +327,40 @@ void main() {
     await tester.pump(const Duration(seconds: 6));
   });
 
+  testWidgets('an exe picked through a symlink is stored resolved',
+      (tester) async {
+    final temp = Directory.systemTemp.createTempSync('tsumige_launch_exe_test_');
+    addTearDown(() => temp.deleteSync(recursive: true));
+    final real = Directory('${temp.path}/real')..createSync();
+    File('${real.path}/game.exe').writeAsBytesSync([0]);
+    Link('${temp.path}/link').createSync(real.path);
+    final repo = await pumpLaunch(
+      tester,
+      [
+        core.Game(
+            id: 'g1',
+            title: 'Alpha',
+            launch: core.LaunchOverrides(executable: '/real/game.exe')),
+      ],
+      pathPicker: ({String? initialDirectory, PathPickMode mode = PathPickMode.file}) async =>
+          '${temp.path}/link/game.exe',
+    );
+    await openLaunch(tester, 'Alpha');
+    await tester.ensureVisible(find.byKey(const Key('launch-executable-choose')));
+    await tester.tap(find.byKey(const Key('launch-executable-choose')));
+    await tester.pump();
+    await tester.pump();
+    expect(repo.games.first.launch.executable, '${real.path}/game.exe');
+    await tester.ensureVisible(find.byKey(const Key('launch-executable')));
+    await tester.tap(find.byKey(const Key('launch-executable')));
+    await tester.pump();
+    await tester.enterText(
+        find.byKey(const Key('launch-executable')), '/games/typed.exe');
+    await blur(tester);
+    expect(repo.games.first.launch.executable, '/games/typed.exe');
+    await tester.pump(const Duration(seconds: 6));
+  });
+
   testWidgets('a non-digit Steam id shows the error and does not save',
       (tester) async {
     final repo = await pumpLaunch(tester, [
