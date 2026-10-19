@@ -170,24 +170,39 @@ void main() {
 
   test('short name never cuts mid-token', () {
     final eps = [game('a', 'Episode 1'), game('b', 'Episode 10')];
-    final eg = GameGroup(id: 'g', name: 'E', memberIds: ['a', 'b']);
+    final eg = GameGroup(id: 'g', name: 'Episode', memberIds: ['a', 'b']);
     final eids = byId(eps);
     expect(memberShortName(eg, eps[0], eids), '1');
     expect(memberShortName(eg, eps[1], eids), '10');
   });
 
-  test('short name keeps the full part number', () {
+  test('short name keeps the full part name after the group name', () {
     final members = [
-      game('a', 'Chapter 10'),
-      game('b', 'Chapter 11'),
-      game('c', 'Chapter 12'),
+      game('a', 'Saga Chapter 10'),
+      game('b', 'Saga Chapter 11'),
+      game('c', 'Saga Chapter 12'),
     ];
-    final group =
-        GameGroup(id: 'g', name: 'Chapters', memberIds: ['a', 'b', 'c']);
+    final group = GameGroup(id: 'g', name: 'Saga', memberIds: ['a', 'b', 'c']);
     final ids = byId(members);
-    expect(memberShortName(group, members[0], ids), '10');
-    expect(memberShortName(group, members[1], ids), '11');
-    expect(memberShortName(group, members[2], ids), '12');
+    expect(memberShortName(group, members[0], ids), 'Chapter 10');
+    expect(memberShortName(group, members[1], ids), 'Chapter 11');
+    expect(memberShortName(group, members[2], ids), 'Chapter 12');
+  });
+
+  test('short name strips separators after the group name', () {
+    final members = [
+      game('a', 'Higurashi When They Cry Hou - Ch.1 Onikakushi'),
+      game('b', 'HIGURASHI WHEN THEY CRY HOU: Ch.2 Watanagashi'),
+      game('c', 'Higurashi  When They Cry Hou – Ch.3 Tatarigoroshi'),
+    ];
+    final group = GameGroup(
+        id: 'g',
+        name: 'Higurashi When They Cry Hou',
+        memberIds: ['a', 'b', 'c']);
+    final ids = byId(members);
+    expect(memberShortName(group, members[0], ids), 'Ch.1 Onikakushi');
+    expect(memberShortName(group, members[1], ids), 'Ch.2 Watanagashi');
+    expect(memberShortName(group, members[2], ids), 'Ch.3 Tatarigoroshi');
   });
 
   test('short name keeps Episode N for a 9-nine- group', () {
@@ -228,7 +243,7 @@ void main() {
     expect(sortEpisodeIds(members), ['c', 'b', 'a']);
   });
 
-  test('short name strips the shared prefix, full title when empty', () {
+  test('short name strips the group name, full title when empty', () {
     final members = [
       game('a', '9-nine- Episode 1'),
       game('b', '9-nine- Episode 2'),

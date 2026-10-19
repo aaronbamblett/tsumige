@@ -119,16 +119,32 @@ String sharedTitlePrefix(List<String> titles) {
   return prefix.substring(0, end);
 }
 
+/// Collapses runs of whitespace to one space and trims the ends, so a group
+/// name still matches a title with different spacing.
+String _collapseWhitespace(String raw) =>
+    raw.trim().replaceAll(RegExp(r'\s+'), ' ');
+
 /// The member's short name in the episode picker: its title with the group's
-/// shared title prefix removed and trimmed; the full title when nothing is
-/// left.
-String memberShortName(GameGroup group, Game member, Map<String, Game> byId) {
-  final prefix = sharedTitlePrefix([
-    for (final id in group.memberIds)
-      if (byId[id] != null) byId[id]!.title,
-  ]);
-  final short = member.title.substring(prefix.length).trim();
-  return short.isEmpty ? member.title : short;
+/// name stripped from the start (case-insensitive, whitespace-collapsed),
+/// then leading ` -:–` trimmed. The full title when it doesn't start with
+/// the name, or when nothing is left.
+String memberShortName(GameGroup group, Game member, Map<String, Game> byId) =>
+    shortNameForGroup(group.name, member.title);
+
+/// [memberShortName] against an explicit group name, so suggestions (which
+/// have a name but no group yet) share the same rule.
+String shortNameForGroup(String groupName, String title) {
+  final name = _collapseWhitespace(groupName);
+  if (name.isEmpty) return title;
+  final collapsed = _collapseWhitespace(title);
+  if (collapsed.length <= name.length ||
+      !collapsed.toLowerCase().startsWith(name.toLowerCase())) {
+    return title;
+  }
+  final rest = collapsed
+      .substring(name.length)
+      .replaceFirst(RegExp(r'^[\s\-:–]+'), '');
+  return rest.isEmpty ? title : rest;
 }
 
 /// Enforces the group invariants in place; called by every writer (store

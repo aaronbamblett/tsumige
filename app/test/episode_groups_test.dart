@@ -72,7 +72,7 @@ core.LoadedLibrary groupLibrary({String? lastPickedId, bool firstPlayed = false}
   ]);
   library.groups.add(core.GameGroup(
       id: 'gr1',
-      name: 'Nine Nine',
+      name: '9-nine-',
       memberIds: ['ep1', 'ep2', 'ep3'],
       lastPickedId: lastPickedId));
   return core.LoadedLibrary(library: library);
@@ -144,7 +144,7 @@ void main() {
   testWidgets('a 3-member group and 2 singles show 3 tiles', (tester) async {
     await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
     expect(find.byType(GameCoverTile), findsNWidgets(3));
-    expect(find.text('Nine Nine'), findsOneWidget);
+    expect(find.text('9-nine-'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
     expect(find.text('9-nine- Episode 1'), findsNothing);
     expect(find.text('Solo A'), findsOneWidget);
@@ -156,12 +156,12 @@ void main() {
     await tester.enterText(toolbarSearch(), 'Episode 2');
     await tester.pump();
     expect(find.byType(GameCoverTile), findsOneWidget);
-    expect(find.text('Nine Nine'), findsOneWidget);
+    expect(find.text('9-nine-'), findsOneWidget);
   });
 
   testWidgets('selecting the group shows the remembered member', (tester) async {
     await pumpGroups(tester, groupLibrary(lastPickedId: 'ep3'));
-    await tester.tap(find.text('Nine Nine'));
+    await tester.tap(find.text('9-nine-'));
     await tester.pump();
     await tester.pump();
     expect(paneText('9-nine- NewEpisode'), findsOneWidget);
@@ -170,7 +170,7 @@ void main() {
   testWidgets('with no lastPickedId it opens the first unplayed member',
       (tester) async {
     await pumpGroups(tester, groupLibrary(firstPlayed: true));
-    await tester.tap(find.text('Nine Nine'));
+    await tester.tap(find.text('9-nine-'));
     await tester.pump();
     await tester.pump();
     expect(paneText('9-nine- Episode 2'), findsOneWidget);
@@ -179,7 +179,7 @@ void main() {
   testWidgets('the picker lists short names and picking switches the hero',
       (tester) async {
     final fake = await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
-    await tester.tap(find.text('Nine Nine'));
+    await tester.tap(find.text('9-nine-'));
     await tester.pump();
     await tester.pump();
     expect(paneText('9-nine- Episode 1'), findsOneWidget);
@@ -213,7 +213,7 @@ void main() {
       ),
     );
     final fake = await pumpGroups(tester, loaded);
-    await tester.tap(find.text('Nine Nine'));
+    await tester.tap(find.text('9-nine-'));
     await tester.pump();
     await tester.pump();
     await tester.tap(find.text('Related'));
@@ -231,7 +231,7 @@ void main() {
 
   testWidgets('removing the shown member keeps the group open', (tester) async {
     final fake = await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
-    await tester.tap(find.text('Nine Nine'));
+    await tester.tap(find.text('9-nine-'));
     await tester.pump();
     await tester.pump();
     final container = ProviderScope.containerOf(
@@ -352,14 +352,14 @@ void main() {
   testWidgets('rename changes the tile name and the saved file',
       (tester) async {
     final fake = await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
-    await tester.tap(find.text('Nine Nine'));
+    await tester.tap(find.text('9-nine-'));
     await tester.pump();
     await tester.pump();
     await tester.tap(find.byTooltip('More'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Rename group…'));
     await tester.pumpAndSettle();
-    expect(groupNameFieldText(tester), 'Nine Nine');
+    expect(groupNameFieldText(tester), '9-nine-');
     await tester.enterText(groupNameField(), 'Renamed');
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('group-name-confirm')));
@@ -371,7 +371,7 @@ void main() {
   testWidgets('split restores separate tiles and drops the group',
       (tester) async {
     final fake = await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
-    await tester.tap(find.text('Nine Nine'));
+    await tester.tap(find.text('9-nine-'));
     await tester.pump();
     await tester.pump();
     await tester.tap(find.byTooltip('More'));
