@@ -54,10 +54,13 @@ class _FakeRepository implements LibraryRepository {
 /// Fake VNDB: release extlinks map a Steam App ID to a VN id, id filters
 /// answer VN rows, search filters answer title rows.
 class _Vndb {
-  _Vndb({required this.bySteamId, required this.byVnId});
+  _Vndb({required this.bySteamId, required this.byVnId, this.bySearch = const {}});
 
   final Map<int, String> bySteamId;
   final Map<String, Map<String, Object?>> byVnId;
+
+  /// Title-search results by query, for the Steam name fallback.
+  final Map<String, List<Map<String, Object?>>> bySearch;
 
   MockClient get client => MockClient((request) async {
     if (request.method == 'POST') {
@@ -95,8 +98,9 @@ class _Vndb {
         );
       }
       if (filters.first == 'search') {
+        final query = filters[2] as String;
         return http.Response(
-          jsonEncode({'results': [], 'more': false}),
+          jsonEncode({'results': bySearch[query] ?? [], 'more': false}),
           200,
         );
       }
@@ -320,6 +324,58 @@ void main() {
       await _drainToast(tester);
     },
   );
+
+  testWidgets('a title-only Steam match shows Best match unticked', (
+    tester,
+  ) async {
+    // No extlink for 1569580; the title search finds only
+    // "Blue Moon Princess" for "Blue Prince".
+    await _open(
+      tester,
+      steamGames: (_) async => const [
+        InstalledSteamGame(
+          appId: 1569580,
+          name: 'Blue Prince',
+          installDir: '/steam/BluePrince',
+        ),
+      ],
+      vndb: _Vndb(
+        bySteamId: const {},
+        byVnId: const {},
+        bySearch: {
+          'Blue Prince': [_vnRow('v12345', 'Blue Moon Princess')],
+        },
+      ),
+    );
+    for (var i = 0; i < 200; i++) {
+      if (find.text('Blue Moon Princess').evaluate().isNotEmpty) break;
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    for (var i = 0; i <= 3; i++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
+    await tester.pump();
+    // The main line keeps the Steam name; the VNDB title reads below it.
+    expect(
+      tester
+          .widget<Text>(
+            find.descendant(
+              of: find.byKey(const Key('import-name-0')),
+              matching: find.byType(Text),
+            ),
+          )
+          .data,
+      'Blue Prince',
+    );
+    expect(find.text('Blue Moon Princess'), findsOneWidget);
+    expect(find.text('Best match'), findsOneWidget);
+    expect(find.text('Steam'), findsOneWidget);
+    expect(_checked(tester, 0), isFalse);
+    await _drainToast(tester);
+  });
 
   testWidgets('Hide imported off shows the library row', (tester) async {
     await _openAndMatch(

@@ -46,9 +46,12 @@ bool isSteamTool({required int appId, required String name}) {
 
 /// Matches an installed Steam game on VNDB: first by its Steam App ID
 /// through the release extlink, which maps exactly, then by its Steam name
-/// with the same title matching the folder import uses (matched, check or
-/// none). A failing App ID lookup falls through to the name search; a
-/// failure with no check match rethrows from [lookupFolderMatch].
+/// with the folder import's title matching. A failing App ID lookup falls
+/// through to the name search; a failure with no check match rethrows from
+/// [lookupFolderMatch]. A name-search hit stays a best match (check, never
+/// ticked) unless its normalised title equals the Steam name exactly: the
+/// name search is only a guess, so a weak hit like "Blue Prince" matching
+/// "Blue Moon Princess" must not tick the row.
 Future<FolderMatch> lookupSteamMatch({
   required InstalledSteamGame game,
   required Future<VnSearchResult?> Function(int appId) fetchByAppId,
@@ -58,11 +61,19 @@ Future<FolderMatch> lookupSteamMatch({
     final vn = await fetchByAppId(game.appId);
     if (vn != null) return FolderMatch(ImportMatchState.matched, vn);
   } catch (_) {}
-  return lookupFolderMatch(
+  final match = await lookupFolderMatch(
     query: cleanFolderName(game.name),
     parentQueries: const [],
     search: search,
   );
+  if (match.state == ImportMatchState.matched && match.vn != null) {
+    final source = normalise(game.name);
+    final exact = vnTitles(
+      match.vn!,
+    ).any((title) => normalise(title) == source);
+    if (!exact) return FolderMatch(ImportMatchState.check, match.vn);
+  }
+  return match;
 }
 
 p.Context _contextFor(HostPlatform platform) => p.Context(

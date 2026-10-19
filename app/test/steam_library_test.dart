@@ -261,6 +261,40 @@ void main() {
       expect(match.vn?.id, 'v21905');
     });
 
+    test('a name hit without an exact title is a best match', () async {
+      const game = InstalledSteamGame(
+        appId: 111,
+        name: 'Solo Quest',
+        installDir: '/steam/Solo',
+      );
+      final match = await lookupSteamMatch(
+        game: game,
+        fetchByAppId: (_) async => null,
+        search: (_) async => const [
+          VnSearchResult(id: 'v7', title: 'Solo Quest Remake'),
+        ],
+      );
+      expect(match.state, ImportMatchState.check);
+      expect(match.vn?.id, 'v7');
+    });
+
+    test('a name hit with an exactly equal title still matches', () async {
+      const game = InstalledSteamGame(
+        appId: 1569580,
+        name: 'Blue-Prince',
+        installDir: '/steam/Blue',
+      );
+      final match = await lookupSteamMatch(
+        game: game,
+        fetchByAppId: (_) async => null,
+        search: (_) async => const [
+          VnSearchResult(id: 'v1', title: 'Blue Prince'),
+        ],
+      );
+      expect(match.state, ImportMatchState.matched);
+      expect(match.vn?.id, 'v1');
+    });
+
     test('a failing Steam ID lookup still falls back to the name', () async {
       final match = await lookupSteamMatch(
         game: game,
