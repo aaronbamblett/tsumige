@@ -347,6 +347,7 @@ class SettingsTextBox extends StatefulWidget {
     this.controller,
     this.focusNode,
     this.hint,
+    this.hintStyle,
     this.height = 40,
     this.minHeight,
     this.minLines,
@@ -361,6 +362,7 @@ class SettingsTextBox extends StatefulWidget {
   final TextEditingController? controller;
   final FocusNode? focusNode;
   final String? hint;
+  final TextStyle? hintStyle;
   final double height;
   final double? minHeight;
   final int? minLines;
@@ -407,9 +409,10 @@ class _SettingsTextBoxState extends State<SettingsTextBox> {
         strutStyle: StrutStyle.disabled,
         decoration: InputDecoration(
           hintText: widget.hint,
-          hintStyle: theme.textTheme.bodyMedium?.copyWith(
-            color: scheme.onSurfaceVariant,
-          ),
+          hintStyle: widget.hintStyle ??
+              theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
           isDense: true,
           border: InputBorder.none,
           // Single-line text sits 4 px lower to match the dropdown values.
@@ -505,6 +508,7 @@ class SettingsTextField extends StatefulWidget {
     this.controller,
     this.focusNode,
     this.hint,
+    this.hintStyle,
     this.onSubmitted,
     this.autofocus = false,
   });
@@ -512,6 +516,7 @@ class SettingsTextField extends StatefulWidget {
   final TextEditingController? controller;
   final FocusNode? focusNode;
   final String? hint;
+  final TextStyle? hintStyle;
   final ValueChanged<String>? onSubmitted;
   final bool autofocus;
 
@@ -526,6 +531,7 @@ class _SettingsTextFieldState extends State<SettingsTextField> {
       controller: widget.controller,
       focusNode: widget.focusNode,
       hint: widget.hint,
+      hintStyle: widget.hintStyle,
       autofocus: widget.autofocus,
       onSubmitted: widget.onSubmitted,
     );

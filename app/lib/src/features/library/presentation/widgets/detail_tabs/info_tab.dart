@@ -229,6 +229,8 @@ class _DeveloperLink extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // A developer typed into Edit… has no VNDB id and nothing to filter on.
+    if (developer.id.isEmpty) return Text(developer.name);
     return InkWell(
       onTap: () =>
           ref.read(developerFilterProvider.notifier).set(developer),
