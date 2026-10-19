@@ -6,7 +6,6 @@
 
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -617,35 +616,19 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
           style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
         ),
         const SizedBox(height: 10),
-        SizedBox(
-          width: 220,
-          child: AspectRatio(
-            aspectRatio: kGameCoverAspectRatio,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child:
-                  provider == null
-                      ? ColoredBox(color: scheme.surface)
-                      : _RepositionableArt(
-                        key: const ValueKey('cover-reposition'),
-                        provider: provider,
-                        aspect: aspect,
-                        alignment: _coverAlignment,
-                        onAlignment: (a) =>
-                            setState(() => _coverAlignment = a),
-                      ),
-            ),
-          ),
+        _RepositionableArt(
+          key: const ValueKey('cover-reposition'),
+          provider: provider,
+          aspect: aspect,
+          alignment: _coverAlignment,
+          onAlignment: (a) => setState(() => _coverAlignment = a),
+          box: const Size(220, 220 / kGameCoverAspectRatio),
+          cropAspect: kGameCoverAspectRatio,
         ),
         const SizedBox(height: 8),
         Text(
           widget.game.title,
           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'Drag to reposition.',
-          style: TextStyle(fontSize: 12, color: scheme.outline),
         ),
       ],
     );
@@ -680,7 +663,6 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
     final picked =
         (pick != null && pick is! _ClearPick) ||
         (pick == null && _hasBackground);
-    final original = game.vndbOriginalTitle;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -689,95 +671,17 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
           style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
         ),
         const SizedBox(height: 10),
-        Container(
-          width: 252,
-          height: 195,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: scheme.outlineVariant),
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (provider == null)
-                ColoredBox(color: scheme.surface)
-              else
-                _RepositionableArt(
-                  key: const ValueKey('background-reposition'),
-                  provider: provider,
-                  aspect: aspect,
-                  alignment: _backgroundAlignment,
-                  onAlignment: (a) => setState(() => _backgroundAlignment = a),
-                ),
-              IgnorePointer(
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            scheme.surfaceContainer.withValues(alpha: 0),
-                            scheme.surfaceContainer.withValues(alpha: 0.55),
-                            scheme.surfaceContainer,
-                          ],
-                          stops: const [0.35, 0.62, 1.0],
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      left: 12,
-                      right: 12,
-                      bottom: 10,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            game.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: OnImage.text,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              shadows: [
-                                Shadow(
-                                  offset: Offset(0, 2),
-                                  blurRadius: 10,
-                                  color: Color(0xB3000000),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (original != null &&
-                              original.isNotEmpty &&
-                              original != game.title)
-                            Text(
-                              original,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'Drag to reposition.',
-          style: TextStyle(fontSize: 12, color: scheme.outline),
+        _RepositionableArt(
+          key: const ValueKey('background-reposition'),
+          provider: provider,
+          aspect: aspect,
+          alignment: _backgroundAlignment,
+          onAlignment: (a) => setState(() => _backgroundAlignment = a),
+          box: const Size(220, 220),
+          cropAspect: 440 / 340,
+          radius: 12,
+          outlined: true,
+          overlay: _paneOverlay(game, scheme),
         ),
         if (!picked) ...[
           const SizedBox(height: 10),
@@ -786,6 +690,66 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
             style: TextStyle(fontSize: 12, color: scheme.outline),
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _paneOverlay(Game game, ColorScheme scheme) {
+    final original = game.vndbOriginalTitle;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                scheme.surfaceContainer.withValues(alpha: 0),
+                scheme.surfaceContainer.withValues(alpha: 0.55),
+                scheme.surfaceContainer,
+              ],
+              stops: const [0.35, 0.62, 1.0],
+            ),
+          ),
+        ),
+        Positioned(
+          left: 12,
+          right: 12,
+          bottom: 10,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                game.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: OnImage.text,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  shadows: [
+                    Shadow(
+                      offset: Offset(0, 2),
+                      blurRadius: 10,
+                      color: Color(0xB3000000),
+                    ),
+                  ],
+                ),
+              ),
+              if (original != null &&
+                  original.isNotEmpty &&
+                  original != game.title)
+                Text(
+                  original,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
+                ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -851,10 +815,8 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
   }
 }
 
-/// The library crop for the active image: it draws with [BoxFit.cover] at the
-/// working alignment, and dragging moves the image under the crop window.
-/// Only the axis with overflow follows the pointer, and the alignment stays
-/// in -1..1, so [BoxFit.cover] never leaves gaps at the edges.
+/// The whole image with its crop frame outlined and the rest darkened. The
+/// frame is dragged along the overflow axis; the alignment stays in -1..1.
 class _RepositionableArt extends StatefulWidget {
   const _RepositionableArt({
     super.key,
@@ -862,17 +824,35 @@ class _RepositionableArt extends StatefulWidget {
     required this.aspect,
     required this.alignment,
     required this.onAlignment,
+    required this.box,
+    required this.cropAspect,
+    this.radius = 10,
+    this.outlined = false,
+    this.overlay,
   });
 
-  /// The image to draw.
-  final ImageProvider provider;
+  /// The image to draw, or null for an empty box.
+  final ImageProvider? provider;
 
   /// Image width over height when the candidate reports it, else 0, in which
   /// case the intrinsic size is read from the image stream.
   final double aspect;
 
+  /// The crop position, as a [BoxFit.cover] alignment.
   final Alignment alignment;
   final ValueChanged<Alignment> onAlignment;
+
+  /// The largest area the whole image is drawn in, centred and top-aligned.
+  final Size box;
+
+  /// Width over height of the crop frame that the alignment moves.
+  final double cropAspect;
+
+  final double radius;
+  final bool outlined;
+
+  /// Drawn over the crop frame, pointer-transparent.
+  final Widget? overlay;
 
   @override
   State<_RepositionableArt> createState() => _RepositionableArtState();
@@ -889,7 +869,7 @@ class _RepositionableArtState extends State<_RepositionableArt> {
   @override
   void initState() {
     super.initState();
-    if (widget.aspect <= 0) _listen();
+    if (widget.provider != null && widget.aspect <= 0) _listen();
   }
 
   @override
@@ -898,7 +878,7 @@ class _RepositionableArtState extends State<_RepositionableArt> {
     if (old.provider != widget.provider) {
       _unlisten();
       _intrinsic = null;
-      if (widget.aspect <= 0) _listen();
+      if (widget.provider != null && widget.aspect <= 0) _listen();
     }
   }
 
@@ -909,7 +889,9 @@ class _RepositionableArtState extends State<_RepositionableArt> {
   }
 
   void _listen() {
-    final stream = widget.provider.resolve(ImageConfiguration.empty);
+    final provider = widget.provider;
+    if (provider == null) return;
+    final stream = provider.resolve(ImageConfiguration.empty);
     _listener = ImageStreamListener(
       (info, _) {
         if (!mounted) return;
@@ -940,63 +922,180 @@ class _RepositionableArtState extends State<_RepositionableArt> {
     return size.width / size.height;
   }
 
-  void _move(Size box) {
+  /// The image is contained in the box. The frame is the largest crop-aspect
+  /// rectangle inside the image, placed by the alignment as BoxFit.cover
+  /// would place the crop. Null while the image size is unknown.
+  ({Rect image, Rect frame, bool overflows})? _layout() {
+    final box = widget.box;
+    if (widget.provider == null) {
+      final whole = Offset.zero & box;
+      return (image: whole, frame: whole, overflows: false);
+    }
     final aspect = _aspect;
-    if (aspect <= 0 || box.isEmpty) return;
-    // Cover scale for an aspect-wide, 1-tall image in this box.
-    final scale = max(box.width / aspect, box.height);
-    final overflowX = aspect * scale - box.width;
-    final overflowY = scale - box.height;
-    // Measured from the drag start so an overshoot past the edge is clamped,
-    // not banked: the image moves back only once the pointer returns.
+    if (aspect <= 0) return null;
+    final crop = widget.cropAspect;
+    final fillsWidth = aspect >= box.width / box.height;
+    final imageW = fillsWidth ? box.width : box.height * aspect;
+    final imageH = fillsWidth ? box.width / aspect : box.height;
+    final frameW = aspect >= crop ? imageH * crop : imageW;
+    final frameH = aspect >= crop ? imageH : imageW / crop;
+    final alignment = widget.alignment;
+    return (
+      image: Rect.fromLTWH((box.width - imageW) / 2, 0, imageW, imageH),
+      frame: Rect.fromLTWH(
+        (box.width - imageW) / 2 + (imageW - frameW) * (alignment.x + 1) / 2,
+        (imageH - frameH) * (alignment.y + 1) / 2,
+        frameW,
+        frameH,
+      ),
+      overflows: (aspect - crop).abs() > 0.01,
+    );
+  }
+
+  /// The frame follows the pointer from where the drag started, so a drag past
+  /// the edge clamps instead of banking the overshoot.
+  void _move() {
+    final layout = _layout();
+    if (layout == null || !layout.overflows) return;
+    final overflowX = layout.image.width - layout.frame.width;
+    final overflowY = layout.image.height - layout.frame.height;
     var next = _dragFrom;
-    // The image follows the pointer: dragging right reveals the left side.
     if (overflowX > 0.5) {
       next = Alignment(
-        (_dragFrom.x - _dragged.dx / (overflowX / 2)).clamp(-1.0, 1.0),
+        (_dragFrom.x + _dragged.dx / (overflowX / 2)).clamp(-1.0, 1.0),
         next.y,
       );
     }
     if (overflowY > 0.5) {
       next = Alignment(
         next.x,
-        (_dragFrom.y - _dragged.dy / (overflowY / 2)).clamp(-1.0, 1.0),
+        (_dragFrom.y + _dragged.dy / (overflowY / 2)).clamp(-1.0, 1.0),
       );
     }
     if (next != widget.alignment) widget.onAlignment(next);
   }
 
+  Widget _shade(Rect rect) => Positioned.fromRect(
+    rect: rect,
+    child: const IgnorePointer(child: ColoredBox(color: Color(0x80000000))),
+  );
+
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final box = Size(constraints.maxWidth, constraints.maxHeight);
-        return MouseRegion(
-          cursor: _dragging
-              ? SystemMouseCursors.grabbing
-              : SystemMouseCursors.grab,
-          child: GestureDetector(
-            onPanStart: (_) => setState(() {
-              _dragging = true;
-              _dragFrom = widget.alignment;
-              _dragged = Offset.zero;
-            }),
-            onPanEnd: (_) => setState(() => _dragging = false),
-            onPanCancel: () => setState(() => _dragging = false),
-            onPanUpdate: (details) {
-              _dragged += details.delta;
-              _move(box);
-            },
-            child: Image(
-              image: widget.provider,
-              fit: BoxFit.cover,
-              alignment: widget.alignment,
-              gaplessPlayback: true,
-              errorBuilder: (_, _, _) => const SizedBox.shrink(),
-            ),
+    final scheme = Theme.of(context).colorScheme;
+    final provider = widget.provider;
+    final layout = _layout();
+    final overflows = layout?.overflows ?? false;
+    final radius = BorderRadius.circular(widget.radius);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: widget.box.width,
+          height: widget.box.height,
+          decoration: widget.outlined
+              ? BoxDecoration(
+                  borderRadius: radius,
+                  border: Border.all(color: scheme.outlineVariant),
+                )
+              : null,
+          child: Stack(
+            children: [
+              Positioned.fromRect(
+                rect: layout?.image ?? Offset.zero & widget.box,
+                child: ClipRRect(
+                  key: const ValueKey('crop-image'),
+                  borderRadius: radius,
+                  child: provider == null
+                      ? ColoredBox(color: scheme.surface)
+                      : Offstage(
+                          offstage: layout == null,
+                          child: Image(
+                            image: provider,
+                            fit: BoxFit.fill,
+                            gaplessPlayback: true,
+                            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                          ),
+                        ),
+                ),
+              ),
+              if (layout != null && overflows) ...[
+                _shade(Rect.fromLTRB(
+                  layout.image.left,
+                  layout.image.top,
+                  layout.image.right,
+                  layout.frame.top,
+                )),
+                _shade(Rect.fromLTRB(
+                  layout.image.left,
+                  layout.frame.bottom,
+                  layout.image.right,
+                  layout.image.bottom,
+                )),
+                _shade(Rect.fromLTRB(
+                  layout.image.left,
+                  layout.frame.top,
+                  layout.frame.left,
+                  layout.frame.bottom,
+                )),
+                _shade(Rect.fromLTRB(
+                  layout.frame.right,
+                  layout.frame.top,
+                  layout.image.right,
+                  layout.frame.bottom,
+                )),
+                Positioned.fromRect(
+                  rect: layout.frame,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      key: const ValueKey('crop-frame'),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0x80FFFFFF)),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned.fromRect(
+                  rect: layout.image,
+                  child: MouseRegion(
+                    cursor: _dragging
+                        ? SystemMouseCursors.grabbing
+                        : SystemMouseCursors.grab,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onPanStart: (_) => setState(() {
+                        _dragging = true;
+                        _dragFrom = widget.alignment;
+                        _dragged = Offset.zero;
+                      }),
+                      onPanEnd: (_) => setState(() => _dragging = false),
+                      onPanCancel: () => setState(() => _dragging = false),
+                      onPanUpdate: (details) {
+                        _dragged += details.delta;
+                        _move();
+                      },
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                ),
+              ],
+              if (layout != null && widget.overlay != null)
+                Positioned.fromRect(
+                  rect: layout.frame,
+                  child: IgnorePointer(child: widget.overlay),
+                ),
+            ],
           ),
-        );
-      },
+        ),
+        if (overflows) ...[
+          const SizedBox(height: 10),
+          Text(
+            'Drag to reposition.',
+            style: TextStyle(fontSize: 12, color: scheme.outline),
+          ),
+        ],
+      ],
     );
   }
 }

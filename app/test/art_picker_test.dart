@@ -745,17 +745,19 @@ void main() {
 
     testWidgets('the library preview uses the 2:3 cover ratio', (tester) async {
       await _pumpDialog(tester);
-      final previews = [
-        for (final element in tester.elementList(find.byType(AspectRatio)))
-          tester.getSize(find.byWidget(element.widget)),
-      ].where((size) => (size.width - 220).abs() < 0.5);
-      expect(previews, hasLength(1));
-      final size = previews.single;
+      final size = tester.getSize(
+        find.byKey(const ValueKey('cover-reposition')),
+      );
+      expect(size.width, 220);
       expect(size.width / size.height, closeTo(2 / 3, 0.01));
     });
 
     testWidgets('both previews hint at dragging to reposition', (tester) async {
-      await _pumpDialog(tester);
+      await _pumpDialogReal(
+        tester,
+        cover: 'g1.png',
+        seed: (dir) => _seedStored(dir, cover: _tallPng()),
+      );
       expect(find.text('Drag to reposition.'), findsOneWidget);
       await tester.tap(find.text('Background'));
       await tester.pump();
@@ -804,7 +806,7 @@ void main() {
         );
         final preview = find.byKey(const ValueKey('background-reposition'));
         expect(preview, findsOneWidget);
-        await tester.drag(preview, const Offset(0, -60));
+        await tester.drag(preview, const Offset(0, 60));
         await tester.pump();
         await tester.tap(find.text('Save'));
         await tester.pumpAndSettle();
@@ -827,7 +829,7 @@ void main() {
       expect(_saveButton(tester).onPressed, isNull);
       final preview = find.byKey(const ValueKey('cover-reposition'));
       expect(preview, findsOneWidget);
-      await tester.drag(preview, const Offset(0, -50));
+      await tester.drag(preview, const Offset(0, 50));
       await tester.pump();
       expect(_saveButton(tester).onPressed, isNotNull);
       await tester.tap(find.text('Save'));
@@ -888,14 +890,14 @@ void main() {
       await tester.pump();
       await tester.drag(
         find.byKey(const ValueKey('cover-reposition')),
-        const Offset(0, -50),
+        const Offset(0, 50),
       );
       await tester.pump();
       await tester.tap(find.text('Background'));
       await tester.pump();
       await tester.drag(
         find.byKey(const ValueKey('background-reposition')),
-        const Offset(0, -30),
+        const Offset(0, 30),
       );
       await tester.pump();
       await tester.tap(find.text('Cover'));
@@ -918,18 +920,99 @@ void main() {
         seed: (dir) => _seedStored(dir, cover: _pngSized(64, 16)),
       );
       await tester.drag(
-        find.byKey(const ValueKey('cover-reposition')),
+        find.byKey(const ValueKey('crop-image')),
         const Offset(-50, 0),
       );
       await tester.pump();
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
       expect(find.byType(ArtPickerDialog), findsNothing);
-      expect(harness.game.coverAlignment?.x, greaterThan(0));
+      expect(harness.game.coverAlignment?.x, lessThan(0));
       expect(harness.game.backgroundAlignment, isNull);
     });
 
-    testWidgets('with no background the Background preview starts at topCenter',
+    testWidgets('a wide cover draws the whole image with a centred 2:3 frame',
+        (tester) async {
+      await _pumpDialogReal(
+        tester,
+        cover: 'g1.png',
+        seed: (dir) => _seedStored(dir, cover: _pngSized(64, 16)),
+      );
+      final image = tester.getRect(find.byKey(const ValueKey('crop-image')));
+      final frame = tester.getRect(find.byKey(const ValueKey('crop-frame')));
+      expect(image.width, 220);
+      expect(frame.width / frame.height, closeTo(2 / 3, 0.01));
+      expect(frame.height, closeTo(image.height, 0.5));
+      expect(frame.center.dx, closeTo(image.center.dx, 0.5));
+    });
+
+    testWidgets('dragging the frame right 20 px moves it right and raises x',
+        (tester) async {
+      final harness = await _pumpDialogReal(
+        tester,
+        cover: 'g1.png',
+        seed: (dir) => _seedStored(dir, cover: _pngSized(64, 16)),
+      );
+      final before = tester.getRect(find.byKey(const ValueKey('crop-frame')));
+      await tester.drag(
+        find.byKey(const ValueKey('crop-image')),
+        const Offset(20, 0),
+      );
+      await tester.pump();
+      final after = tester.getRect(find.byKey(const ValueKey('crop-frame')));
+      expect(after.left - before.left, closeTo(20, 1));
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(harness.game.coverAlignment?.x, greaterThan(0));
+    });
+
+    testWidgets('a drag past the edge then back 10 px keeps the frame at the edge',
+        (tester) async {
+      await _pumpDialogReal(
+        tester,
+        cover: 'g1.png',
+        seed: (dir) => _seedStored(dir, cover: _pngSized(64, 16)),
+      );
+      final image = tester.getRect(find.byKey(const ValueKey('crop-image')));
+      final gesture = await tester.startGesture(image.center);
+      await gesture.moveBy(const Offset(400, 0));
+      await tester.pump();
+      await gesture.moveBy(const Offset(-10, 0));
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+      final frame = tester.getRect(find.byKey(const ValueKey('crop-frame')));
+      expect(frame.right, closeTo(image.right, 0.5));
+    });
+
+    testWidgets('a tall background frame is 440 by 340, at the top, and drags down',
+        (tester) async {
+      final harness = await _pumpDialogReal(
+        tester,
+        cover: 'g1.png',
+        background: 'g1.png',
+        backgroundSource: _shotOne['url'] as String,
+        seed: (dir) => _seedStored(dir, background: _tallPng()),
+        backgroundTab: true,
+      );
+      final image = tester.getRect(find.byKey(const ValueKey('crop-image')));
+      final before = tester.getRect(find.byKey(const ValueKey('crop-frame')));
+      expect(before.width / before.height, closeTo(440 / 340, 0.01));
+      expect(before.width, closeTo(image.width, 0.5));
+      expect(before.top, closeTo(image.top, 0.5));
+      await tester.drag(
+        find.byKey(const ValueKey('crop-image')),
+        const Offset(0, 20),
+      );
+      await tester.pump();
+      final after = tester.getRect(find.byKey(const ValueKey('crop-frame')));
+      expect(after.top - before.top, closeTo(20, 1));
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(harness.game.backgroundAlignment!.y, greaterThan(-1));
+    });
+
+    testWidgets('with no background the Background frame starts at the top',
         (tester) async {
       await _pumpDialogReal(
         tester,
@@ -937,10 +1020,9 @@ void main() {
         seed: (dir) => _seedStored(dir, cover: _tallPng()),
         backgroundTab: true,
       );
-      expect(
-        _previewImage(tester, 'background-reposition').alignment,
-        Alignment.topCenter,
-      );
+      final image = tester.getRect(find.byKey(const ValueKey('crop-image')));
+      final frame = tester.getRect(find.byKey(const ValueKey('crop-frame')));
+      expect(frame.top, closeTo(image.top, 0.5));
     });
 
     testWidgets(
@@ -953,8 +1035,8 @@ void main() {
           backgroundTab: true,
         );
         await tester.drag(
-          find.byKey(const ValueKey('background-reposition')),
-          const Offset(0, -40),
+          find.byKey(const ValueKey('crop-image')),
+          const Offset(0, 40),
         );
         await tester.pump();
         await tester.tap(find.text('Save'));
@@ -1003,10 +1085,9 @@ void main() {
         await tester.pump();
         await tester.tap(find.text('Background'));
         await tester.pump();
-        expect(
-          _previewImage(tester, 'background-reposition').alignment,
-          Alignment.topCenter,
-        );
+        final image = tester.getRect(find.byKey(const ValueKey('crop-image')));
+        final frame = tester.getRect(find.byKey(const ValueKey('crop-frame')));
+        expect(frame.top, closeTo(image.top, 0.5));
         await tester.tap(find.text('Cover'));
         await tester.pump();
         final thumb = core.thumbPath(harness.dir, 'g1', 512);
@@ -1025,29 +1106,27 @@ void main() {
       },
     );
 
-    testWidgets(
-      'an overshoot clamps at the edge and moves back only with the pointer',
-      (tester) async {
-        final harness = await _pumpDialogReal(
-          tester,
-          cover: 'g1.png',
-          seed: (dir) => _seedStored(dir, cover: _pngSized(30, 50)),
-        );
-        final gesture = await tester.startGesture(
-          tester.getCenter(find.byKey(const ValueKey('cover-reposition'))),
-        );
-        await gesture.moveBy(const Offset(0, -200));
-        await tester.pump();
-        await gesture.moveBy(const Offset(0, 20));
-        await tester.pump();
-        await gesture.up();
-        await tester.pump();
-        expect(_saveButton(tester).onPressed, isNotNull);
-        await tester.tap(find.text('Save'));
-        await tester.pumpAndSettle();
-        expect(harness.game.coverAlignment?.y, 1);
-      },
-    );
+    testWidgets('an overshoot clamps at the edge and moves back only with the pointer',
+        (tester) async {
+      final harness = await _pumpDialogReal(
+        tester,
+        cover: 'g1.png',
+        seed: (dir) => _seedStored(dir, cover: _pngSized(30, 50)),
+      );
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(const ValueKey('crop-image'))),
+      );
+      await gesture.moveBy(const Offset(0, 200));
+      await tester.pump();
+      await gesture.moveBy(const Offset(0, -20));
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+      expect(_saveButton(tester).onPressed, isNotNull);
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(harness.game.coverAlignment?.y, 1);
+    });
 
     testWidgets('a drag of half the vertical overflow moves y by one',
         (tester) async {
@@ -1062,9 +1141,10 @@ void main() {
         ),
         seed: (dir) => _seedStored(dir, cover: _pngSized(30, 50)),
       );
+      // The 30 by 50 cover fills 330 tall, so the 297 tall frame overflows by 33.
       await tester.drag(
-        find.byKey(const ValueKey('cover-reposition')),
-        const Offset(0, -18.33),
+        find.byKey(const ValueKey('crop-image')),
+        const Offset(0, 16.5),
       );
       await tester.pump();
       await tester.tap(find.text('Save'));
@@ -1086,15 +1166,52 @@ void main() {
         ),
         seed: (dir) => _seedStored(dir, cover: _pngSized(64, 16)),
       );
+      // The wide cover overflows the 36.67 wide frame by 183.33.
       await tester.drag(
-        find.byKey(const ValueKey('cover-reposition')),
-        const Offset(-550, 0),
+        find.byKey(const ValueKey('crop-image')),
+        const Offset(91.67, 0),
       );
       await tester.pump();
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
       expect(harness.game.coverAlignment!.x, closeTo(0, 0.01));
       expect(harness.game.coverAlignment!.y, 0.5);
+    });
+
+    testWidgets('Save stores the alignment the frame drag gives',
+        (tester) async {
+      final harness = await _pumpDialogReal(
+        tester,
+        cover: 'g1.png',
+        seed: (dir) => _seedStored(dir, cover: _pngSized(30, 50)),
+      );
+      // A 8.25 px drag up moves the frame half a step of its 16.5 px half-overflow.
+      await tester.drag(
+        find.byKey(const ValueKey('crop-image')),
+        const Offset(0, -8.25),
+      );
+      await tester.pump();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(harness.game.coverAlignment!.x, 0);
+      expect(harness.game.coverAlignment!.y, closeTo(-0.5, 0.01));
+    });
+
+    testWidgets('an image at the crop aspect has no frame, hint or drag',
+        (tester) async {
+      await _pumpDialogReal(
+        tester,
+        cover: 'g1.png',
+        seed: (dir) => _seedStored(dir, cover: _pngSized(20, 30)),
+      );
+      expect(find.byKey(const ValueKey('crop-frame')), findsNothing);
+      expect(find.text('Drag to reposition.'), findsNothing);
+      await tester.drag(
+        find.byKey(const ValueKey('cover-reposition')),
+        const Offset(0, -50),
+      );
+      await tester.pump();
+      expect(_saveButton(tester).onPressed, isNull);
     });
 
     testWidgets('a drag that returns to the start leaves Save disabled',
@@ -1104,7 +1221,7 @@ void main() {
         cover: 'g1.png',
         seed: (dir) => _seedStored(dir, cover: _tallPng()),
       );
-      final preview = find.byKey(const ValueKey('cover-reposition'));
+      final preview = find.byKey(const ValueKey('crop-image'));
       await tester.drag(preview, const Offset(0, -50));
       await tester.pump();
       expect(_saveButton(tester).onPressed, isNotNull);
