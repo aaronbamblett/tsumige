@@ -143,3 +143,21 @@ class DetailFields extends _$DetailFields with PrefsMixin<Set<String>> {
     state = next;
   }
 }
+
+/// Suggestion keys the grouping notice was dismissed with. The notice hides
+/// while the current suggestion keys equal these; any change shows it again.
+/// Stored as a string list; a missing key means it was never dismissed.
+@riverpod
+class DismissedSuggestionNotice extends _$DismissedSuggestionNotice
+    with PrefsMixin<Set<String>> {
+  @override
+  Set<String> build() {
+    persistOnChange((next) async => prefs.setStringList(
+        keys.PrefKey.dismissedSuggestionNotice.key, next.toList()));
+    final raw = prefs.get(keys.PrefKey.dismissedSuggestionNotice.key);
+    if (raw is! List || raw.any((e) => e is! String)) return {};
+    return raw.cast<String>().toSet();
+  }
+
+  void dismiss(Set<String> keys) => state = keys;
+}

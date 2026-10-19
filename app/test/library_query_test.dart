@@ -149,6 +149,70 @@ void main() {
     expect(vndbTagCounts(games), [('Romance', 2), ('Yuri', 1)]);
   });
 
+  test('grouped title sort uses the group name', () {
+    final library = Library(
+      games: [
+        game('m1', 'Mango Episode 1'),
+        game('m2', 'Mango Episode 2'),
+        game('s', 'Zebra'),
+      ],
+      groups: [
+        GameGroup(id: 'g', name: 'Apple', memberIds: ['m1', 'm2']),
+      ],
+    );
+    final tiles = applyGroupedQuery(
+      library,
+      LibraryQuery(field: SortField.title, ascending: true),
+    );
+    expect(tiles.map((t) => t.title), ['Apple', 'Zebra']);
+    expect(tiles.first, isA<GroupTile>());
+  });
+
+  test('a group ranks by its best visible member', () {
+    PlaySession ago(int year) => session(year, 60);
+    final library = Library(
+      games: [
+        game('old-hidden', 'Old Hidden', sessions: [ago(2010)]),
+        game('new-shown', 'New Shown', favourite: true,
+            sessions: [ago(2020)]),
+        game('mid', 'Mid', favourite: true, sessions: [ago(2015)]),
+      ],
+      groups: [
+        GameGroup(
+            id: 'g', name: 'Pairs', memberIds: ['old-hidden', 'new-shown']),
+      ],
+    );
+    final tiles = applyGroupedQuery(
+      library,
+      const LibraryQuery(
+          favouritesOnly: true, field: SortField.lastPlayed),
+    );
+    expect(tiles.map((t) => t.title), ['Mid', 'Pairs']);
+  });
+
+  test('favourites filter shows a group when any member is a favourite',
+      () {
+    final library = Library(
+      games: [
+        game('m1', 'Mango 1', favourite: true),
+        game('m2', 'Mango 2'),
+        game('p1', 'Plain 1'),
+        game('p2', 'Plain 2'),
+        game('s', 'Solo', favourite: true),
+      ],
+      groups: [
+        GameGroup(id: 'g1', name: 'Mangoes', memberIds: ['m1', 'm2']),
+        GameGroup(id: 'g2', name: 'Plains', memberIds: ['p1', 'p2']),
+      ],
+    );
+    final tiles = applyGroupedQuery(
+      library,
+      LibraryQuery(
+          favouritesOnly: true, field: SortField.title, ascending: true),
+    );
+    expect(tiles.map((t) => t.title), ['Mangoes', 'Solo']);
+  });
+
   test('adult filter keeps all games, hides adult or shows only adult', () {
     final games = [
       Game(id: 'a', title: 'A', adultVndb: true),

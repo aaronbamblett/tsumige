@@ -4,12 +4,14 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 import 'package:tsumige/main.dart';
 import 'package:tsumige/src/core/covers.dart' as core;
 import 'package:tsumige/src/core/model.dart' as core;
@@ -19,6 +21,8 @@ import 'package:tsumige/src/core/store.dart';
 import 'package:tsumige/src/features/library/data/library_repository.dart';
 import 'package:tsumige/src/features/library/domain/cover_source.dart';
 import 'package:tsumige/src/features/library/domain/game_editor.dart';
+import 'package:tsumige/src/features/library/domain/selection.dart';
+import 'package:tsumige/src/core/groups.dart' as groups;
 import 'package:tsumige/src/features/library/domain/launch_actions.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_detail_pane.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
@@ -140,5 +144,140 @@ void main() {
     final games = container.read(libraryProvider).value!.library.games;
     expect(games.firstWhere((g) => g.id == 'g1').description, 'new words');
     expect(games.firstWhere((g) => g.id == 'g2').description, 'beta words');
+  });
+
+  /// `splitGroup` through the real repository: `groups` leaves the file and
+  /// stays gone on reload. Runs on a bare container (no widgets): with the
+  /// app pumped, async file IO never completes, so persistence is proven
+  /// here while the pane behaviour is proven in the group widget tests.
+  test('splitGroup saves through the real repository', () async {
+    final temp =
+        Directory.systemTemp.createTempSync('tsumige_editor_split_');
+    addTearDown(() => Directory(temp.path).deleteSync(recursive: true));
+    resetBackupSessionForTest();
+    final dir = core.DataDir(temp.path);
+    final ep1 = const Uuid().v4();
+    final ep2 = const Uuid().v4();
+    final seed = core.LoadedLibrary(
+      library: core.Library(games: [
+        core.Game(id: ep1, title: 'Duo Episode 1'),
+        core.Game(id: ep2, title: 'Duo Episode 2'),
+      ]),
+    );
+    seed.library.groups.add(
+      core.GameGroup(id: 'gr1', name: 'Duo', memberIds: [ep1, ep2]),
+    );
+    await saveLibrary(dir, seed);
+    final container = ProviderContainer(overrides: [
+      libraryRepositoryProvider.overrideWithValue(IoLibraryRepository(dir)),
+    ]);
+    addTearDown(container.dispose);
+    await container.read(libraryProvider.future);
+    await container.read(gameEditorProvider).splitGroup('gr1');
+    final saved = jsonDecode(await dir.libraryJson.readAsString())
+        as Map<String, Object?>;
+    expect(saved.containsKey('groups'), isFalse);
+    final again = await loadLibrary(dir);
+    expect(again.library.groups, isEmpty);
+    expect(again.library.games, hasLength(2));
+  });
+
+  test('renameGroup saves through the real repository', () async {
+    final temp =
+        Directory.systemTemp.createTempSync('tsumige_editor_rename_');
+    addTearDown(() => Directory(temp.path).deleteSync(recursive: true));
+    resetBackupSessionForTest();
+    final dir = core.DataDir(temp.path);
+    final seed = core.LoadedLibrary(
+      library: core.Library(games: [
+        core.Game(id: const Uuid().v4(), title: 'Duo Episode 1'),
+        core.Game(id: const Uuid().v4(), title: 'Duo Episode 2'),
+      ]),
+    );
+    seed.library.groups.add(
+      core.GameGroup(id: 'gr1', name: 'Duo', memberIds: [
+        seed.library.games[0].id,
+        seed.library.games[1].id,
+      ]),
+    );
+    await saveLibrary(dir, seed);
+    final container = ProviderContainer(overrides: [
+      libraryRepositoryProvider.overrideWithValue(IoLibraryRepository(dir)),
+    ]);
+    addTearDown(container.dispose);
+    await container.read(libraryProvider.future);
+    await container.read(gameEditorProvider).renameGroup('gr1', 'Renamed');
+    final again = await loadLibrary(dir);
+    expect(again.library.groups.single.name, 'Renamed');
+  });
+
+  test('combineTiles saves through the real repository', () async {
+    final temp =
+        Directory.systemTemp.createTempSync('tsumige_editor_combine_');
+    addTearDown(() => Directory(temp.path).deleteSync(recursive: true));
+    resetBackupSessionForTest();
+    final dir = core.DataDir(temp.path);
+    final ep1 = core.Game(id: const Uuid().v4(), title: 'Duo Episode 1');
+    final ep2 = core.Game(id: const Uuid().v4(), title: 'Duo Episode 2');
+    final solo = core.Game(id: const Uuid().v4(), title: 'Lone Wolf');
+    final seed = core.LoadedLibrary(
+      library: core.Library(games: [ep1, ep2, solo]),
+    );
+    seed.library.groups.add(
+      core.GameGroup(id: 'gr1', name: 'Duo', memberIds: [ep1.id, ep2.id]),
+    );
+    await saveLibrary(dir, seed);
+    final container = ProviderContainer(overrides: [
+      libraryRepositoryProvider.overrideWithValue(IoLibraryRepository(dir)),
+    ]);
+    addTearDown(container.dispose);
+    await container.read(libraryProvider.future);
+    final created = await container
+        .read(gameEditorProvider)
+        .combineTiles(name: 'Trio', tileIds: ['gr1', solo.id]);
+    expect(created, isNotNull);
+    final again = await loadLibrary(dir);
+    expect(again.library.groups, hasLength(1));
+    final group = again.library.groups.single;
+    expect(group.id, isNot('gr1'));
+    expect(group.name, 'Trio');
+    expect(group.memberIds, groups.sortEpisodeIds([ep1, ep2, solo]));
+    expect(again.library.games, hasLength(3));
+  });
+
+  test('select saves the group pick through the real repository', () async {
+    final temp =
+        Directory.systemTemp.createTempSync('tsumige_editor_pick_');
+    addTearDown(() => Directory(temp.path).deleteSync(recursive: true));
+    resetBackupSessionForTest();
+    final dir = core.DataDir(temp.path);
+    final ep1 = core.Game(id: const Uuid().v4(), title: 'Duo Episode 1');
+    final ep2 = core.Game(id: const Uuid().v4(), title: 'Duo Episode 2');
+    final seed = core.LoadedLibrary(
+      library: core.Library(games: [ep1, ep2]),
+    );
+    seed.library.groups.add(
+      core.GameGroup(
+          id: 'gr1',
+          name: 'Duo',
+          memberIds: [ep1.id, ep2.id],
+          lastPickedId: ep1.id),
+    );
+    await saveLibrary(dir, seed);
+    final container = ProviderContainer(overrides: [
+      libraryRepositoryProvider.overrideWithValue(IoLibraryRepository(dir)),
+    ]);
+    addTearDown(container.dispose);
+    await container.read(libraryProvider.future);
+    container.read(selectedGameIdProvider.notifier).select(ep2.id);
+    expect(container.read(selectedGameIdProvider), 'gr1');
+    final deadline = DateTime.now().add(const Duration(seconds: 10));
+    core.LoadedLibrary? again;
+    do {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      again = await loadLibrary(dir);
+    } while (again.library.groups.single.lastPickedId != ep2.id &&
+        DateTime.now().isBefore(deadline));
+    expect(again.library.groups.single.lastPickedId, ep2.id);
   });
 }

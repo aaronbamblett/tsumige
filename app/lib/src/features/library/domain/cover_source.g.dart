@@ -356,48 +356,57 @@ abstract class _$DeveloperFilter extends $Notifier<Developer?> {
   }
 }
 
-/// `applyQuery` over the loaded library and every toolbar preference.
+/// `applyGroupedQuery` over the loaded library and every toolbar
+/// preference: group members collapse into one tile per group.
 
-@ProviderFor(visibleGames)
-final visibleGamesProvider = VisibleGamesProvider._();
+@ProviderFor(visibleTiles)
+final visibleTilesProvider = VisibleTilesProvider._();
 
-/// `applyQuery` over the loaded library and every toolbar preference.
+/// `applyGroupedQuery` over the loaded library and every toolbar
+/// preference: group members collapse into one tile per group.
 
-final class VisibleGamesProvider
-    extends $FunctionalProvider<List<Game>, List<Game>, List<Game>>
-    with $Provider<List<Game>> {
-  /// `applyQuery` over the loaded library and every toolbar preference.
-  VisibleGamesProvider._()
+final class VisibleTilesProvider
+    extends
+        $FunctionalProvider<
+          List<LibraryTile>,
+          List<LibraryTile>,
+          List<LibraryTile>
+        >
+    with $Provider<List<LibraryTile>> {
+  /// `applyGroupedQuery` over the loaded library and every toolbar
+  /// preference: group members collapse into one tile per group.
+  VisibleTilesProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
-        name: r'visibleGamesProvider',
+        name: r'visibleTilesProvider',
         isAutoDispose: true,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
 
   @override
-  String debugGetCreateSourceHash() => _$visibleGamesHash();
+  String debugGetCreateSourceHash() => _$visibleTilesHash();
 
   @$internal
   @override
-  $ProviderElement<List<Game>> $createElement($ProviderPointer pointer) =>
-      $ProviderElement(pointer);
+  $ProviderElement<List<LibraryTile>> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
 
   @override
-  List<Game> create(Ref ref) {
-    return visibleGames(ref);
+  List<LibraryTile> create(Ref ref) {
+    return visibleTiles(ref);
   }
 
   /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(List<Game> value) {
+  Override overrideWithValue(List<LibraryTile> value) {
     return $ProviderOverride(
       origin: this,
-      providerOverride: $SyncValueProvider<List<Game>>(value),
+      providerOverride: $SyncValueProvider<List<LibraryTile>>(value),
     );
   }
 }
 
-String _$visibleGamesHash() => r'800df29f77038ec9ca2f55eaad57478a121e82af';
+String _$visibleTilesHash() => r'86a7f3e8be27827cf46334a5c5a1e007e514f4d9';
