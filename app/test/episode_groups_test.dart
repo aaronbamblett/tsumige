@@ -274,6 +274,29 @@ void main() {
     expect(find.byType(GameDetailPane), findsNothing);
   });
 
+  testWidgets('ctrl+click two tiles combines them into a group of 2',
+      (tester) async {
+    final fake = await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
+    await ctrlClick(tester, find.text('Solo A'));
+    await ctrlClick(tester, find.text('Solo B'));
+    expect(find.text('2 games selected'), findsOneWidget);
+    await tester.tap(find.text('Combine into one tile…'));
+    await tester.pumpAndSettle();
+    expect(find.text('Combine into one tile'), findsOneWidget);
+    expect(groupNameFieldText(tester), 'Solo');
+    await tester.enterText(groupNameField(), 'Test');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('group-name-confirm')));
+    await tester.pumpAndSettle();
+    expect(find.text('Test'), findsOneWidget);
+    expect(find.text('2'), findsOneWidget);
+    expect(fake.loaded.library.groups, hasLength(2));
+    final created = fake.loaded.library.groups
+        .firstWhere((group) => group.id != 'gr1');
+    expect(created.name, 'Test');
+    expect(created.memberIds, hasLength(2));
+  });
+
   testWidgets('shift+click selects the range', (tester) async {
     final library = core.Library(games: [
       game('a', 'Alpha'),
@@ -292,6 +315,38 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
     await tester.pump();
     expect(find.text('4 games selected'), findsOneWidget);
+  });
+
+  testWidgets('combining a group with a game flattens into one group of 3',
+      (tester) async {
+    final library = core.Library(games: [
+      game('ep1', 'Duo Episode 1'),
+      game('ep2', 'Duo Episode 2'),
+      game('s1', 'Lone Wolf'),
+    ]);
+    library.groups.add(
+      core.GameGroup(id: 'gr1', name: 'Duo', memberIds: ['ep1', 'ep2']),
+    );
+    final fake =
+        await pumpGroups(tester, core.LoadedLibrary(library: library));
+    await ctrlClick(tester, find.text('Duo'));
+    await ctrlClick(tester, find.text('Lone Wolf'));
+    expect(find.text('2 games selected'), findsOneWidget);
+    expect(find.text('Duo (2)'), findsOneWidget);
+    await tester.tap(find.text('Combine into one tile…'));
+    await tester.pumpAndSettle();
+    expect(groupNameFieldText(tester), 'Duo Episode 1');
+    await tester.enterText(groupNameField(), 'Trio');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('group-name-confirm')));
+    await tester.pumpAndSettle();
+    expect(fake.loaded.library.groups, hasLength(1));
+    final group = fake.loaded.library.groups.single;
+    expect(group.name, 'Trio');
+    expect(group.id, isNot('gr1'));
+    expect(group.memberIds, hasLength(3));
+    expect(find.text('Trio'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
   });
 
   testWidgets('split restores separate tiles and drops the group',
