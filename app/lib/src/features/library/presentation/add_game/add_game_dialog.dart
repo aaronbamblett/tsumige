@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:path/path.dart' as p;
 
+import '../../../../core/host_platform.dart';
 import '../../../../core/launch/launch_modes.dart';
 import '../../../../core/model.dart';
 import '../../../../core/vndb.dart';
@@ -47,6 +48,14 @@ Future<void> showAddGameDialog(
   );
 }
 
+/// Counts the distinct games under a folder: 0, 1, or 2 meaning two or
+/// more. Overridden in widget tests with a completer-backed fake.
+typedef FolderGameCount = Future<int> Function(String path, HostPlatform platform);
+
+final folderGameCountProvider = Provider<FolderGameCount>(
+  (ref) => countImportGames,
+);
+
 /// Starts adding the items dropped on the library window. Ignored while a
 /// dialog is open over it.
 Future<void> dropOntoLibrary(BuildContext context, List<String> paths) async {
@@ -55,14 +64,28 @@ Future<void> dropOntoLibrary(BuildContext context, List<String> paths) async {
     Toast(context).show(portalPathMessage);
     return;
   }
-  final platform = ProviderScope.containerOf(
-    context,
-  ).read(hostPlatformProvider);
-  final route = await routeDrop(
-    paths,
-    isDirectory: FileSystemEntity.isDirectorySync,
-    scanFolder: (path) => scanImportFolder(path, platform),
-  );
+  final container = ProviderScope.containerOf(context);
+  final platform = container.read(hostPlatformProvider);
+  final countGames = container.read(folderGameCountProvider);
+  // A single folder first runs the game-count probe. It is usually instant,
+  // so feedback only appears when it is slow: the same Toast pattern other
+  // short drop outcomes (like the portal-path warning) use.
+  Timer? slow;
+  if (paths.length == 1 && FileSystemEntity.isDirectorySync(paths.single)) {
+    slow = Timer(const Duration(milliseconds: 300), () {
+      if (context.mounted) Toast(context).show('Checking folder…');
+    });
+  }
+  DropRoute? route;
+  try {
+    route = await routeDrop(
+      paths,
+      isDirectory: FileSystemEntity.isDirectorySync,
+      countGames: (path) => countGames(path, platform),
+    );
+  } finally {
+    slow?.cancel();
+  }
   if (!context.mounted) return;
   switch (route) {
     case DropMatch(:final folder, :final file):
@@ -115,6 +138,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
   VnSearchResult? _picked;
   bool _saving = false;
   String? _formError;
+  bool _checkingFolder = false;
 
   @override
   void initState() {
@@ -270,6 +294,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
   }
 
   Future<void> _chooseFolder() async {
+    if (_checkingFolder) return;
     final picked = await ref.read(pathPickerProvider)(
       mode: PathPickMode.folder,
     );
@@ -278,14 +303,22 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
       Toast(context).show(portalPathMessage);
       return;
     }
-    List<ImportFolder> found;
+    setState(() => _checkingFolder = true);
+    int count;
     try {
-      found = await scanImportFolder(picked, ref.read(hostPlatformProvider));
+      count = await ref.read(folderGameCountProvider)(
+        picked,
+        ref.read(hostPlatformProvider),
+      );
     } on FileSystemException {
-      found = const [];
+      count = 0;
+    } finally {
+      // Clear before routing: the spinner only covers the probe, and the
+      // import dialog it can open stays up while the test clock settles.
+      if (mounted) setState(() => _checkingFolder = false);
     }
     if (!mounted) return;
-    if (found.length >= 2) {
+    if (count >= 2) {
       await _openImport(roots: [picked]);
       return;
     }
@@ -293,6 +326,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
   }
 
   Future<void> _chooseGameFile() async {
+    if (_checkingFolder) return;
     final picked = await _pickGameFile();
     if (picked == null) return;
     await _enterMatch(p.dirname(picked), file: picked);
@@ -444,16 +478,26 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
   }
 
   Future<void> _dropped(List<String> paths) async {
+    if (_checkingFolder) return;
     if (paths.any(isPortalPath)) {
       Toast(context).show(portalPathMessage);
       return;
     }
-    final route = await routeDrop(
-      paths,
-      isDirectory: FileSystemEntity.isDirectorySync,
-      scanFolder: (path) =>
-          scanImportFolder(path, ref.read(hostPlatformProvider)),
-    );
+    setState(() => _checkingFolder = true);
+    final DropRoute? route;
+    try {
+      route = await routeDrop(
+        paths,
+        isDirectory: FileSystemEntity.isDirectorySync,
+        countGames: (path) => ref.read(folderGameCountProvider)(
+          path,
+          ref.read(hostPlatformProvider),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _checkingFolder = false);
+    }
+    if (!mounted) return;
     switch (route) {
       case DropMatch(:final folder, :final file):
         await _enterMatch(folder, file: file);
@@ -615,7 +659,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                         key: const Key('add-game-choose-folder'),
                         height: 40,
                         expand: false,
-                        onPressed: _chooseFolder,
+                        onPressed: _checkingFolder ? null : _chooseFolder,
                         icon: const Icon(Icons.folder_outlined),
                         label: const Text('Choose folder…'),
                       ),
@@ -624,11 +668,30 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                         key: const Key('add-game-choose-file'),
                         height: 40,
                         expand: false,
-                        onPressed: _chooseGameFile,
+                        onPressed: _checkingFolder ? null : _chooseGameFile,
                         label: const Text('Choose game file…'),
                       ),
                     ],
                   ),
+                  if (_checkingFolder) ...[
+                    const SizedBox(height: 14),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox.square(
+                          dimension: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Checking folder…',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -643,7 +706,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   icon: Icons.sports_esports_outlined,
                   title: 'Steam game',
                   subtitle: 'By App ID',
-                  onTap: _startSteam,
+                  onTap: _checkingFolder ? null : _startSteam,
                 ),
               ),
               const SizedBox(width: 12),
@@ -653,7 +716,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   key: const Key('add-game-import'),
                   icon: Icons.folder_copy_outlined,
                   title: 'Import folder',
-                  onTap: () => _openImport(),
+                  onTap: _checkingFolder ? null : () => _openImport(),
                 ),
               ),
             ],
@@ -669,7 +732,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     required IconData icon,
     required String title,
     String? subtitle,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
   }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;

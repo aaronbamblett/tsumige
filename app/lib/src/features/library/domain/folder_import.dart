@@ -151,6 +151,54 @@ Future<List<ImportFolder>> scanImportFolder(
   return folders;
 }
 
+/// How many distinct games sit under [rootPath]: 0, 1, or 2, where 2 means
+/// two or more. Used to decide whether a picked or dropped folder is one
+/// game or an import root, without the full [scanImportFolder] pass.
+///
+/// Shares the full scan's rules: a root holding a launchable is the only
+/// game, exe dirs walk up past generic subfolders via [_gameFolder], and
+/// exe dirs nested inside another exe dir belong to that game. The walk is
+/// top-down, so ancestors are always known before their children, and it
+/// returns as soon as a second distinct game is found instead of reading
+/// the rest of the tree. Async with one directory listing at a time, so it
+/// never blocks on a synchronous recursive walk.
+///
+/// [listSubfolders] and [holdsLaunchable] are seams for tests; they default
+/// to [_subfolders] and [_holdsLaunchable].
+Future<int> countImportGames(
+  String rootPath,
+  HostPlatform platform, {
+  Future<List<String>> Function(String dir)? listSubfolders,
+  Future<bool> Function(String dir)? holdsLaunchable,
+}) async {
+  final root = p.normalize(rootPath);
+  final subs = listSubfolders ?? _subfolders;
+  final holds =
+      holdsLaunchable ?? (String dir) => _holdsLaunchable(dir, platform);
+  if (await holds(root)) return 1;
+  final exeDirs = <String>{};
+  final games = <String>{};
+  var frontier = [root];
+  for (var depth = 0; depth < _maxGameDepth; depth++) {
+    final next = <String>[];
+    for (final folder in frontier) {
+      for (final sub in await subs(folder)) {
+        if (await holds(sub)) {
+          exeDirs.add(sub);
+          if (!_hasExeDirAbove(sub, exeDirs, root)) {
+            games.add(_gameFolder(sub, root));
+            if (games.length >= 2) return 2;
+          }
+        }
+        next.add(sub);
+      }
+    }
+    frontier = next;
+    if (frontier.isEmpty) return games.length;
+  }
+  return games.length;
+}
+
 String _gameFolder(String exeDir, String root) {
   var game = exeDir;
   while (game != root &&

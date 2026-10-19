@@ -4,25 +4,26 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tsumige/src/features/library/domain/drop_routing.dart';
-import 'package:tsumige/src/features/library/domain/folder_import.dart';
 
 bool _isDir(String path) => !path.endsWith('.exe');
 
-Future<List<ImportFolder>> Function(String) _scan(Map<String, int> games) =>
-    (path) async => [
-      for (var i = 0; i < (games[path] ?? 0); i++)
-        ImportFolder(name: 'Game$i', path: '$path/Game$i', exes: const []),
-    ];
+Future<int> Function(String) _count(Map<String, int> games) =>
+    (path) async => games[path] ?? 0;
 
-Future<List<ImportFolder>> _noScan(String path) =>
-    throw StateError('must not scan $path');
+Future<int> _noCount(String path) => throw StateError('must not probe $path');
+
+Future<int> _failingCount(String path) {
+  throw FileSystemException('unreadable', path);
+}
 
 void main() {
   test('nothing dropped routes nowhere', () async {
     expect(
-      await routeDrop(const [], isDirectory: _isDir, scanFolder: _noScan),
+      await routeDrop(const [], isDirectory: _isDir, countGames: _noCount),
       isNull,
     );
   });
@@ -32,7 +33,7 @@ void main() {
         (await routeDrop(
               ['/games/Alpha'],
               isDirectory: _isDir,
-              scanFolder: _scan({'/games/Alpha': 1}),
+              countGames: _count({'/games/Alpha': 1}),
             ))!;
     expect(route, isA<DropMatch>());
     final match = route as DropMatch;
@@ -45,7 +46,7 @@ void main() {
         (await routeDrop(
               ['/games/Alpha'],
               isDirectory: _isDir,
-              scanFolder: _scan({'/games/Alpha': 0}),
+              countGames: _count({'/games/Alpha': 0}),
             ))!;
     expect(route, isA<DropMatch>());
     expect((route as DropMatch).folder, '/games/Alpha');
@@ -56,10 +57,21 @@ void main() {
         (await routeDrop(
               ['/games/Story'],
               isDirectory: _isDir,
-              scanFolder: _scan({'/games/Story': 3}),
+              countGames: _count({'/games/Story': 2}),
             ))!;
     expect(route, isA<DropImport>());
     expect((route as DropImport).roots, ['/games/Story']);
+  });
+
+  test('a probe failure is a single game with that folder', () async {
+    final route =
+        (await routeDrop(
+              ['/games/Alpha'],
+              isDirectory: _isDir,
+              countGames: _failingCount,
+            ))!;
+    expect(route, isA<DropMatch>());
+    expect((route as DropMatch).folder, '/games/Alpha');
   });
 
   test('one game file matches its parent folder with that file', () async {
@@ -67,7 +79,7 @@ void main() {
         (await routeDrop(
               ['/games/Alpha/Alpha.exe'],
               isDirectory: _isDir,
-              scanFolder: _noScan,
+              countGames: _noCount,
             ))!
             as DropMatch;
     expect(match.folder, '/games/Alpha');
@@ -79,7 +91,7 @@ void main() {
         (await routeDrop(
               ['/games/Alpha', '/games/Beta'],
               isDirectory: _isDir,
-              scanFolder: _noScan,
+              countGames: _noCount,
             ))!
             as DropImport;
     expect(route.roots, ['/games/Alpha', '/games/Beta']);
@@ -94,7 +106,7 @@ void main() {
                 '/games/Beta/Beta.exe',
               ],
               isDirectory: _isDir,
-              scanFolder: _noScan,
+              countGames: _noCount,
             ))!
             as DropImport;
     expect(route.roots, ['/games/Alpha', '/games/Beta']);

@@ -25,6 +25,7 @@ import 'package:tsumige/src/core/paths.dart' as core;
 import 'package:tsumige/src/core/vndb.dart' as core;
 import 'package:tsumige/src/features/library/data/library_repository.dart';
 import 'package:tsumige/src/features/library/domain/add_game.dart';
+import 'package:tsumige/src/features/library/domain/folder_import.dart';
 import 'package:tsumige/src/features/library/domain/game_editor.dart';
 import 'package:tsumige/src/features/library/domain/selection.dart';
 import 'package:tsumige/src/features/library/presentation/add_game/add_game_dialog.dart';
@@ -140,6 +141,7 @@ Future<(_FakeRepository, _Http, ProviderContainer)> _pump(
   Size surface = const Size(1280, 800),
   bool openMatch = true,
   String Function(String folder)? pickFolder,
+  FolderGameCount? countGames,
 }) async {
   tester.view.physicalSize = surface;
   tester.view.devicePixelRatio = 1.0;
@@ -164,6 +166,9 @@ Future<(_FakeRepository, _Http, ProviderContainer)> _pump(
         dataDirProvider.overrideWithValue(core.DataDir(temp.path)),
         libraryRepositoryProvider.overrideWithValue(fake),
         addGameHttpClientProvider.overrideWithValue(http.client),
+        folderGameCountProvider.overrideWithValue(
+          countGames ?? countImportGames,
+        ),
         pathPickerProvider.overrideWithValue(
           ({String? initialDirectory, PathPickMode? mode}) async =>
               mode == PathPickMode.file
@@ -260,6 +265,43 @@ Future<void> _drainToast(WidgetTester tester) =>
     tester.pump(const Duration(seconds: 6));
 
 void main() {
+  testWidgets('choosing a folder shows Checking folder while the probe runs', (
+    tester,
+  ) async {
+    final gate = Completer<int>();
+    final probed = <String>[];
+    await _pump(
+      tester,
+      openMatch: false,
+      countGames: (path, platform) {
+        probed.add(path);
+        return gate.future;
+      },
+    );
+    await tester.tap(find.byKey(const Key('add-game-choose-folder')));
+    await tester.pump();
+    expect(find.text('Checking folder…'), findsOneWidget);
+    // Further picks are ignored until the probe resolves.
+    await tester.tap(find.byKey(const Key('add-game-choose-folder')));
+    await tester.pump();
+    expect(probed, hasLength(1));
+    expect(find.text('Checking folder…'), findsOneWidget);
+    gate.complete(1);
+    for (
+      var i = 0;
+      i < 100 && find.text('Match on VNDB').evaluate().isEmpty;
+      i++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    expect(find.text('Match on VNDB'), findsOneWidget);
+    expect(find.text('Checking folder…'), findsNothing);
+  });
+
   testWidgets('typing searches once after the debounce', (tester) async {
     final (_, http, _) = await _pump(
       tester,
