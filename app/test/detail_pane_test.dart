@@ -1659,6 +1659,24 @@ void main() {
         isNull);
   });
 
+  testWidgets('Edit… hints use the outline colour', (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openEditDetails(tester, 'Alpha');
+    final scheme = Theme.of(
+      tester.element(find.byKey(const Key('edit-details-developers'))),
+    ).colorScheme;
+    for (final key in ['edit-details-developers', 'edit-details-released']) {
+      final textField = tester.widget<TextField>(
+        find.descendant(
+          of: find.byKey(Key(key)),
+          matching: find.byType(TextField),
+        ),
+      );
+      expect(textField.decoration?.hintStyle?.color, scheme.outline,
+          reason: key);
+    }
+  });
+
   testWidgets('Change art stores a picked file as the cover and thumbnails',
       (tester) async {
     late Directory temp;

@@ -326,7 +326,7 @@ class _EditDetailsDialogState extends ConsumerState<EditDetailsDialog> {
               TextButton(
                 key: Key('use-vndb-$vndbKey'),
                 style: TextButton.styleFrom(
-                  foregroundColor: scheme.onSurfaceVariant,
+                  foregroundColor: scheme.primary,
                   minimumSize: const Size(0, 28),
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -338,7 +338,14 @@ class _EditDetailsDialogState extends ConsumerState<EditDetailsDialog> {
           ],
         ),
         const SizedBox(height: 6),
-        SettingsTextField(key: fieldKey, controller: controller, hint: hint),
+        SettingsTextField(
+          key: fieldKey,
+          controller: controller,
+          hint: hint,
+          hintStyle: hint == null
+              ? null
+              : TextStyle(color: scheme.outline, fontSize: 14),
+        ),
       ],
     );
   }
