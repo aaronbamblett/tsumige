@@ -302,7 +302,7 @@ class _HeroTitle extends StatelessWidget {
           style: TextStyle(
             color: OnImage.text,
             fontSize: 30,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
             height: 1.15,
             shadows: [
               Shadow(

@@ -4,6 +4,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -25,6 +27,13 @@ void main() {
       final theme = themeFor(brightness);
       expect(theme.textTheme.bodyLarge?.fontFamily, 'Inter');
     }
+  });
+
+  test('Inter Bold (700) asset is declared', () {
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+    expect(pubspec, contains('assets/fonts/Inter-Bold.ttf'));
+    expect(pubspec, contains('weight: 700'));
+    expect(File('assets/fonts/Inter-Bold.ttf').existsSync(), isTrue);
   });
 
   test('Inter licence is registered', () async {

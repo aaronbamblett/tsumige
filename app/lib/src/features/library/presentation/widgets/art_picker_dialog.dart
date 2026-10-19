@@ -728,7 +728,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
                 style: const TextStyle(
                   color: OnImage.text,
                   fontSize: 18,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                   shadows: [
                     Shadow(
                       offset: Offset(0, 2),

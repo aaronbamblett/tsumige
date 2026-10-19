@@ -82,9 +82,8 @@ double _labelWidth(BuildContext context, String text) {
 }
 
 /// Width of the sort control: the smallest width fitting the longest label
-/// in [sortFieldLabels], measured at runtime so it fits the platform's
-/// default font. Fixed across sort fields, so the control never jumps when
-/// the sort changes.
+/// in [sortFieldLabels], measured in the ambient text style. Fixed across
+/// sort fields, so the control never jumps when the sort changes.
 double sortBoxWidth(BuildContext context) {
   var widest = 0.0;
   for (final label in sortFieldLabels.values) {
