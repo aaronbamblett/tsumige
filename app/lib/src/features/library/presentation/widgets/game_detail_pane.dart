@@ -601,6 +601,13 @@ class _HeroControls extends ConsumerWidget {
                 }
               case 'art':
                 showArtPickerDialog(context, game);
+              case 'vndb':
+                final vndbId = game.vndbId;
+                if (vndbId != null) {
+                  await ref.read(vndbUrlOpenerProvider)(
+                    Uri.parse('https://vndb.org/$vndbId'),
+                  );
+                }
               case 'adult':
                 ref
                     .read(gameEditorProvider)
@@ -631,6 +638,11 @@ class _HeroControls extends ConsumerWidget {
           itemBuilder: (context) => [
             const PopupMenuItem(value: 'edit', child: Text('Edit…')),
             const PopupMenuItem(value: 'art', child: Text('Change art…')),
+            if (game.vndbId != null)
+              const PopupMenuItem(
+                value: 'vndb',
+                child: Text('Open on VNDB'),
+              ),
             if (group != null)
               const PopupMenuItem(
                 value: 'rename',

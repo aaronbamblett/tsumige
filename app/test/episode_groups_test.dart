@@ -22,6 +22,7 @@ import 'package:tsumige/src/features/library/domain/cover_source.dart';
 import 'package:tsumige/src/features/library/domain/game_editor.dart';
 import 'package:tsumige/src/features/library/domain/launch_actions.dart';
 import 'package:tsumige/src/features/library/domain/selection.dart';
+import 'package:tsumige/src/features/library/presentation/widgets/detail_tabs/related_tab.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_cover_tile.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_detail_pane.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/multi_selection_pane.dart';
@@ -81,7 +82,10 @@ core.LoadedLibrary groupLibrary({String? lastPickedId, bool firstPlayed = false}
 }
 
 Future<GroupFakeRepository> pumpGroups(
-    WidgetTester tester, core.LoadedLibrary loaded) async {
+  WidgetTester tester,
+  core.LoadedLibrary loaded, {
+  Future<bool> Function(Uri)? urlOpener,
+}) async {
   tester.view.physicalSize = const Size(1280, 800);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(() {
@@ -107,6 +111,8 @@ Future<GroupFakeRepository> pumpGroups(
         libraryRepositoryProvider.overrideWithValue(fake),
         coverExistsProvider.overrideWithValue((_) => false),
         umuRunPathProvider.overrideWithValue('/usr/bin/umu-run'),
+        if (urlOpener != null)
+          vndbUrlOpenerProvider.overrideWithValue(urlOpener),
       ],
       child: const TsumigeApp(),
     ),
@@ -730,6 +736,38 @@ void main() {
           '2 series can be grouped'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('Open on VNDB uses the shown group member', (tester) async {
+    final opened = <Uri>[];
+    final ep1 = game('ep1', '9-nine- Episode 1');
+    final ep2 = core.Game(id: 'ep2', title: '9-nine- Episode 2', vndbId: 'v777');
+    final library = core.Library(games: [ep1, ep2]);
+    library.groups.add(
+      core.GameGroup(
+        id: 'gr1',
+        name: '9-nine-',
+        memberIds: ['ep1', 'ep2'],
+        lastPickedId: 'ep2',
+      ),
+    );
+    await pumpGroups(
+      tester,
+      core.LoadedLibrary(library: library),
+      urlOpener: (uri) async {
+        opened.add(uri);
+        return true;
+      },
+    );
+    await tester.tap(find.text('9-nine-'));
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    expect(find.text('Open on VNDB'), findsOneWidget);
+    await tester.tap(find.text('Open on VNDB'));
+    await tester.pumpAndSettle();
+    expect(opened.single.toString(), 'https://vndb.org/v777');
   });
 }
 

@@ -2242,4 +2242,32 @@ void main() {
       expect(image.alignment, const Alignment(-0.5, 0.5));
     }
   });
+
+  testWidgets('More menu hides Open on VNDB without a vndbId', (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openPane(tester, 'Alpha');
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    expect(find.text('Change art…'), findsOneWidget);
+    expect(find.text('Open on VNDB'), findsNothing);
+  });
+
+  testWidgets('Open on VNDB launches the game VNDB page', (tester) async {
+    final opened = <Uri>[];
+    await pumpLibrary(
+      tester,
+      [core.Game(id: 'g1', title: 'Alpha', vndbId: 'v12345')],
+      urlOpener: (uri) async {
+        opened.add(uri);
+        return true;
+      },
+    );
+    await openPane(tester, 'Alpha');
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    expect(find.text('Open on VNDB'), findsOneWidget);
+    await tester.tap(find.text('Open on VNDB'));
+    await tester.pumpAndSettle();
+    expect(opened.single.toString(), 'https://vndb.org/v12345');
+  });
 }
