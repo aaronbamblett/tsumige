@@ -148,8 +148,9 @@ class LaunchActions {
     } on LaunchConfigError catch (e) {
       if (context.mounted) Toast(context).showError(e.message);
     } catch (e) {
+      debugPrint('$e');
       if (context.mounted) {
-        Toast(context).showError('Failed to launch ${game.title}: $e');
+        Toast(context).showError('Failed to launch ${game.title}');
       }
     } finally {
       _ref.read(runningGamesProvider.notifier).remove(game.id);

@@ -221,10 +221,11 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
           : await client.search(query);
       results = rankSearchResults(found, query);
     } catch (e) {
+      debugPrint('$e');
       if (!mounted || token != _searchToken) return;
       setState(() {
         _loading = false;
-        _searchError = '$e';
+        _searchError = "Couldn't reach VNDB.";
       });
       return;
     }

@@ -636,7 +636,7 @@ class _WineRunnerFieldState extends ConsumerState<_WineRunnerField> {
                   key: const Key('launch-runner-custom'),
                   gameId: widget.game.id,
                   initial: _selected() == _customKey ? (stored ?? '') : '',
-                  hint: widget.defaultRunner ?? 'umu default',
+                  hint: widget.defaultRunner ?? 'wine',
                   isPath: true,
                   onSave: (editor, id, text) =>
                       editor.update(id, (g) => g.launch.runner = text),

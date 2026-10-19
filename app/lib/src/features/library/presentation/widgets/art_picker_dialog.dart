@@ -23,6 +23,7 @@ import '../../data/library_repository.dart';
 import '../../domain/cover_source.dart';
 import '../../domain/add_game.dart';
 import '../../domain/game_editor.dart';
+import '../../domain/runner_detection.dart';
 import 'art_image.dart';
 import 'art_overlay.dart';
 import 'art_store.dart';
@@ -170,10 +171,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
     final picked = await ref.read(coverPickerProvider)();
     if (picked == null || picked.isEmpty || !mounted) return;
     if (picked.startsWith('/run/user/')) {
-      Toast(context).show(
-        'That file came through the Flatpak portal. '
-        'Pick it from its real location.',
-      );
+      Toast(context).show(portalPathMessage);
       return;
     }
     _setActivePick(_FilePick(picked));
@@ -272,9 +270,10 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
       }
       if (mounted) _close();
     } catch (e) {
+      debugPrint('$e');
       if (!mounted) return;
       setState(() => _saving = false);
-      Toast(context).showError("Couldn't use that image: $e");
+      Toast(context).showError("Couldn't use that image");
     }
   }
 

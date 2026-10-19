@@ -40,7 +40,8 @@ class _LibrarySectionState extends ConsumerState<LibrarySection> {
       if (loaded.skipped.isNotEmpty) {
         if (mounted) {
           Toast(context).showError(
-            'Some library entries could not be read, so ratings cannot be saved. Fix library.json first.',
+            "Some library entries couldn't be read. "
+            'Fix library.json, then try again.',
           );
         }
         return;
@@ -52,9 +53,7 @@ class _LibrarySectionState extends ConsumerState<LibrarySection> {
         } on core.ChangedOnDisk {
           await notifier.reload();
           if (mounted) {
-            Toast(context).showError(
-              'The library changed outside the app. Reloaded it, try again.',
-            );
+            Toast(context).showError(core.changedOnDiskMessage);
           }
           return;
         } catch (_) {
@@ -65,17 +64,22 @@ class _LibrarySectionState extends ConsumerState<LibrarySection> {
       await notifier.reload();
       if (!mounted) return;
       if (report.error != null) {
-        Toast(context).showError('VNDB refresh failed: ${report.error}');
+        debugPrint('${report.error}');
+        Toast(context).showError("Couldn't reach VNDB.");
         return;
       }
-      var message = 'Updated ${report.updated} VNDB ratings';
+      final updated = report.updated == 1
+          ? '1 game'
+          : '${report.updated} games';
+      var message = 'Updated $updated from VNDB';
       if (report.notFound.isNotEmpty) {
-        message += ', ${report.notFound.length} not found on VNDB';
+        message += ', ${report.notFound.length} not found';
       }
       Toast(context).show(message);
     } catch (e) {
+      debugPrint('$e');
       if (mounted) {
-        Toast(context).showError('VNDB refresh failed: $e');
+        Toast(context).showError("Couldn't reach VNDB.");
       }
     } finally {
       if (mounted) setState(() => _refreshing = false);

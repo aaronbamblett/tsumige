@@ -289,9 +289,10 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
         found.addAll(await scanImportFolder(root, platform));
       }
     } on FileSystemException catch (e) {
+      debugPrint('$e');
       if (!mounted || token != _scanToken) return;
       setState(() => _scanning = false);
-      Toast(context).showError('$e');
+      Toast(context).showError("Couldn't read ${e.path ?? roots.join(', ')}");
       return;
     }
     if (!mounted || token != _scanToken) return;
@@ -419,10 +420,11 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     try {
       results = rankSearchResults(await _vndb.run(query), query);
     } catch (e) {
+      debugPrint('$e');
       if (!mounted || token != _pickToken) return;
       setState(() {
         _pickLoading = false;
-        _pickError = '$e';
+        _pickError = "Couldn't reach VNDB.";
       });
       return;
     }
