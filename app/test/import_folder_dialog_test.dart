@@ -36,15 +36,20 @@ import 'package:tsumige/src/utils/theme/brand.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 
 class _FakeRepository implements LibraryRepository {
-  _FakeRepository(this.games);
+  _FakeRepository(this.games, {this.copyOnLoad = false});
 
   final List<core.Game> games;
+
+  /// Return a fresh games list per load, like a disk read does, so the
+  /// dialog notices a changed library.
+  final bool copyOnLoad;
   int saves = 0;
   Completer<void>? saveGate;
 
   @override
-  Future<core.LoadedLibrary> load() async =>
-      core.LoadedLibrary(library: core.Library(games: games));
+  Future<core.LoadedLibrary> load() async => core.LoadedLibrary(
+    library: core.Library(games: copyOnLoad ? [...games] : games),
+  );
 
   @override
   Future<void> save(core.LoadedLibrary loaded) async {
@@ -75,6 +80,9 @@ class _Vndb {
 
   final List<String> heldQueries = [];
 
+  /// Every search query the dialog sent, in order.
+  final List<String> queries = [];
+
   /// Queries that fail this many times with a 500 before succeeding.
   final Map<String, int> failCounts = {};
 
@@ -87,6 +95,7 @@ class _Vndb {
       if (filters.first == 'search') {
         final query = filters[2] as String;
         searches++;
+        queries.add(query);
         if (query == gateQuery) await gate!.future;
         final hold = holds[query];
         if (hold != null) {
@@ -200,6 +209,14 @@ class _Harness {
 /// Opens the import dialog directly over a fixture folder.
 core.Game _ownedGame() => core.Game(id: 'g1', title: 'Owned', vndbId: 'v99');
 
+/// A library game whose executable sits in [folder] under [root], so the
+/// import row for that folder counts as in-library by the folder rule.
+core.Game _folderGame(String root, String folder, String exe) => core.Game(
+  id: 'lib-$folder',
+  title: folder,
+  launch: core.LaunchOverrides(executable: p.join(root, folder, exe)),
+);
+
 Future<_Harness> _open(
   WidgetTester tester, {
   List<core.Game>? games,
@@ -214,6 +231,7 @@ Future<_Harness> _open(
   Completer<String?>? picker,
   HostPlatform? platform,
   Map<String, int>? failCounts,
+  bool copyOnLoad = false,
 }) async {
   tester.view.physicalSize = surface;
   tester.view.devicePixelRatio = 1.0;
@@ -236,9 +254,10 @@ Future<_Harness> _open(
   }
   var picks = 0;
   SharedPreferences.setMockInitialValues({});
-  final repo = _FakeRepository([
-    ...(games ?? gamesForRoot?.call(root) ?? [_ownedGame()]),
-  ]);
+  final repo = _FakeRepository(
+    [...(games ?? gamesForRoot?.call(root) ?? [_ownedGame()])],
+    copyOnLoad: copyOnLoad,
+  );
   final vndb = _Vndb(
     results ?? _defaultResults(),
     gate: gate,
@@ -607,6 +626,115 @@ void main() {
       isNull,
     );
     expect(h.repo.saves, 0);
+  });
+
+  testWidgets('in-library folders skip matching and count only the rest', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    final h = await _open(
+      tester,
+      gamesForRoot: (root) => [
+        _folderGame(root, 'DEMO', 'DEMO.exe'),
+        _folderGame(root, 'Owned Game', 'Owned.exe'),
+        _folderGame(root, 'Rena sensei', 'RenaPool.exe'),
+      ],
+      gate: gate,
+      gateQuery: 'Solo Quest',
+    );
+    // Nothing Here resolves while Solo Quest waits on the gate: the bar
+    // counts the 2 rows that need matching, not the 5 on disk.
+    for (
+      var i = 0;
+      i < 200 &&
+          find.text('Matching on VNDB… 1 of 2').evaluate().isEmpty;
+      i++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(find.text('Matching on VNDB… 1 of 2'), findsOneWidget);
+    gate.complete();
+    await _waitFor(
+      tester,
+      () => find.textContaining('Matching on VNDB').evaluate().isEmpty,
+    );
+    expect(find.textContaining('Matching on VNDB'), findsNothing);
+    expect(find.text('Solo Quest Remake'), findsOneWidget);
+    expect(h.vndb.queries, contains('Nothing Here'));
+    expect(h.vndb.queries, contains('Solo Quest'));
+    for (final query in h.vndb.queries) {
+      expect(query, isNot(contains('DEMO')));
+      expect(query, isNot(contains('Owned')));
+      expect(query, isNot(contains('Rena')));
+    }
+  });
+
+  testWidgets('a library change mid-scan drops and queues rows', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    final h = await _open(
+      tester,
+      gamesForRoot: (root) => [
+        _folderGame(root, 'Rena sensei', 'RenaPool.exe'),
+      ],
+      gate: gate,
+      gateQuery: 'DEMO',
+      copyOnLoad: true,
+    );
+    // The first lookup is in flight; the rest are still pending.
+    await _waitFor(tester, () => h.vndb.queries.contains('DEMO'));
+    await _waitFor(
+      tester,
+      () => find.text('Select games to import').evaluate().isNotEmpty,
+    );
+    // Nothing Here joins the library, Rena sensei leaves it.
+    h.repo.games.add(_folderGame(h.root, 'Nothing Here', 'Nothing.exe'));
+    h.repo.games.removeWhere((game) => game.id == 'lib-Rena sensei');
+    ProviderScope.containerOf(
+      tester.element(find.text('Select games to import')),
+    ).invalidate(libraryProvider);
+    await tester.pump();
+    gate.complete();
+    await _waitFor(
+      tester,
+      () => find.textContaining('Matching on VNDB').evaluate().isEmpty,
+    );
+    expect(find.textContaining('Matching on VNDB'), findsNothing);
+    // Newly covered: never looked up. Newly uncovered: queued and matched.
+    for (final query in h.vndb.queries) {
+      expect(query, isNot(contains('Nothing')));
+    }
+    expect(h.vndb.queries, contains('Rena sensei'));
+    expect(find.text('Rena-sensei to Pool Ryokou'), findsOneWidget);
+  });
+
+  testWidgets('every row in the library means no lookups and no bar', (
+    tester,
+  ) async {
+    final h = await _openAndMatch(
+      tester,
+      gamesForRoot: (root) => [
+        _folderGame(root, 'DEMO', 'DEMO.exe'),
+        _folderGame(root, 'Nothing Here', 'Nothing.exe'),
+        _folderGame(root, 'Owned Game', 'Owned.exe'),
+        _folderGame(root, 'Rena sensei', 'RenaPool.exe'),
+        _folderGame(root, 'Solo Quest', 'Solo.exe'),
+      ],
+    );
+    expect(h.vndb.searches, 0);
+    expect(find.textContaining('Matching on VNDB'), findsNothing);
+    expect(find.text('No games in this folder'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('import-hide-imported')));
+    await tester.pump();
+    expect(find.text('DEMO'), findsOneWidget);
+    expect(
+      tester.widget<Checkbox>(find.byKey(const Key('import-check-0'))).onChanged,
+      isNull,
+    );
   });
 
   testWidgets('a game scanned through a symlink is hidden as imported', (
