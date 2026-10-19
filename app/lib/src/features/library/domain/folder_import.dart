@@ -431,14 +431,12 @@ Set<String> libraryRealExePaths(Iterable<Game> games) => {
 /// Whether the import row for [folder] is already in the library: a library
 /// game's resolved executable is that folder or inside it (so the same game
 /// picked through a different link, or through a different `.exe` in the
-/// same folder, still matches), or the VNDB id matches.
+/// same folder, still matches). A matching VNDB id alone only warns, it
+/// doesn't count as imported.
 bool importRowInLibrary({
   required String folder,
-  required String? vndbId,
   required Set<String> libraryExes,
-  required Iterable<Game> games,
 }) {
-  if (vndbId != null && games.any((g) => g.vndbId == vndbId)) return true;
   if (libraryExes.isEmpty) return false;
   final realFolder = realPath(folder);
   return libraryExes.any(

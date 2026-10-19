@@ -299,7 +299,7 @@ void main() {
     expect(find.text('★ 8.5'), findsWidgets);
   });
 
-  testWidgets('an In library result cannot be picked', (tester) async {
+  testWidgets('an In library result warns but can be picked', (tester) async {
     final (_, http, _) = await _pump(
       tester,
       games: [core.Game(id: 'g1', title: 'Owned', vndbId: 'v900017')],
@@ -311,9 +311,6 @@ void main() {
     await _search(tester, 'DEMO', http);
     expect(find.text('In library'), findsOneWidget);
     await tester.tap(_resultRow('DEMO'));
-    await tester.pumpAndSettle();
-    expect(find.text('Set it up'), findsNothing);
-    await tester.tap(_resultRow('Other Game'));
     await tester.pumpAndSettle();
     await _next(tester);
     expect(find.text('Set it up'), findsOneWidget);

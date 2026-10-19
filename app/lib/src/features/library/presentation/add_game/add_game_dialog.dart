@@ -980,7 +980,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
           owned: owned,
           selected: _picked?.id == result.id,
           badge: result.id == _bestId ? 'Best match' : null,
-          onPick: owned ? null : () => _pick(result),
+          onPick: () => _pick(result),
         );
       },
     );

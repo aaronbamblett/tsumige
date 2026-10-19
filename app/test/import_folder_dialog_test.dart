@@ -189,6 +189,7 @@ core.Game _ownedGame() => core.Game(id: 'g1', title: 'Owned', vndbId: 'v99');
 Future<_Harness> _open(
   WidgetTester tester, {
   List<core.Game>? games,
+  List<core.Game> Function(String root)? gamesForRoot,
   Map<String, List<Map<String, Object?>>>? results,
   Size surface = const Size(1400, 980),
   bool duplicate = false,
@@ -215,7 +216,7 @@ Future<_Harness> _open(
   );
   SharedPreferences.setMockInitialValues({});
   final repo = _FakeRepository([
-    ...(games ?? [_ownedGame()]),
+    ...(games ?? gamesForRoot?.call(root) ?? [_ownedGame()]),
   ]);
   final vndb = _Vndb(
     results ?? _defaultResults(),
@@ -277,10 +278,12 @@ Future<_Harness> _openAndMatch(
   int folders = 5,
   HostPlatform? platform,
   Map<String, int>? failCounts,
+  List<core.Game> Function(String root)? gamesForRoot,
 }) async {
   final harness = await _open(
     tester,
     games: games,
+    gamesForRoot: gamesForRoot,
     results: results,
     surface: surface,
     duplicate: duplicate,
@@ -351,7 +354,8 @@ void main() {
       expect(find.text('Solo Quest Remake'), findsOneWidget);
       expect(find.text('Best match'), findsOneWidget);
       expect(find.text('Nothing Here'), findsOneWidget);
-      expect(find.text('Owned Game'), findsNothing);
+      expect(find.text('Owned Game'), findsOneWidget);
+      expect(find.text('Same VNDB entry as Owned'), findsOneWidget);
       expect(find.text('Matched'), findsNothing);
       expect(find.text('Check match'), findsNothing);
       expect(find.text('Pick the game file'), findsNothing);
@@ -368,26 +372,23 @@ void main() {
     },
   );
 
-  testWidgets('the hide imported checkbox shows library rows disabled', (
-    tester,
-  ) async {
+  testWidgets('a library VNDB id warns instead of hiding', (tester) async {
     await _openAndMatch(
       tester,
-      games: [core.Game(id: 'g1', title: 'Owned', vndbId: 'v99')],
+      games: [core.Game(id: 'g1', title: 'Alpha', vndbId: 'v99')],
     );
-    expect(find.byKey(const Key('import-check-2')), findsNothing);
-    await tester.tap(find.byKey(const Key('import-hide-imported')));
-    await tester.pump();
-    expect(find.text('Owned Game'), findsOneWidget);
+    expect(find.byKey(const Key('import-check-2')), findsOneWidget);
+    expect(find.text('Same VNDB entry as Alpha'), findsOneWidget);
+    expect(_checked(tester, 2), isFalse);
     expect(
       tester
           .widget<Checkbox>(find.byKey(const Key('import-check-2')))
           .onChanged,
-      isNull,
+      isNotNull,
     );
     await tester.tap(find.byKey(const Key('import-check-2')));
     await tester.pump();
-    expect(find.text('Add Games'), findsOneWidget);
+    expect(_checked(tester, 2), isTrue);
   });
 
   testWidgets('Scan Folder does not list a folder twice', (tester) async {
@@ -550,13 +551,25 @@ void main() {
     expect(find.text('Solo Quest Remake'), findsOneWidget);
   });
 
-  testWidgets('In library rows are disabled and never added', (tester) async {
+  testWidgets('a folder holding a library game stays hidden and disabled', (
+    tester,
+  ) async {
     final h = await _openAndMatch(
       tester,
-      games: [core.Game(id: 'g1', title: 'Owned', vndbId: 'v99')],
+      gamesForRoot: (root) => [
+        core.Game(
+          id: 'g1',
+          title: 'Owned',
+          launch: core.LaunchOverrides(
+            executable: p.join(root, 'Owned Game', 'Owned.exe'),
+          ),
+        ),
+      ],
     );
+    expect(find.byKey(const Key('import-check-2')), findsNothing);
     await tester.tap(find.byKey(const Key('import-hide-imported')));
     await tester.pump();
+    expect(find.text('Owned Game'), findsOneWidget);
     expect(
       tester
           .widget<Checkbox>(find.byKey(const Key('import-check-2')))
@@ -646,19 +659,20 @@ void main() {
     expect(repo.saves, 0);
   });
 
-  testWidgets('a duplicate in the batch is hidden, and disabled when shown', (
+  testWidgets('a repeated VNDB id in the batch warns on the later row', (
     tester,
   ) async {
     await _openAndMatch(tester, duplicate: true, folders: 6);
-    expect(find.byKey(const Key('import-check-1')), findsNothing);
-    await tester.tap(find.byKey(const Key('import-hide-imported')));
-    await tester.pump();
+    expect(find.byKey(const Key('import-check-0')), findsOneWidget);
     expect(find.byKey(const Key('import-check-1')), findsOneWidget);
+    expect(_checked(tester, 0), isTrue);
+    expect(_checked(tester, 1), isFalse);
+    expect(find.text('Same VNDB entry as DEMO'), findsOneWidget);
     expect(
       tester
           .widget<Checkbox>(find.byKey(const Key('import-check-1')))
           .onChanged,
-      isNull,
+      isNotNull,
     );
   });
 

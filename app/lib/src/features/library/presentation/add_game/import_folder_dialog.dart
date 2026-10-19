@@ -159,36 +159,60 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     _pop(ImportFolderResult.cancel);
   }
 
-  bool _inLibrary(_ImportRow row, List<Game> games, Set<String> libraryExes) =>
-      importRowInLibrary(
-        folder: row.folder.path,
-        vndbId: row.vn?.id,
-        libraryExes: libraryExes,
-        games: games,
-      );
+  bool _inLibrary(_ImportRow row, Set<String> libraryExes) =>
+      importRowInLibrary(folder: row.folder.path, libraryExes: libraryExes);
 
-  bool _eligible(_ImportRow row, List<Game> games, Set<String> libraryExes) =>
+  bool _eligible(_ImportRow row, Set<String> libraryExes) =>
       row.state != null &&
       row.exePath != null &&
-      !_inLibrary(row, games, libraryExes);
+      !_inLibrary(row, libraryExes);
 
+  /// Two rows with the same real exe path stay deduplicated. A repeated
+  /// VNDB id only warns, it doesn't deduplicate.
   bool _sameGame(_ImportRow a, _ImportRow b) {
     final ae = a.exePath;
     final be = b.exePath;
-    if (ae != null && be != null && p.equals(realPath(ae), realPath(be))) {
-      return true;
+    return ae != null &&
+        be != null &&
+        p.equals(realPath(ae), realPath(be));
+  }
+
+  /// The warning when a row repeats a VNDB entry: the library game's
+  /// title, or the earlier row's folder name. Null when it repeats
+  /// nothing.
+  String? _repeatWarning(int index, List<Game> games) {
+    final id = _rows[index].vn?.id;
+    if (id == null) return null;
+    for (final game in games) {
+      if (game.vndbId == id) return 'Same VNDB entry as ${game.title}';
     }
-    return a.vn != null && a.vn!.id == b.vn?.id;
+    for (var j = 0; j < index; j++) {
+      if (_rows[j].vn?.id == id) {
+        return 'Same VNDB entry as ${_rows[j].folder.name}';
+      }
+    }
+    return null;
+  }
+
+  /// Whether [id] already names a library game or an earlier row's entry.
+  /// Such rows are unticked by default, but still tickable.
+  bool _vndbRepeats(String id, _ImportRow? except, List<Game> games) {
+    if (games.any((game) => game.vndbId == id)) return true;
+    for (final other in _rows) {
+      if (identical(other, except)) break;
+      if (other.vn?.id == id) return true;
+    }
+    return false;
   }
 
   /// Which rows are added, and which are duplicates of an earlier added row.
-  /// The first ticked row for a VNDB id or exe wins.
-  _Plan _plan(List<Game> games, Set<String> libraryExes) {
+  /// The first ticked row for an exe wins.
+  _Plan _plan(Set<String> libraryExes) {
     final selected = List.filled(_rows.length, false);
     final duplicate = List.filled(_rows.length, false);
     for (var i = 0; i < _rows.length; i++) {
       final row = _rows[i];
-      if (!_eligible(row, games, libraryExes)) continue;
+      if (!_eligible(row, libraryExes)) continue;
       for (var j = 0; j < i; j++) {
         if (selected[j] && _sameGame(_rows[j], row)) {
           duplicate[i] = true;
@@ -294,14 +318,18 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       match = const FolderMatch(ImportMatchState.error, null);
     }
     if (!mounted || token != _scanToken) return;
+    final games = ref.read(libraryProvider).value?.library.games ?? const [];
     setState(() {
       row.state = match.state;
       row.vn = match.vn;
       row.error = error;
       _applyExe(row);
       if (!row.tickTouched) {
+        final vn = match.vn;
         row.ticked =
-            match.state == ImportMatchState.matched && row.exePath != null;
+            match.state == ImportMatchState.matched &&
+            row.exePath != null &&
+            (vn == null || !_vndbRepeats(vn.id, row, games));
       }
     });
   }
@@ -385,12 +413,14 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     final index = _pickIndex;
     if (vn == null || index == null) return;
     final row = _rows[index];
+    final games = ref.read(libraryProvider).value?.library.games ?? const [];
     setState(() {
       row.vn = vn;
       row.state = ImportMatchState.matched;
       row.error = null;
       _applyExe(row);
-      row.ticked = row.exePath != null;
+      row.ticked =
+          row.exePath != null && !_vndbRepeats(vn.id, row, games);
       _pickIndex = null;
       _pickSelected = null;
     });
@@ -398,7 +428,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
 
   Future<void> _add() async {
     final games = ref.read(libraryProvider).value?.library.games ?? const [];
-    final plan = _plan(games, libraryRealExePaths(games));
+    final plan = _plan(libraryRealExePaths(games));
     final rows = [
       for (var i = 0; i < _rows.length; i++)
         if (plan.selected[i]) _rows[i],
@@ -471,7 +501,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     // Resolved once per library value so every row compares against the
     // same set without re-resolving symlinks on every rebuild.
     final libraryExes = _libraryExes(games);
-    final plan = _plan(games, libraryExes);
+    final plan = _plan(libraryExes);
     if (pick != null) {
       return DialogShell(
         autofocus: false,
@@ -496,15 +526,10 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     );
   }
 
-  bool _hidden(
-    int index,
-    List<Game> games,
-    _Plan plan,
-    Set<String> libraryExes,
-  ) =>
+  bool _hidden(int index, _Plan plan, Set<String> libraryExes) =>
       _hideImported &&
       (plan.duplicate[index] ||
-          _inLibrary(_rows[index], games, libraryExes));
+          _inLibrary(_rows[index], libraryExes));
 
   Widget _listBody(
     BuildContext context,
@@ -520,11 +545,11 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     );
     final visible = [
       for (var i = 0; i < _rows.length; i++)
-        if (!_hidden(i, games, plan, libraryExes)) i,
+        if (!_hidden(i, plan, libraryExes)) i,
     ];
     final eligible = [
       for (final i in visible)
-        if (_eligible(_rows[i], games, libraryExes) && !plan.duplicate[i]) i,
+        if (_eligible(_rows[i], libraryExes) && !plan.duplicate[i]) i,
     ];
     final allChecked =
         eligible.isNotEmpty && eligible.every((i) => plan.selected[i]);
@@ -638,7 +663,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     final row = _rows[index];
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final inLibrary = _inLibrary(row, games, libraryExes);
+    final inLibrary = _inLibrary(row, libraryExes);
     final vn =
         row.state == ImportMatchState.matched ||
             (!inLibrary && row.state == ImportMatchState.check)
@@ -707,7 +732,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                   key: Key('import-check-$index'),
                   value: plan.selected[index],
                   onChanged:
-                      _eligible(row, games, libraryExes) &&
+                      _eligible(row, libraryExes) &&
                               !plan.duplicate[index] &&
                               !_saving
                       ? (value) => setState(() {
@@ -733,7 +758,13 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                         child: nameText,
                       ),
                     ),
-                    _statusRow(context, index, row, inLibrary),
+                    _statusRow(
+                      context,
+                      index,
+                      row,
+                      inLibrary,
+                      _repeatWarning(index, games),
+                    ),
                   ],
                 ),
               ),
@@ -757,12 +788,15 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   }
 
   /// The muted status line under a row's name, with its small text button.
-  /// Library rows keep their old look and show nothing here.
+  /// Library rows keep their old look and show nothing here. A repeated
+  /// VNDB entry reads in place of the other status text, with the badge
+  /// and button staying as for the row's state.
   Widget _statusRow(
     BuildContext context,
     int index,
     _ImportRow row,
     bool inLibrary,
+    String? repeatWarning,
   ) {
     if (inLibrary) return const SizedBox.shrink();
     final theme = Theme.of(context);
@@ -771,6 +805,14 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       fontSize: 12.5,
       color: scheme.onSurfaceVariant,
     );
+    Widget statusText(String text) => Flexible(
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: muted,
+      ),
+    );
     switch (row.state) {
       case null:
         return const SizedBox.shrink();
@@ -778,14 +820,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Flexible(
-              child: Text(
-                'No matches on VNDB',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: muted,
-              ),
-            ),
+            statusText(repeatWarning ?? 'No matches on VNDB'),
             _statusButton(
               key: Key('import-choose-$index'),
               label: 'Choose…',
@@ -798,6 +833,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _bestMatchBadge(context),
+            if (repeatWarning != null) statusText(repeatWarning),
             _statusButton(
               key: Key('import-change-$index'),
               label: 'Change…',
@@ -809,14 +845,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Flexible(
-              child: Text(
-                'VNDB search failed',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: muted,
-              ),
-            ),
+            statusText(repeatWarning ?? 'VNDB search failed'),
             _statusButton(
               key: Key('import-retry-$index'),
               label: 'Try again',
@@ -825,15 +854,19 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
           ],
         );
       case ImportMatchState.matched:
-        if (_hoveredRow != index) return const SizedBox.shrink();
+        if (repeatWarning == null && _hoveredRow != index) {
+          return const SizedBox.shrink();
+        }
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _statusButton(
-              key: Key('import-change-$index'),
-              label: 'Change…',
-              onPressed: _saving ? null : () => _openPick(index),
-            ),
+            if (repeatWarning != null) statusText(repeatWarning),
+            if (_hoveredRow == index)
+              _statusButton(
+                key: Key('import-change-$index'),
+                label: 'Change…',
+                onPressed: _saving ? null : () => _openPick(index),
+              ),
           ],
         );
     }

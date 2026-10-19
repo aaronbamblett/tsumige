@@ -456,9 +456,7 @@ void main() {
       expect(
         importRowInLibrary(
           folder: p.join(temp.path, 'link', 'Game'),
-          vndbId: null,
           libraryExes: exes,
-          games: games,
         ),
         isTrue,
       );
@@ -475,9 +473,7 @@ void main() {
       expect(
         importRowInLibrary(
           folder: folder.path,
-          vndbId: null,
           libraryExes: libraryRealExePaths(games),
-          games: games,
         ),
         isTrue,
       );
@@ -490,24 +486,20 @@ void main() {
       expect(
         importRowInLibrary(
           folder: folder.path,
-          vndbId: null,
           libraryExes: libraryRealExePaths(games),
-          games: games,
         ),
         isFalse,
       );
     });
 
-    test('a vndb id match still counts without any exe', () {
+    test('a vndb id match alone is not in the library', () {
       final games = [game('Owned', '', vndbId: 'v99')];
       expect(
         importRowInLibrary(
           folder: p.join(temp.path, 'Missing'),
-          vndbId: 'v99',
           libraryExes: libraryRealExePaths(games),
-          games: games,
         ),
-        isTrue,
+        isFalse,
       );
     });
 
