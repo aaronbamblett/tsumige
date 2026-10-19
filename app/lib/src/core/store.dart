@@ -11,6 +11,7 @@ import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
+import 'groups.dart';
 import 'json_read.dart';
 import 'model.dart';
 import 'paths.dart';
@@ -112,10 +113,21 @@ Future<LoadedLibrary> loadLibrary(DataDir dir) async {
           reason: '$e'));
     }
   }
+  final rawGroups = decoded['groups'];
+  final groupList = rawGroups is List ? rawGroups : const [];
+  final groups = <GameGroup>[];
+  for (final raw in groupList) {
+    try {
+      if (raw is! Map) throw const FormatException('group must be an object');
+      groups.add(GameGroup.fromJson(raw));
+    } catch (_) {
+      continue;
+    }
+  }
+  final library = Library(schemaVersion: found, games: games, groups: groups);
+  normalizeGroups(library);
   return LoadedLibrary(
-      library: Library(schemaVersion: found, games: games),
-      skipped: skipped,
-      stamp: await _stamp(file));
+      library: library, skipped: skipped, stamp: await _stamp(file));
 }
 
 final Set<String> _backedUpRoots = <String>{};
@@ -168,9 +180,12 @@ Future<void> saveLibrary(DataDir dir, LoadedLibrary loaded) async {
   } else {
     await file.parent.create(recursive: true);
   }
+  normalizeGroups(loaded.library);
   final payload = jsonEncode({
     'schema_version': schemaVersion,
     'games': [for (final g in loaded.library.games) g.toJson()],
+    if (loaded.library.groups.isNotEmpty)
+      'groups': [for (final gr in loaded.library.groups) gr.toJson()],
   });
   final tmp = File('${file.path}.$pid.tmp');
   await tmp.writeAsString(payload, flush: true);
