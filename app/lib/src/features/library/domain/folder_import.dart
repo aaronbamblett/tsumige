@@ -829,22 +829,32 @@ class VndbRequestQueue {
 /// Searches VNDB for each query variant in order (the cleaned name, its
 /// CamelCase split, language tags dropped, then the parent folders
 /// nearest first), each with its [shortenedQuery] retry. Stops at the
-/// first matched; otherwise keeps the first check.
+/// first matched; otherwise keeps the first check. A variant that fails
+/// is skipped; the first failure is rethrown only when no check was found.
 Future<FolderMatch> lookupFolderMatch({
   required String query,
   required List<String> parentQueries,
   required Future<List<VnSearchResult>> Function(String query) search,
 }) async {
   FolderMatch? check;
+  ({Object error, StackTrace stack})? failure;
   final tried = <String>{};
   for (final candidate in [...folderQueryVariants(query), ...parentQueries]) {
     if (candidate.isEmpty || !tried.add(candidate)) continue;
-    final results = await lookupFolder(candidate, search);
-    final match = matchFolder(candidate, results);
+    var match = const FolderMatch(ImportMatchState.none, null);
+    try {
+      final results = await lookupFolder(candidate, search);
+      match = matchFolder(candidate, results);
+    } catch (error, stack) {
+      failure ??= (error: error, stack: stack);
+      continue;
+    }
     if (match.state == ImportMatchState.matched) return match;
     if (check == null && match.state == ImportMatchState.check) {
       check = match;
     }
   }
-  return check ?? const FolderMatch(ImportMatchState.none, null);
+  if (check != null) return check;
+  if (failure != null) Error.throwWithStackTrace(failure.error, failure.stack);
+  return const FolderMatch(ImportMatchState.none, null);
 }

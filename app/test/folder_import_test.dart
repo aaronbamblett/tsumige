@@ -670,6 +670,39 @@ void main() {
       expect(match.vn!.id, 'v7');
     });
 
+    test('a failing variant keeps an earlier check', () async {
+      final match = await lookupFolderMatch(
+        query: 'Solo Quest',
+        parentQueries: const ['Parent A', 'Parent B'],
+        search: (query) async {
+          if (query == 'Parent B') {
+            throw const VndbException('HTTP 500', statusCode: 500);
+          }
+          if (query == 'Parent A') return const [];
+          return [
+            _vn('v7', 'Solo Quest Remake'),
+            _vn('v8', 'Solo Quest Remaster'),
+          ];
+        },
+      );
+      expect(match.state, ImportMatchState.check);
+      expect(match.vn!.id, 'v7');
+    });
+
+    test('a failure with no check is rethrown', () async {
+      await expectLater(
+        lookupFolderMatch(
+          query: 'Solo Quest',
+          parentQueries: const ['Parent A'],
+          search: (query) async {
+            if (query == 'Parent A') return const [];
+            throw const VndbException('HTTP 500', statusCode: 500);
+          },
+        ),
+        throwsA(isA<VndbException>()),
+      );
+    });
+
     test('each variant keeps its shortened retry', () async {
       final asked = <String>[];
       final match = await lookupFolderMatch(
