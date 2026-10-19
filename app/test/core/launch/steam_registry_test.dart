@@ -30,4 +30,16 @@ void main() {
   test('a decimal value is read too', () {
     expect(parseRunningAppId('    RunningAppID    REG_DWORD    42\n'), 42);
   });
+
+  test('a SteamPath with spaces reads whole', () {
+    const output =
+        '\r\nHKEY_CURRENT_USER\\Software\\Valve\\Steam\r\n'
+        '    SteamPath    REG_SZ    C:\\Program Files (x86)\\Steam\r\n\r\n';
+    expect(parseSteamPath(output), r'C:\Program Files (x86)\Steam');
+  });
+
+  test('output without the value means no path', () {
+    expect(parseSteamPath('ERROR: The system was unable to find it.'), isNull);
+    expect(parseSteamPath(''), isNull);
+  });
 }
