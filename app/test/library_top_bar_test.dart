@@ -22,11 +22,9 @@ import 'package:tsumige/src/features/library/data/library_repository.dart';
 import 'package:tsumige/src/features/library/domain/cover_source.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/library_grid.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/library_toolbar.dart';
-import 'package:tsumige/src/routes/router.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 import 'package:tsumige/src/utils/platform/platform_runtime.dart';
 import 'package:tsumige/src/widgets/desktop/desktop_title_bar.dart';
-import 'package:tsumige/src/widgets/desktop/desktop_window_scaffold.dart';
 import 'package:tsumige/src/widgets/tsumige_logo.dart';
 
 class _FakeRepository implements LibraryRepository {
@@ -198,20 +196,11 @@ void main() {
     expect(find.byType(DesktopWindowButtons), findsOneWidget);
   });
 
-  testWidgets('scaffold title bar is off on the library route',
+  testWidgets('library screen draws its own top bar without a scaffold',
       (tester) async {
     await _pumpApp(tester, _games(), size: const Size(1280, 800));
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(LibraryTopBar)),
-    );
-    expect(container.read(scaffoldTitleBarProvider), isFalse);
 
-    expect(
-      tsumigeRouterBuilder(
-        tester.element(find.byType(LibraryTopBar)),
-        const SizedBox(),
-      ),
-      isA<DesktopWindowScaffold>(),
-    );
+    expect(find.byType(DesktopWindowButtons), findsOneWidget);
+    expect(find.byType(LibraryTopBar), findsOneWidget);
   });
 }

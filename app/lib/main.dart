@@ -24,11 +24,10 @@ import 'src/utils/prefs/prefs_mixin.dart';
 import 'src/utils/startup_time.dart';
 import 'src/utils/theme/app_theme_builder.dart';
 import 'src/widgets/app_error_app.dart';
-import 'src/widgets/desktop/desktop_window_scaffold.dart';
 import 'src/widgets/tsumige_logo.dart';
 
 Widget tsumigeRouterBuilder(BuildContext context, Widget? child) =>
-    DesktopWindowScaffold(child: FToastBuilder()(context, child));
+    FToastBuilder()(context, child);
 
 /// App entry. Never loads the library: the root widget does that through
 /// [libraryProvider] so startup always lands on a loading, error, or library
