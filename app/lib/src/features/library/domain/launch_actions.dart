@@ -82,7 +82,7 @@ Future<String?> pickExe(core.Game game) async {
     }
   }
   final files = await FilePicker.pickFiles(
-    dialogTitle: 'Run .exe inside prefix',
+    dialogTitle: 'Run EXE inside prefix',
     initialDirectory: initialDirectory,
     type: FileType.any,
   );

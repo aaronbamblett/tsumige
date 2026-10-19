@@ -991,7 +991,6 @@ void main() {
     const keys = [
       'import-browse',
       'import-scan',
-      'import-hide-imported',
       'import-add',
       'import-cancel',
     ];
@@ -1002,18 +1001,30 @@ void main() {
     await _openAndMatch(tester, surface: const Size(1400, 980));
     final wide = [
       for (final key in keys) tester.getCenter(find.byKey(Key(key))).dy,
-      tester.getCenter(hideBox()).dy,
     ];
     for (var i = 0; i < wide.length; i++) {
       expect(wide[i], closeTo(wide.first, 1), reason: 'control $i $wide');
     }
+    final pathHeader = tester.getRect(find.text('Path'));
+    expect(
+      tester.getCenter(hideBox()).dy,
+      closeTo(pathHeader.center.dy, 2),
+    );
+    expect(tester.getRect(hide()).left, greaterThan(pathHeader.right));
+    expect(tester.widget<Checkbox>(hideBox()).value, isTrue);
+    await tester.tap(hide());
+    await tester.pump();
+    expect(tester.widget<Checkbox>(hideBox()).value, isFalse);
+    await tester.tap(hide());
+    await tester.pump();
+    expect(tester.widget<Checkbox>(hideBox()).value, isTrue);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
 
     await _openAndMatch(tester, surface: const Size(1000, 640));
     final shell = tester.getRect(find.byType(DialogShell));
-    for (final key in keys) {
+    for (final key in [...keys, 'import-hide-imported']) {
       final rect = tester.getRect(find.byKey(Key(key)));
       expect(shell.contains(rect.topLeft), isTrue, reason: key);
       expect(shell.contains(rect.bottomRight), isTrue, reason: key);

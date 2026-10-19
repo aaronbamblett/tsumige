@@ -629,6 +629,39 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                     Expanded(flex: 5, child: Text('Name', style: headerStyle)),
                     const SizedBox(width: 12),
                     Expanded(flex: 6, child: Text('Path', style: headerStyle)),
+                    const SizedBox(width: 12),
+                    InkWell(
+                      key: const Key('import-hide-imported'),
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: _saving
+                          ? null
+                          : () =>
+                                setState(() => _hideImported = !_hideImported),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 4,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IgnorePointer(
+                              child: Checkbox(
+                                value: _hideImported,
+                                onChanged: (_) {},
+                              ),
+                            ),
+                            Text(
+                              'Hide imported',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -954,16 +987,12 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
 
   Widget _listFooter(List<Game> games, _Plan plan) {
     final count = plan.selected.where((added) => added).length;
-    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
       child: Row(
         children: [
           Expanded(
-            child: Wrap(
-              spacing: 10,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            child: Row(
               children: [
                 IntrinsicWidth(
                   child: BrandGlassButton(
@@ -974,6 +1003,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                     label: const Text('Choose folder…'),
                   ),
                 ),
+                const SizedBox(width: 10),
                 IntrinsicWidth(
                   child: BrandGlassButton(
                     key: const Key('import-scan'),
@@ -981,37 +1011,6 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                     expand: false,
                     onPressed: _saving ? null : () => _browse(append: true),
                     label: const Text('Add folder…'),
-                  ),
-                ),
-                InkWell(
-                  key: const Key('import-hide-imported'),
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: _saving
-                      ? null
-                      : () => setState(() => _hideImported = !_hideImported),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 4,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IgnorePointer(
-                          child: Checkbox(
-                            value: _hideImported,
-                            onChanged: (_) {},
-                          ),
-                        ),
-                        Text(
-                          'Hide imported',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
                 ),
               ],
