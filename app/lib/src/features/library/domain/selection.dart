@@ -50,6 +50,57 @@ class SelectedGameId extends _$SelectedGameId {
   void clear() => state = null;
 }
 
+/// Several grid tiles selected with Ctrl/Shift for Combine. The single
+/// selection ([SelectedGameId]) is untouched: while 2 or more tiles are
+/// selected the pane shows a summary instead of a game.
+@Riverpod(keepAlive: true)
+class MultiSelection extends _$MultiSelection {
+  /// The last clicked tile; a Shift+click selects the range from here.
+  String? _anchor;
+
+  @override
+  List<String> build() => const [];
+
+  /// A plain click collapses back to one tile: no multi-selection.
+  void showSingle(String id) {
+    _anchor = id;
+    state = const [];
+  }
+
+  /// Ctrl+click toggles a tile in or out, in click order.
+  void toggle(String id) {
+    _anchor = id;
+    if (state.contains(id)) {
+      state = [for (final other in state) if (other != id) other];
+    } else {
+      state = [...state, id];
+    }
+  }
+
+  /// Shift+click selects the range from the last clicked tile to [id] in
+  /// [orderedKeys] (the current grid order), inclusive. The anchor stays put
+  /// so another Shift+click re-anchors from the same tile.
+  void selectRangeTo(String id, List<String> orderedKeys) {
+    final anchor = _anchor;
+    final a = anchor == null ? -1 : orderedKeys.indexOf(anchor);
+    final b = orderedKeys.indexOf(id);
+    if (b < 0) return;
+    if (a < 0) {
+      _anchor = id;
+      state = [id];
+      return;
+    }
+    final from = a < b ? a : b;
+    final to = a < b ? b : a;
+    state = orderedKeys.sublist(from, to + 1);
+  }
+
+  void clear() {
+    _anchor = null;
+    state = const [];
+  }
+}
+
 /// The selected group, when the selected tile is a group.
 @riverpod
 GameGroup? selectedGroup(Ref ref) {

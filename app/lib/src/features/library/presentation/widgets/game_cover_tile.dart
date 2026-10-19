@@ -83,7 +83,9 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
     final settledPhysical = settled * MediaQuery.devicePixelRatioOf(context);
     final source = coverSourceFor(game, dir, settledPhysical, exists);
     final selectId = widget.selectId ?? game.id;
-    final selected = ref.watch(selectedGameIdProvider) == selectId;
+    final selected =
+        ref.watch(selectedGameIdProvider) == selectId ||
+        ref.watch(multiSelectionProvider).contains(selectId);
     final colorScheme = Theme.of(context).colorScheme;
     const coverRadius = BorderRadius.all(Radius.circular(10));
     final keyboardFocus =
@@ -100,11 +102,24 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
       onTapDown: (_) => setState(() => _pointerFocused = true),
       onTap: () {
         _focusNode.requestFocus();
-        final selection = ref.read(selectedGameIdProvider.notifier);
-        if (selected) {
-          selection.clear();
+        final single = ref.read(selectedGameIdProvider.notifier);
+        final multi = ref.read(multiSelectionProvider.notifier);
+        if (HardwareKeyboard.instance.isShiftPressed) {
+          multi.selectRangeTo(
+            selectId,
+            [for (final tile in ref.read(visibleTilesProvider)) tile.key],
+          );
+          single.select(selectId);
+        } else if (HardwareKeyboard.instance.isControlPressed ||
+            HardwareKeyboard.instance.isMetaPressed) {
+          multi.toggle(selectId);
+        } else if (ref.read(multiSelectionProvider).isEmpty &&
+            ref.read(selectedGameIdProvider) == selectId) {
+          single.clear();
+          multi.clear();
         } else {
-          selection.select(selectId);
+          multi.showSingle(selectId);
+          single.select(selectId);
         }
       },
       onHover: (hovered) => setState(() => _hovered = hovered),

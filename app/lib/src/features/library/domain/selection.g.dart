@@ -11,6 +11,10 @@ part of 'selection.dart';
 /// Selected tile id: a game id, or a group id. Null means the detail pane is
 /// closed. When a group is selected, the pane shows one of its members (see
 /// [selectedGame]), so the selection represents "group X, showing member Y".
+///
+/// Selecting a game id that belongs to a group selects the group instead and
+/// remembers that member, so every caller of [select] (grid, Related tab)
+/// opens the group with that member shown.
 
 @ProviderFor(SelectedGameId)
 final selectedGameIdProvider = SelectedGameIdProvider._();
@@ -18,11 +22,19 @@ final selectedGameIdProvider = SelectedGameIdProvider._();
 /// Selected tile id: a game id, or a group id. Null means the detail pane is
 /// closed. When a group is selected, the pane shows one of its members (see
 /// [selectedGame]), so the selection represents "group X, showing member Y".
+///
+/// Selecting a game id that belongs to a group selects the group instead and
+/// remembers that member, so every caller of [select] (grid, Related tab)
+/// opens the group with that member shown.
 final class SelectedGameIdProvider
     extends $NotifierProvider<SelectedGameId, String?> {
   /// Selected tile id: a game id, or a group id. Null means the detail pane is
   /// closed. When a group is selected, the pane shows one of its members (see
   /// [selectedGame]), so the selection represents "group X, showing member Y".
+  ///
+  /// Selecting a game id that belongs to a group selects the group instead and
+  /// remembers that member, so every caller of [select] (grid, Related tab)
+  /// opens the group with that member shown.
   SelectedGameIdProvider._()
     : super(
         from: null,
@@ -50,11 +62,15 @@ final class SelectedGameIdProvider
   }
 }
 
-String _$selectedGameIdHash() => r'e2685676e241a9cf4a9308c32dbdc6c321bbc7ac';
+String _$selectedGameIdHash() => r'c5f2aa2753005f82535c77221eb1aa66bbb6f0c9';
 
 /// Selected tile id: a game id, or a group id. Null means the detail pane is
 /// closed. When a group is selected, the pane shows one of its members (see
 /// [selectedGame]), so the selection represents "group X, showing member Y".
+///
+/// Selecting a game id that belongs to a group selects the group instead and
+/// remembers that member, so every caller of [select] (grid, Related tab)
+/// opens the group with that member shown.
 
 abstract class _$SelectedGameId extends $Notifier<String?> {
   String? build();
@@ -67,6 +83,72 @@ abstract class _$SelectedGameId extends $Notifier<String?> {
             as $ClassProviderElement<
               AnyNotifier<String?, String?>,
               String?,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
+/// Several grid tiles selected with Ctrl/Shift for Combine. The single
+/// selection ([SelectedGameId]) is untouched: while 2 or more tiles are
+/// selected the pane shows a summary instead of a game.
+
+@ProviderFor(MultiSelection)
+final multiSelectionProvider = MultiSelectionProvider._();
+
+/// Several grid tiles selected with Ctrl/Shift for Combine. The single
+/// selection ([SelectedGameId]) is untouched: while 2 or more tiles are
+/// selected the pane shows a summary instead of a game.
+final class MultiSelectionProvider
+    extends $NotifierProvider<MultiSelection, List<String>> {
+  /// Several grid tiles selected with Ctrl/Shift for Combine. The single
+  /// selection ([SelectedGameId]) is untouched: while 2 or more tiles are
+  /// selected the pane shows a summary instead of a game.
+  MultiSelectionProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'multiSelectionProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$multiSelectionHash();
+
+  @$internal
+  @override
+  MultiSelection create() => MultiSelection();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(List<String> value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<List<String>>(value),
+    );
+  }
+}
+
+String _$multiSelectionHash() => r'5bb41100401fb947a79bce625e2caff4bad2213b';
+
+/// Several grid tiles selected with Ctrl/Shift for Combine. The single
+/// selection ([SelectedGameId]) is untouched: while 2 or more tiles are
+/// selected the pane shows a summary instead of a game.
+
+abstract class _$MultiSelection extends $Notifier<List<String>> {
+  List<String> build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<List<String>, List<String>>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<List<String>, List<String>>,
+              List<String>,
               Object?,
               Object?
             >;

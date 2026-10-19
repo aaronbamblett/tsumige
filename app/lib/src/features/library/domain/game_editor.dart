@@ -7,6 +7,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../core/groups.dart';
 import '../../../core/model.dart';
@@ -193,6 +194,63 @@ class GameEditor {
       }
     }
     _ref.invalidate(libraryProvider);
+  }
+
+  /// Combines [tileIds] into one new group: selected groups flatten (their
+  /// members join the new group and the old groups are removed), members end
+  /// up in episode order, and the new group is selected. Does nothing with
+  /// fewer than 2 resulting games.
+  Future<String?> combineTiles({
+    required String name,
+    required List<String> tileIds,
+    BuildContext? context,
+  }) async {
+    final loaded = _ref.read(libraryProvider).value;
+    if (loaded == null) return null;
+    final byId = {for (final g in loaded.library.games) g.id: g};
+    final groupsById = {for (final g in loaded.library.groups) g.id: g};
+    final gameIds = <String>[];
+    final seen = <String>{};
+    final absorbed = <String>{};
+    for (final id in tileIds) {
+      final group = groupsById[id];
+      if (group != null) {
+        absorbed.add(group.id);
+        for (final memberId in group.memberIds) {
+          if (byId.containsKey(memberId) && seen.add(memberId)) {
+            gameIds.add(memberId);
+          }
+        }
+      } else if (byId.containsKey(id) && seen.add(id)) {
+        gameIds.add(id);
+      }
+    }
+    if (gameIds.length < 2) return null;
+    final group = createGroup(
+      id: const Uuid().v4(),
+      name: name,
+      members: [for (final id in gameIds) byId[id]!],
+    );
+    loaded.library.groups.removeWhere((gr) => absorbed.contains(gr.id));
+    loaded.library.groups.add(group);
+    normalizeGroups(loaded.library);
+    try {
+      await _ref.read(libraryRepositoryProvider).save(loaded);
+    } on ChangedOnDisk {
+      _ref.invalidate(libraryProvider);
+      if (context?.mounted == false) return null;
+      _tell(context, changedOnDiskMessage, error: false);
+      return null;
+    } catch (e) {
+      _ref.invalidate(libraryProvider);
+      if (context?.mounted == false) return null;
+      _tell(context, '$e', error: true);
+      return null;
+    }
+    _ref.read(multiSelectionProvider.notifier).clear();
+    _ref.read(selectedGameIdProvider.notifier).select(group.id);
+    _ref.invalidate(libraryProvider);
+    return group.id;
   }
 
   void _tell(BuildContext? context, String message, {required bool error}) {

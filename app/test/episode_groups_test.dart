@@ -124,6 +124,22 @@ Finder toolbarSearch() => find.descendant(
       matching: find.byType(TextField),
     );
 
+Future<void> ctrlClick(WidgetTester tester, Finder finder) async {
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.control);
+  await tester.tap(finder);
+  await tester.pump();
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.control);
+  await tester.pump();
+}
+
+Finder groupNameField() => find.descendant(
+      of: find.byKey(const ValueKey('group-name-frame')),
+      matching: find.byType(TextField),
+    );
+
+String groupNameFieldText(WidgetTester tester) =>
+    tester.widget<TextField>(groupNameField()).controller!.text;
+
 void main() {
   testWidgets('a 3-member group and 2 singles show 3 tiles', (tester) async {
     await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
@@ -258,6 +274,26 @@ void main() {
     expect(find.byType(GameDetailPane), findsNothing);
   });
 
+  testWidgets('shift+click selects the range', (tester) async {
+    final library = core.Library(games: [
+      game('a', 'Alpha'),
+      game('b', 'Beta'),
+      game('c', 'Gamma'),
+      game('d', 'Delta'),
+    ]);
+    await pumpGroups(tester, core.LoadedLibrary(library: library));
+    final tiles = find.byType(GameCoverTile);
+    await tester.tap(tiles.first);
+    await tester.pump();
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
+    await tester.tap(tiles.last);
+    await tester.pump();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
+    await tester.pump();
+    expect(find.text('4 games selected'), findsOneWidget);
+  });
+
   testWidgets('split restores separate tiles and drops the group',
       (tester) async {
     final fake = await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
@@ -279,5 +315,16 @@ void main() {
     expect(gridText('9-nine- Episode 2'), findsOneWidget);
     expect(gridText('9-nine- NewEpisode'), findsOneWidget);
     expect(paneText('9-nine- Episode 1'), findsOneWidget);
+  });
+
+  testWidgets('esc clears a multi-selection', (tester) async {
+    await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
+    await ctrlClick(tester, find.text('Solo A'));
+    await ctrlClick(tester, find.text('Solo B'));
+    expect(find.text('2 games selected'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(find.text('2 games selected'), findsNothing);
+    expect(find.byType(GameDetailPane), findsNothing);
   });
 }

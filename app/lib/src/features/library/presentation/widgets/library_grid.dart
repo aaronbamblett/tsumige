@@ -47,7 +47,10 @@ class LibraryGrid extends HookConsumerWidget {
       padding: const EdgeInsets.only(top: topInset),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => ref.read(selectedGameIdProvider.notifier).clear(),
+        onTap: () {
+          ref.read(selectedGameIdProvider.notifier).clear();
+          ref.read(multiSelectionProvider.notifier).clear();
+        },
         child: Scrollbar(
           controller: scrollController,
           thumbVisibility: true,
