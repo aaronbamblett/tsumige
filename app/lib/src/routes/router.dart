@@ -10,11 +10,14 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../features/library/presentation/library_screen.dart';
 
 /// App routes: `/` is the library. Settings opens as a dialog over it.
-final routerProvider = Provider<GoRouter>((ref) => GoRouter(
-      routes: [
-        GoRoute(
-          path: '/',
-          builder: (context, state) => const LibraryScreen(),
-        ),
-      ],
-    ));
+/// The library screen draws its own top bar, so no scaffold chrome is needed.
+final routerProvider = Provider<GoRouter>(
+  (ref) => GoRouter(
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (context, state) => const LibraryScreen(),
+      ),
+    ],
+  ),
+);

@@ -5,7 +5,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'dart:async';
-
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -29,6 +28,7 @@ import 'art_overlay.dart';
 import 'art_store.dart';
 import 'detail_tabs/related_tab.dart';
 import 'dialog_shell.dart';
+import 'game_cover_grid_delegate.dart';
 import 'library_toolbar.dart';
 
 /// Opens the Cover and Background picker over the current screen.
@@ -79,19 +79,30 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
   var _tab = _ArtTab.cover;
   _Pick? _coverPick;
   _Pick? _backgroundPick;
+  late Alignment _coverAlignment;
+  late Alignment _backgroundAlignment;
   ArtCandidates? _candidates;
   Future<ArtCandidates>? _art;
   var _saving = false;
   final _scroll = ScrollController();
 
+  /// SteamGridDB Steam IDs, name-search results and the picked search game,
+  /// shared by the Cover and Background tabs so one dialog looks them up once.
+  late final _sgdb = _SgdbShared();
+
   @override
   void initState() {
     super.initState();
+    _coverAlignment =
+        widget.game.coverAlignment ?? kLibraryCoverAlignment;
+    _backgroundAlignment =
+        widget.game.backgroundAlignment ?? kDetailPaneArtAlignment;
     if (widget.game.vndbId != null) _load();
   }
 
   @override
   void dispose() {
+    _sgdb.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -115,10 +126,43 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
   void _setActivePick(_Pick pick) => setState(() {
     if (_tab == _ArtTab.cover) {
       _coverPick = pick;
+      // A new image starts at the default position.
+      _coverAlignment = kLibraryCoverAlignment;
+      // With no background the pane shows the cover, so its position changes too.
+      if (!_hasBackground && _backgroundPick == null) {
+        _backgroundAlignment = kDetailPaneArtAlignment;
+      }
     } else {
       _backgroundPick = pick;
+      if (pick is! _ClearPick) {
+        _backgroundAlignment = kDetailPaneArtAlignment;
+      }
     }
   });
+
+  static bool _near(Alignment a, Alignment b) =>
+      (a.x - b.x).abs() <= 0.001 && (a.y - b.y).abs() <= 0.001;
+
+  /// Null when the working position is within tolerance of the default, so
+  /// saving a repositioned-then-centred image writes no key.
+  static Alignment? _storedOrNull(Alignment working, Alignment def) =>
+      _near(working, def) ? null : working;
+
+  bool get _coverMoved => !_near(
+    _coverAlignment,
+    widget.game.coverAlignment ?? kLibraryCoverAlignment,
+  );
+
+  bool get _backgroundMoved => !_near(
+    _backgroundAlignment,
+    widget.game.backgroundAlignment ?? kDetailPaneArtAlignment,
+  );
+
+  bool get _canSave =>
+      _coverPick != null ||
+      _backgroundPick != null ||
+      _coverMoved ||
+      _backgroundMoved;
 
   void _close() => Navigator.of(context).pop();
 
@@ -162,7 +206,11 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
     final cover = _coverPick;
     final background = _backgroundPick;
     final game = widget.game;
-    if (cover == null && background == null) {
+    final coverMoved = _coverMoved;
+    final backgroundMoved = _backgroundMoved;
+    final resetsBackground =
+        cover != null && !_hasBackground && background == null;
+    if (cover == null && background == null && !coverMoved && !backgroundMoved) {
       _close();
       return;
     }
@@ -174,9 +222,28 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
           : await _bytesFor(background);
       if (!mounted) return;
       if (cover != null && coverBytes != null) {
-        await storeCoverBytes(context, ref, game, coverBytes, _sourceOf(cover));
+        await storeCoverBytes(
+          context,
+          ref,
+          game,
+          coverBytes,
+          _sourceOf(cover),
+          _storedOrNull(_coverAlignment, kLibraryCoverAlignment),
+        );
         if (!mounted) return;
         setState(() => _coverPick = null);
+      } else if (coverMoved) {
+        await ref
+            .read(gameEditorProvider)
+            .update(
+              game.id,
+              (g) =>
+                  g.coverAlignment = _storedOrNull(
+                    _coverAlignment,
+                    kLibraryCoverAlignment,
+                  ),
+              context: context,
+            );
       }
       if (!mounted) return;
       if (background is _ClearPick) {
@@ -188,7 +255,20 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
           game,
           backgroundBytes,
           _sourceOf(background),
+          _storedOrNull(_backgroundAlignment, kDetailPaneArtAlignment),
         );
+      } else if (backgroundMoved || resetsBackground) {
+        await ref
+            .read(gameEditorProvider)
+            .update(
+              game.id,
+              (g) =>
+                  g.backgroundAlignment = _storedOrNull(
+                    _backgroundAlignment,
+                    kDetailPaneArtAlignment,
+                  ),
+              context: context,
+            );
       }
       if (mounted) _close();
     } catch (e) {
@@ -256,7 +336,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
             thumbVisibility: true,
             child: SingleChildScrollView(
               controller: _scroll,
-              padding: const EdgeInsets.fromLTRB(24, 4, 12, 20),
+              padding: const EdgeInsets.fromLTRB(24, 4, 24, 20),
               child: _body(),
             ),
           ),
@@ -266,15 +346,15 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
   }
 
   Widget _body() {
-    if (_tab == _ArtTab.background && widget.game.vndbId == null) {
-      return _note('No VNDB id, so pick a file.');
-    }
-    if (_tab == _ArtTab.cover && widget.game.vndbId == null) {
+    if (widget.game.vndbId == null) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _note('No VNDB id, so pick a file.'),
-          _steamGridDbSection(),
+          if (_tab == _ArtTab.cover)
+            _steamGridDbSection()
+          else
+            _steamGridDbHeroesSection(),
         ],
       );
     }
@@ -286,7 +366,12 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
           snapshot,
           background: _tab == _ArtTab.background,
         );
-        if (_tab == _ArtTab.background) return vndb;
+        if (_tab == _ArtTab.background) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [vndb, _steamGridDbHeroesSection()],
+          );
+        }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [vndb, _steamGridDbSection()],
@@ -296,12 +381,27 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
   }
 
   Widget _steamGridDbSection() => _SteamGridDbSection(
+    key: const ValueKey('sgdb-grids'),
     game: widget.game,
+    kind: _SgdbKind.grids,
+    shared: _sgdb,
     selectedUrl: _coverPick is _RemotePick
         ? (_coverPick as _RemotePick).art.url
         : null,
     isCurrent: _isCurrentCover,
     onPick: (art) => setState(() => _coverPick = _RemotePick(art)),
+  );
+
+  Widget _steamGridDbHeroesSection() => _SteamGridDbSection(
+    key: const ValueKey('sgdb-heroes'),
+    game: widget.game,
+    kind: _SgdbKind.heroes,
+    shared: _sgdb,
+    selectedUrl: _backgroundPick is _RemotePick
+        ? (_backgroundPick as _RemotePick).art.url
+        : null,
+    isCurrent: _isCurrentBackground,
+    onPick: (art) => setState(() => _backgroundPick = _RemotePick(art)),
   );
 
   Widget _vndbSnapshot(
@@ -354,7 +454,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
         ...art.releaseImages.where((i) => !i.portrait),
       ],
       columns: 5,
-      aspectRatio: 3 / 4,
+      aspectRatio: kGameCoverAspectRatio,
       isCurrent: _isCurrentCover,
     );
   }
@@ -432,23 +532,36 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
             ],
           ),
         ),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: columns,
-          crossAxisSpacing: 14,
-          mainAxisSpacing: 14,
-          childAspectRatio: aspectRatio,
-          children: [
-            for (final art in items)
-              _ArtTile(
-                key: ValueKey('art-${art.url}'),
-                art: art,
-                selected: active is _RemotePick && active.art.url == art.url,
-                current: isCurrent(art),
-                onTap: () => _setActivePick(_RemotePick(art)),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const spacing = 14.0;
+            final columnWidth =
+                (constraints.maxWidth - spacing * (columns - 1)) / columns;
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columns,
+                crossAxisSpacing: spacing,
+                mainAxisSpacing: spacing,
+                mainAxisExtent:
+                    columnWidth / aspectRatio + _kArtCaptionExtent,
               ),
-          ],
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                final art = items[index];
+                return _ArtTile(
+                  key: ValueKey('art-${art.url}'),
+                  art: art,
+                  aspectRatio: aspectRatio,
+                  selected:
+                      active is _RemotePick && active.art.url == art.url,
+                  current: isCurrent(art),
+                  onTap: () => _setActivePick(_RemotePick(art)),
+                );
+              },
+            );
+          },
         ),
       ],
     );
@@ -471,17 +584,29 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
     );
   }
 
+  double _candidateAspect(ArtCandidate art) =>
+      art.width > 0 && art.height > 0 ? art.width / art.height : 0;
+
+  ImageProvider _fileProvider(String path) => artFileImage(
+    File(path),
+    version: ref.watch(artVersionProvider)(path),
+  );
+
   Widget _coverPreview(BuildContext context, DataDir dir) {
     final scheme = Theme.of(context).colorScheme;
     final pick = _coverPick;
     final cover = widget.game.cover;
-    final Widget image;
-    if (pick != null) {
-      image = _pickImage(pick);
+    final ImageProvider? provider;
+    var aspect = 0.0;
+    if (pick is _RemotePick) {
+      provider = NetworkImage(pick.art.thumbnail);
+      aspect = _candidateAspect(pick.art);
+    } else if (pick is _FilePick) {
+      provider = _fileProvider(pick.path);
     } else if (cover != null && cover.isNotEmpty) {
-      image = _storedImage(p.join(dir.coversOriginal.path, cover));
+      provider = _fileProvider(p.join(dir.coversOriginal.path, cover));
     } else {
-      image = ColoredBox(color: scheme.surface);
+      provider = null;
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -491,25 +616,19 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
           style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
         ),
         const SizedBox(height: 10),
-        SizedBox(
-          width: 220,
-          child: AspectRatio(
-            aspectRatio: 3 / 4,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: image,
-            ),
-          ),
+        _RepositionableArt(
+          key: const ValueKey('cover-reposition'),
+          provider: provider,
+          aspect: aspect,
+          alignment: _coverAlignment,
+          onAlignment: (a) => setState(() => _coverAlignment = a),
+          box: const Size(220, 220 / kGameCoverAspectRatio),
+          cropAspect: kGameCoverAspectRatio,
         ),
         const SizedBox(height: 8),
         Text(
           widget.game.title,
           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'Covers are cropped to 3:4 in the grid.',
-          style: TextStyle(fontSize: 12, color: scheme.outline),
         ),
       ],
     );
@@ -519,20 +638,31 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
     final scheme = Theme.of(context).colorScheme;
     final game = widget.game;
     final pick = _backgroundPick;
-    final Widget image;
-    if (pick != null && pick is! _ClearPick) {
-      image = _pickImage(pick);
-    } else if (pick == null && _hasBackground) {
-      image = _storedImage(p.join(dir.coversBackground.path, game.background!));
+    // Without a background the pane shows the cover, so the preview shows the
+    // cover the pane will show after Save.
+    final shown = switch (pick) {
+      _ClearPick() || null => _coverPick,
+      _ => pick,
+    };
+    final ImageProvider? provider;
+    var aspect = 0.0;
+    if (pick == null && _hasBackground) {
+      provider = _fileProvider(
+        p.join(dir.coversBackground.path, game.background!),
+      );
+    } else if (shown is _RemotePick) {
+      provider = NetworkImage(shown.art.thumbnail);
+      aspect = _candidateAspect(shown.art);
+    } else if (shown is _FilePick) {
+      provider = _fileProvider(shown.path);
     } else if (game.cover != null && game.cover!.isNotEmpty) {
-      image = _storedImage(p.join(dir.coversOriginal.path, game.cover!));
+      provider = _fileProvider(p.join(dir.coversOriginal.path, game.cover!));
     } else {
-      image = ColoredBox(color: scheme.surface);
+      provider = null;
     }
     final picked =
         (pick != null && pick is! _ClearPick) ||
         (pick == null && _hasBackground);
-    final original = game.vndbOriginalTitle;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -541,74 +671,17 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
           style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
         ),
         const SizedBox(height: 10),
-        Container(
-          width: 252,
-          height: 195,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: scheme.outlineVariant),
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              image,
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      scheme.surfaceContainer.withValues(alpha: 0),
-                      scheme.surfaceContainer.withValues(alpha: 0.55),
-                      scheme.surfaceContainer,
-                    ],
-                    stops: const [0.35, 0.62, 1.0],
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 12,
-                right: 12,
-                bottom: 10,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      game.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: OnImage.text,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        shadows: [
-                          Shadow(
-                            offset: Offset(0, 2),
-                            blurRadius: 10,
-                            color: Color(0xB3000000),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (original != null &&
-                        original.isNotEmpty &&
-                        original != game.title)
-                      Text(
-                        original,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+        _RepositionableArt(
+          key: const ValueKey('background-reposition'),
+          provider: provider,
+          aspect: aspect,
+          alignment: _backgroundAlignment,
+          onAlignment: (a) => setState(() => _backgroundAlignment = a),
+          box: const Size(220, 220),
+          cropAspect: 440 / 340,
+          radius: 12,
+          outlined: true,
+          overlay: _paneOverlay(game, scheme),
         ),
         if (!picked) ...[
           const SizedBox(height: 10),
@@ -621,27 +694,65 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
     );
   }
 
-  Widget _pickImage(_Pick pick) => switch (pick) {
-    _RemotePick(:final art) => Image.network(
-      art.thumbnail,
-      fit: BoxFit.cover,
-      alignment: Alignment.topCenter,
-      errorBuilder: (_, _, _) => const SizedBox.shrink(),
-    ),
-    _FilePick(:final path) => _storedImage(path),
-    _ClearPick() => const SizedBox.shrink(),
-  };
-
-  Widget _storedImage(String path) => Image(
-    image: artFileImage(
-      File(path),
-      version: ref.watch(artVersionProvider)(path),
-    ),
-    fit: BoxFit.cover,
-    alignment: Alignment.topCenter,
-    gaplessPlayback: true,
-    errorBuilder: (_, _, _) => const SizedBox.shrink(),
-  );
+  Widget _paneOverlay(Game game, ColorScheme scheme) {
+    final original = game.vndbOriginalTitle;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                scheme.surfaceContainer.withValues(alpha: 0),
+                scheme.surfaceContainer.withValues(alpha: 0.55),
+                scheme.surfaceContainer,
+              ],
+              stops: const [0.35, 0.62, 1.0],
+            ),
+          ),
+        ),
+        Positioned(
+          left: 12,
+          right: 12,
+          bottom: 10,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                game.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: OnImage.text,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  shadows: [
+                    Shadow(
+                      offset: Offset(0, 2),
+                      blurRadius: 10,
+                      color: Color(0xB3000000),
+                    ),
+                  ],
+                ),
+              ),
+              if (original != null &&
+                  original.isNotEmpty &&
+                  original != game.title)
+                Text(
+                  original,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _footer() {
     final candidates = _candidates;
@@ -695,7 +806,7 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
             height: 40,
             expand: false,
             loading: _saving,
-            onPressed: _save,
+            onPressed: _canSave ? _save : null,
             label: const Text('Save'),
           ),
         ],
@@ -704,17 +815,788 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
   }
 }
 
-/// SteamGridDB covers on the Cover tab. Loads independently of VNDB so one
-/// source never blocks the other.
+/// The whole image with its crop frame outlined and the rest darkened. The
+/// frame is dragged along the overflow axis; the alignment stays in -1..1.
+class _RepositionableArt extends StatefulWidget {
+  const _RepositionableArt({
+    super.key,
+    required this.provider,
+    required this.aspect,
+    required this.alignment,
+    required this.onAlignment,
+    required this.box,
+    required this.cropAspect,
+    this.radius = 10,
+    this.outlined = false,
+    this.overlay,
+  });
+
+  /// The image to draw, or null for an empty box.
+  final ImageProvider? provider;
+
+  /// Image width over height when the candidate reports it, else 0, in which
+  /// case the intrinsic size is read from the image stream.
+  final double aspect;
+
+  /// The crop position, as a [BoxFit.cover] alignment.
+  final Alignment alignment;
+  final ValueChanged<Alignment> onAlignment;
+
+  /// The largest area the whole image is drawn in, centred and top-aligned.
+  final Size box;
+
+  /// Width over height of the crop frame that the alignment moves.
+  final double cropAspect;
+
+  final double radius;
+  final bool outlined;
+
+  /// Drawn over the crop frame, pointer-transparent.
+  final Widget? overlay;
+
+  @override
+  State<_RepositionableArt> createState() => _RepositionableArtState();
+}
+
+class _RepositionableArtState extends State<_RepositionableArt> {
+  ImageStream? _stream;
+  ImageStreamListener? _listener;
+  Size? _intrinsic;
+  var _dragging = false;
+  var _dragFrom = Alignment.center;
+  var _dragged = Offset.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.provider != null && widget.aspect <= 0) _listen();
+  }
+
+  @override
+  void didUpdateWidget(covariant _RepositionableArt old) {
+    super.didUpdateWidget(old);
+    if (old.provider != widget.provider) {
+      _unlisten();
+      _intrinsic = null;
+      if (widget.provider != null && widget.aspect <= 0) _listen();
+    }
+  }
+
+  @override
+  void dispose() {
+    _unlisten();
+    super.dispose();
+  }
+
+  void _listen() {
+    final provider = widget.provider;
+    if (provider == null) return;
+    final stream = provider.resolve(ImageConfiguration.empty);
+    _listener = ImageStreamListener(
+      (info, _) {
+        if (!mounted) return;
+        setState(() {
+          _intrinsic = Size(
+            info.image.width.toDouble(),
+            info.image.height.toDouble(),
+          );
+        });
+      },
+      onError: (_, _) {},
+    );
+    _stream = stream..addListener(_listener!);
+  }
+
+  void _unlisten() {
+    if (_stream != null && _listener != null) {
+      _stream!.removeListener(_listener!);
+    }
+    _stream = null;
+    _listener = null;
+  }
+
+  double get _aspect {
+    if (widget.aspect > 0) return widget.aspect;
+    final size = _intrinsic;
+    if (size == null || size.height <= 0) return 0;
+    return size.width / size.height;
+  }
+
+  /// The image is contained in the box. The frame is the largest crop-aspect
+  /// rectangle inside the image, placed by the alignment as BoxFit.cover
+  /// would place the crop. Null while the image size is unknown.
+  ({Rect image, Rect frame, bool overflows})? _layout() {
+    final box = widget.box;
+    if (widget.provider == null) {
+      final whole = Offset.zero & box;
+      return (image: whole, frame: whole, overflows: false);
+    }
+    final aspect = _aspect;
+    if (aspect <= 0) return null;
+    final crop = widget.cropAspect;
+    final fillsWidth = aspect >= box.width / box.height;
+    final imageW = fillsWidth ? box.width : box.height * aspect;
+    final imageH = fillsWidth ? box.width / aspect : box.height;
+    final frameW = aspect >= crop ? imageH * crop : imageW;
+    final frameH = aspect >= crop ? imageH : imageW / crop;
+    final alignment = widget.alignment;
+    return (
+      image: Rect.fromLTWH((box.width - imageW) / 2, 0, imageW, imageH),
+      frame: Rect.fromLTWH(
+        (box.width - imageW) / 2 + (imageW - frameW) * (alignment.x + 1) / 2,
+        (imageH - frameH) * (alignment.y + 1) / 2,
+        frameW,
+        frameH,
+      ),
+      overflows: (aspect - crop).abs() > 0.01,
+    );
+  }
+
+  /// The frame follows the pointer from where the drag started, so a drag past
+  /// the edge clamps instead of banking the overshoot.
+  void _move() {
+    final layout = _layout();
+    if (layout == null || !layout.overflows) return;
+    final overflowX = layout.image.width - layout.frame.width;
+    final overflowY = layout.image.height - layout.frame.height;
+    var next = _dragFrom;
+    if (overflowX > 0.5) {
+      next = Alignment(
+        (_dragFrom.x + _dragged.dx / (overflowX / 2)).clamp(-1.0, 1.0),
+        next.y,
+      );
+    }
+    if (overflowY > 0.5) {
+      next = Alignment(
+        next.x,
+        (_dragFrom.y + _dragged.dy / (overflowY / 2)).clamp(-1.0, 1.0),
+      );
+    }
+    if (next != widget.alignment) widget.onAlignment(next);
+  }
+
+  Widget _shade(Rect rect) => Positioned.fromRect(
+    rect: rect,
+    child: const IgnorePointer(child: ColoredBox(color: Color(0x80000000))),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final provider = widget.provider;
+    final layout = _layout();
+    final overflows = layout?.overflows ?? false;
+    final radius = BorderRadius.circular(widget.radius);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: widget.box.width,
+          height: widget.box.height,
+          decoration: widget.outlined
+              ? BoxDecoration(
+                  borderRadius: radius,
+                  border: Border.all(color: scheme.outlineVariant),
+                )
+              : null,
+          child: Stack(
+            children: [
+              Positioned.fromRect(
+                rect: layout?.image ?? Offset.zero & widget.box,
+                child: ClipRRect(
+                  key: const ValueKey('crop-image'),
+                  borderRadius: radius,
+                  child: provider == null
+                      ? ColoredBox(color: scheme.surface)
+                      : Offstage(
+                          offstage: layout == null,
+                          child: Image(
+                            image: provider,
+                            fit: BoxFit.fill,
+                            gaplessPlayback: true,
+                            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                          ),
+                        ),
+                ),
+              ),
+              if (layout != null && overflows) ...[
+                _shade(Rect.fromLTRB(
+                  layout.image.left,
+                  layout.image.top,
+                  layout.image.right,
+                  layout.frame.top,
+                )),
+                _shade(Rect.fromLTRB(
+                  layout.image.left,
+                  layout.frame.bottom,
+                  layout.image.right,
+                  layout.image.bottom,
+                )),
+                _shade(Rect.fromLTRB(
+                  layout.image.left,
+                  layout.frame.top,
+                  layout.frame.left,
+                  layout.frame.bottom,
+                )),
+                _shade(Rect.fromLTRB(
+                  layout.frame.right,
+                  layout.frame.top,
+                  layout.image.right,
+                  layout.frame.bottom,
+                )),
+                Positioned.fromRect(
+                  rect: layout.frame,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      key: const ValueKey('crop-frame'),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0x80FFFFFF)),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned.fromRect(
+                  rect: layout.image,
+                  child: MouseRegion(
+                    cursor: _dragging
+                        ? SystemMouseCursors.grabbing
+                        : SystemMouseCursors.grab,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onPanStart: (_) => setState(() {
+                        _dragging = true;
+                        _dragFrom = widget.alignment;
+                        _dragged = Offset.zero;
+                      }),
+                      onPanEnd: (_) => setState(() => _dragging = false),
+                      onPanCancel: () => setState(() => _dragging = false),
+                      onPanUpdate: (details) {
+                        _dragged += details.delta;
+                        _move();
+                      },
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                ),
+              ],
+              if (layout != null && widget.overlay != null)
+                Positioned.fromRect(
+                  rect: layout.frame,
+                  child: IgnorePointer(child: widget.overlay),
+                ),
+            ],
+          ),
+        ),
+        if (overflows) ...[
+          const SizedBox(height: 10),
+          Text(
+            'Drag to reposition.',
+            style: TextStyle(fontSize: 12, color: scheme.outline),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Which SteamGridDB art a section shows: covers on the Cover tab, heroes
+/// (wide banners) on the Background tab.
+enum _SgdbKind {
+  grids,
+  heroes;
+
+  String get noKeyMessage => switch (this) {
+    grids =>
+      'Covers from SteamGridDB need your own free API key. '
+      'Get one in your SteamGridDB preferences.',
+    heroes =>
+      'Backgrounds from SteamGridDB need your own free API key. '
+      'Get one in your SteamGridDB preferences.',
+  };
+
+  String get emptyMessage => switch (this) {
+    grids => 'No SteamGridDB covers for this game.',
+    heroes => 'No SteamGridDB backgrounds for this game.',
+  };
+
+  int get columns => switch (this) {
+    grids => 5,
+    heroes => 3,
+  };
+
+  double get aspectRatio => switch (this) {
+    grids => kGameCoverAspectRatio,
+    heroes => 440 / 340,
+  };
+
+  Future<List<ArtCandidate>> fetchSteam(
+    SteamGridDbClient client,
+    int appId,
+  ) => switch (this) {
+    grids => client.gridsForSteamApp(appId),
+    heroes => client.heroesForSteamApp(appId),
+  };
+
+  Future<List<ArtCandidate>> fetchGame(
+    SteamGridDbClient client,
+    int gameId,
+  ) => switch (this) {
+    grids => client.gridsForGame(gameId),
+    heroes => client.heroesForGame(gameId),
+  };
+}
+
+/// SteamGridDB lookup shared by the Cover and Background tabs. The Steam IDs,
+/// the name-search results and the picked search game are resolved once per
+/// dialog; each kind of art (covers, heroes) is then fetched once for that
+/// lookup. The in-flight lookup is shared by both tabs, with one in-flight
+/// fetch per kind, so a tab switch joins pending work instead of repeating
+/// it. A lookup generation plus one generation per kind keeps a stale
+/// response from landing: the lookup never invalidates a kind fetch, and a
+/// kind fetch never invalidates the lookup or the other kind.
+class _SgdbShared extends ChangeNotifier {
+  List<int>? steamIds;
+  /// The VN's Steam apps to choose between when there is more than one.
+  List<SteamApp> steamChoices = const [];
+  List<SteamGridDbGame>? search;
+  int? selectedSearchId;
+  var grids = const <ArtCandidate>[];
+  var heroes = const <ArtCandidate>[];
+  var gridsLoading = false;
+  var heroesLoading = false;
+  String? gridsError;
+  String? heroesError;
+
+  /// Which game plus key the lookup above was resolved for.
+  var lookupFor = '';
+
+  /// Which lookup plus search selection each kind of art was loaded for.
+  var gridsFor = '';
+  var heroesFor = '';
+
+  var _lookupGeneration = 0;
+  var _gridsGeneration = 0;
+  var _heroesGeneration = 0;
+  Future<void>? _lookupFuture;
+  var _lookupPrint = '';
+  Future<void>? _gridsFuture;
+  Future<void>? _heroesFuture;
+
+  /// Why the shared lookup failed: 'badKey' or 'network'.
+  String? _lookupError;
+
+  var _disposed = false;
+
+  static String fingerprint(Game game, String key) =>
+      '${game.id}|${key.trim()}';
+
+  List<ArtCandidate> artFor(_SgdbKind kind) =>
+      kind == _SgdbKind.grids ? grids : heroes;
+
+  bool loadingFor(_SgdbKind kind) =>
+      kind == _SgdbKind.grids ? gridsLoading : heroesLoading;
+
+  String? errorFor(_SgdbKind kind) =>
+      kind == _SgdbKind.grids ? gridsError : heroesError;
+
+  String loadedFor(_SgdbKind kind) =>
+      kind == _SgdbKind.grids ? gridsFor : heroesFor;
+
+  /// True while the shared Steam ID / name-search lookup is running.
+  bool get lookupPending => _lookupFuture != null;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  int _kindGeneration(_SgdbKind kind) =>
+      kind == _SgdbKind.grids ? _gridsGeneration : _heroesGeneration;
+
+  Future<void>? _kindFuture(_SgdbKind kind) =>
+      kind == _SgdbKind.grids ? _gridsFuture : _heroesFuture;
+
+  void _setKindFuture(_SgdbKind kind, Future<void>? future) {
+    if (kind == _SgdbKind.grids) {
+      _gridsFuture = future;
+    } else {
+      _heroesFuture = future;
+    }
+  }
+
+  bool _fetchStale(_SgdbKind kind, int generation) =>
+      _disposed || generation != _kindGeneration(kind);
+
+  void reset() {
+    _lookupGeneration++;
+    _gridsGeneration++;
+    _heroesGeneration++;
+    _lookupFuture = null;
+    _lookupPrint = '';
+    _lookupError = null;
+    _gridsFuture = null;
+    _heroesFuture = null;
+    steamIds = null;
+    steamChoices = const [];
+    search = null;
+    selectedSearchId = null;
+    grids = const [];
+    heroes = const [];
+    gridsLoading = false;
+    heroesLoading = false;
+    gridsError = null;
+    heroesError = null;
+    lookupFor = '';
+    gridsFor = '';
+    heroesFor = '';
+    _notify();
+  }
+
+  void _setLoading(_SgdbKind kind, bool value) {
+    if (kind == _SgdbKind.grids) {
+      gridsLoading = value;
+    } else {
+      heroesLoading = value;
+    }
+  }
+
+  void _setError(_SgdbKind kind, String? value) {
+    if (kind == _SgdbKind.grids) {
+      gridsError = value;
+    } else {
+      heroesError = value;
+    }
+  }
+
+  void _setArt(_SgdbKind kind, List<ArtCandidate> value) {
+    if (kind == _SgdbKind.grids) {
+      grids = value;
+    } else {
+      heroes = value;
+    }
+  }
+
+  void _setLoadedFor(_SgdbKind kind, String value) {
+    if (kind == _SgdbKind.grids) {
+      gridsFor = value;
+    } else {
+      heroesFor = value;
+    }
+  }
+
+  /// Which lookup plus search selection a kind's art belongs to. Steam-ID art
+  /// does not depend on the search selection; search art does.
+  String _artKey(String print) {
+    final ids = steamIds;
+    if (ids != null && ids.isNotEmpty) return '$print|steam:${ids.join(',')}';
+    return '$print|search:$selectedSearchId';
+  }
+
+  /// Loads [kind] unless it is already loaded for this lookup and selection.
+  /// The Steam IDs and the name search come from the shared lookup: while the
+  /// lookup is in flight a second caller joins it, and while this kind's
+  /// fetch is in flight a second caller for this kind joins that instead, so
+  /// a tab switch never repeats them.
+  Future<void> ensureKind(
+    _SgdbKind kind, {
+    required Game game,
+    required String key,
+    required SteamGridDbClient? client,
+    required VndbClient vndb,
+  }) async {
+    final print = fingerprint(game, key);
+    if (client == null) return;
+    final generation = _kindGeneration(kind);
+    if (lookupFor == print && loadedFor(kind) == _artKey(print)) return;
+    final joined = _kindFuture(kind);
+    if (joined != null) {
+      await joined;
+      return;
+    }
+    if (lookupFor != print) {
+      _setLoading(kind, true);
+      _setError(kind, null);
+      _notify();
+      await _joinLookup(game: game, client: client, vndb: vndb, print: print);
+      if (_fetchStale(kind, generation)) return;
+      if (lookupFor != print) {
+        _setLoading(kind, false);
+        _setError(kind, _lookupError ?? 'network');
+        _notify();
+        return;
+      }
+    }
+    if (loadedFor(kind) == _artKey(print)) {
+      _setLoading(kind, false);
+      _notify();
+      return;
+    }
+    final pending = _kindFuture(kind);
+    if (pending != null) {
+      await pending;
+      return;
+    }
+    if (_fetchStale(kind, generation)) return;
+    _setLoading(kind, true);
+    _setError(kind, null);
+    _notify();
+    final future = _fetchKindArt(kind, client, print, generation);
+    _setKindFuture(kind, future);
+    unawaited(
+      future.whenComplete(() {
+        if (identical(_kindFuture(kind), future)) _setKindFuture(kind, null);
+      }),
+    );
+    await future;
+  }
+
+  /// Starts the shared lookup for [print], or joins it when one is already
+  /// running for the same game and key.
+  Future<void> _joinLookup({
+    required Game game,
+    required SteamGridDbClient client,
+    required VndbClient vndb,
+    required String print,
+  }) {
+    if (_lookupFuture != null && _lookupPrint == print) return _lookupFuture!;
+    final generation = ++_lookupGeneration;
+    _lookupError = null;
+    final future = _runLookup(
+      game: game,
+      client: client,
+      vndb: vndb,
+      print: print,
+      generation: generation,
+    );
+    _lookupFuture = future;
+    _lookupPrint = print;
+    unawaited(
+      future.whenComplete(() {
+        if (identical(_lookupFuture, future)) {
+          _lookupFuture = null;
+          _lookupPrint = '';
+        }
+      }),
+    );
+    return future;
+  }
+
+  Future<void> _runLookup({
+    required Game game,
+    required SteamGridDbClient client,
+    required VndbClient vndb,
+    required String print,
+    required int generation,
+  }) async {
+    bool stale() => _disposed || generation != _lookupGeneration;
+    try {
+      List<SteamApp> apps = const [];
+      if (game.launch.steamAppId != null) {
+        apps = [(appId: game.launch.steamAppId!, title: game.title)];
+      } else if (game.vndbId != null) {
+        try {
+          apps = await vndb.fetchSteamApps(game.vndbId!);
+        } catch (_) {
+          apps = const [];
+        }
+      }
+      if (stale()) return;
+      if (apps.isNotEmpty) {
+        steamChoices = apps.length > 1 ? apps : const [];
+        steamIds = [_preselectSteamApp(game.title, apps)];
+        search = null;
+        lookupFor = print;
+        _notify();
+        return;
+      }
+      final results = await client.searchGames(game.title);
+      if (stale()) return;
+      final folded = normalizeGridTitle(game.title);
+      int? selected;
+      for (final result in results) {
+        if (normalizeGridTitle(result.name) == folded) {
+          selected = result.id;
+          break;
+        }
+      }
+      steamIds = const [];
+      steamChoices = const [];
+      search = results;
+      selectedSearchId = selected;
+      lookupFor = print;
+      _notify();
+    } on SteamGridDbBadKeyException {
+      if (stale()) return;
+      _lookupError = 'badKey';
+      _notify();
+    } catch (_) {
+      if (stale()) return;
+      _lookupError = 'network';
+      _notify();
+    }
+  }
+
+  Future<void> _fetchKindArt(
+    _SgdbKind kind,
+    SteamGridDbClient client,
+    String print,
+    int generation,
+  ) async {
+    bool stale() => _fetchStale(kind, generation);
+    try {
+      final ids = steamIds;
+      if (ids == null || ids.isEmpty) {
+        final selected = selectedSearchId;
+        if (selected == null) {
+          _setArt(kind, const []);
+          _setLoadedFor(kind, _artKey(print));
+          _setLoading(kind, false);
+          _notify();
+          return;
+        }
+        final arts = await kind.fetchGame(client, selected);
+        if (stale()) return;
+        _setArt(kind, _dedupe(arts));
+        _setLoadedFor(kind, _artKey(print));
+        _setLoading(kind, false);
+        _notify();
+        return;
+      }
+      final merged = <ArtCandidate>[];
+      final seen = <String>{};
+      for (final id in ids) {
+        final arts = await kind.fetchSteam(client, id);
+        if (stale()) return;
+        for (final art in arts) {
+          if (seen.add(art.url)) merged.add(art);
+        }
+      }
+      if (stale()) return;
+      _setArt(kind, merged);
+      _setLoadedFor(kind, _artKey(print));
+      _setLoading(kind, false);
+      _notify();
+    } on SteamGridDbBadKeyException {
+      if (stale()) return;
+      _setLoading(kind, false);
+      _setError(kind, 'badKey');
+      _notify();
+    } catch (_) {
+      if (stale()) return;
+      _setLoading(kind, false);
+      _setError(kind, 'network');
+      _notify();
+    }
+  }
+
+  /// The user picked a search result: remember it for both tabs and load this
+  /// tab's art for it. Only this kind's fetch is invalidated; the shared
+  /// lookup and the other kind's fetch stand. The other tab follows on its
+  /// next build.
+  Future<void> selectSearch(
+    _SgdbKind kind,
+    int id, {
+    required Game game,
+    required String key,
+    required SteamGridDbClient? client,
+  }) async {
+    if (client == null) return;
+    selectedSearchId = id;
+    await _reselect(kind, game: game, key: key, client: client);
+  }
+
+  /// The user picked one of the VN's Steam apps: load this tab's art for it,
+  /// with the same invalidation as [selectSearch].
+  Future<void> selectSteam(
+    _SgdbKind kind,
+    int appId, {
+    required Game game,
+    required String key,
+    required SteamGridDbClient? client,
+  }) async {
+    if (client == null) return;
+    steamIds = [appId];
+    await _reselect(kind, game: game, key: key, client: client);
+  }
+
+  Future<void> _reselect(
+    _SgdbKind kind, {
+    required Game game,
+    required String key,
+    required SteamGridDbClient client,
+  }) async {
+    final generation = kind == _SgdbKind.grids
+        ? ++_gridsGeneration
+        : ++_heroesGeneration;
+    _setLoading(kind, true);
+    _setError(kind, null);
+    _notify();
+    final future = _fetchKindArt(
+      kind,
+      client,
+      fingerprint(game, key),
+      generation,
+    );
+    _setKindFuture(kind, future);
+    unawaited(
+      future.whenComplete(() {
+        if (identical(_kindFuture(kind), future)) _setKindFuture(kind, null);
+      }),
+    );
+    await future;
+  }
+
+  List<ArtCandidate> _dedupe(List<ArtCandidate> arts) {
+    final seen = <String>{};
+    return [for (final art in arts) if (seen.add(art.url)) art];
+  }
+}
+
+/// SteamGridDB art below the VNDB art: covers on the Cover tab, heroes on the
+/// Background tab. Loads independently of VNDB so one source never blocks the
+/// other. The lookup is shared between the tabs; only the key form is local.
+/// The Steam app whose title shares the most words with [gameTitle]. Words
+/// that every release shares are ignored; a tie or no overlap keeps the first.
+int _preselectSteamApp(String gameTitle, List<SteamApp> apps) {
+  Set<String> words(String title) => {
+    for (final word in title.split(RegExp(r'[^A-Za-z0-9]+')))
+      if (word.isNotEmpty) normalizeGridTitle(word),
+  };
+  final releases = [for (final app in apps) words(app.title)];
+  final common = releases.reduce((a, b) => a.intersection(b));
+  final game = words(gameTitle).difference(common);
+  var best = 0;
+  var bestScore = -1;
+  for (var i = 0; i < apps.length; i++) {
+    final score = releases[i].difference(common).intersection(game).length;
+    if (score > bestScore) {
+      best = i;
+      bestScore = score;
+    }
+  }
+  return apps[best].appId;
+}
+
 class _SteamGridDbSection extends ConsumerStatefulWidget {
   const _SteamGridDbSection({
+    super.key,
     required this.game,
+    required this.kind,
+    required this.shared,
     required this.selectedUrl,
     required this.isCurrent,
     required this.onPick,
   });
 
   final Game game;
+  final _SgdbKind kind;
+  final _SgdbShared shared;
   final String? selectedUrl;
   final bool Function(ArtCandidate) isCurrent;
   final void Function(ArtCandidate) onPick;
@@ -727,193 +1609,101 @@ class _SteamGridDbSection extends ConsumerStatefulWidget {
 class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
   var _editingKey = false;
   late final TextEditingController _keyController;
-  var _loading = false;
-  String? _error;
-  List<int>? _steamIds;
-  List<SteamGridDbGame>? _search;
-  int? _selectedSearchId;
-  var _grids = const <ArtCandidate>[];
-  var _loadedFor = '';
-  var _generation = 0;
   late final ProviderSubscription<String> _keySub;
+
+  _SgdbShared get _shared => widget.shared;
+  _SgdbKind get _kind => widget.kind;
 
   @override
   void initState() {
     super.initState();
     _keyController = TextEditingController();
     _keyController.addListener(() => setState(() {}));
+    _shared.addListener(_onShared);
     _keySub = ref.listenManual<String>(steamGridDbKeyProvider, (
       previous,
       next,
     ) {
       if (!mounted) return;
-      final wasEmpty = (previous ?? '').trim().isEmpty;
-      final isEmpty = next.trim().isEmpty;
-      if (wasEmpty && isEmpty) return;
-      if (isEmpty) {
-        setState(_reset);
-      } else if (!_editingKey) {
-        setState(() => _loadedFor = '${widget.game.id}|${next.trim()}');
+      if ((previous ?? '').trim() == next.trim()) return;
+      // A key saved from either tab resets the shared lookup and loads this
+      // tab's art; the other tab follows from the shared lookup.
+      _shared.reset();
+      if (next.trim().isNotEmpty && !_editingKey) {
         unawaited(_load());
       }
     });
     if (ref.read(steamGridDbKeyProvider).trim().isNotEmpty) {
-      _loadedFor =
-          '${widget.game.id}|${ref.read(steamGridDbKeyProvider).trim()}';
       Future.microtask(_load);
     }
   }
 
   @override
   void dispose() {
+    _shared.removeListener(_onShared);
     _keySub.close();
     _keyController.dispose();
     super.dispose();
+  }
+
+  void _onShared() {
+    if (mounted) setState(() {});
   }
 
   @override
   void didUpdateWidget(_SteamGridDbSection oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.game.id != widget.game.id) {
-      _reset();
+      _shared.reset();
       if (ref.read(steamGridDbKeyProvider).trim().isNotEmpty) {
-        _loadedFor =
-            '${widget.game.id}|${ref.read(steamGridDbKeyProvider).trim()}';
         Future.microtask(_load);
       }
     }
   }
 
-  void _reset() {
-    _generation++;
-    _editingKey = false;
-    _loading = false;
-    _error = null;
-    _steamIds = null;
-    _search = null;
-    _selectedSearchId = null;
-    _grids = const [];
-    _loadedFor = '';
-  }
+  Future<void> _load() => _shared.ensureKind(
+    _kind,
+    game: widget.game,
+    key: ref.read(steamGridDbKeyProvider),
+    client: ref.read(steamGridDbClientProvider),
+    vndb: ref.read(vndbSearchClientProvider),
+  );
 
-  Future<void> _load() async {
-    final client = ref.read(steamGridDbClientProvider);
-    if (client == null) return;
-    final generation = ++_generation;
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final game = widget.game;
-      List<int> ids = const [];
-      if (game.launch.steamAppId != null) {
-        ids = [game.launch.steamAppId!];
-      } else if (game.vndbId != null) {
-        try {
-          ids = await ref
-              .read(vndbSearchClientProvider)
-              .fetchSteamAppIds(game.vndbId!);
-        } catch (_) {
-          ids = const [];
-        }
-      }
-      if (!mounted || generation != _generation) return;
-      if (ids.isNotEmpty) {
-        final merged = <ArtCandidate>[];
-        final seen = <String>{};
-        for (final id in ids) {
-          final arts = await client.gridsForSteamApp(id);
-          if (!mounted || generation != _generation) return;
-          for (final art in arts) {
-            if (seen.add(art.url)) merged.add(art);
-          }
-        }
-        if (!mounted || generation != _generation) return;
-        setState(() {
-          _loading = false;
-          _steamIds = ids;
-          _search = null;
-          _grids = merged;
-        });
-      } else {
-        final results = await client.searchGames(game.title);
-        if (!mounted || generation != _generation) return;
-        final folded = normalizeGridTitle(game.title);
-        int? selected;
-        for (final result in results) {
-          if (normalizeGridTitle(result.name) == folded) {
-            selected = result.id;
-            break;
-          }
-        }
-        setState(() {
-          _steamIds = const [];
-          _search = results;
-          _selectedSearchId = selected;
-        });
-        if (selected != null) {
-          await _loadSearchGrids(client, selected);
-        } else {
-          if (!mounted || generation != _generation) return;
-          setState(() {
-            _loading = false;
-            _grids = const [];
-          });
-        }
-      }
-    } on SteamGridDbBadKeyException {
-      if (!mounted || generation != _generation) return;
-      setState(() {
-        _loading = false;
-        _error = 'badKey';
-      });
-    } catch (_) {
-      if (!mounted || generation != _generation) return;
-      setState(() {
-        _loading = false;
-        _error = 'network';
-      });
+  /// Retries the failed load. An art-fetch error retries only this kind's
+  /// fetch, keeping the lookup, the search and the picked chip. A lookup
+  /// error or a bad key redoes the lookup.
+  Future<void> _retry() {
+    final key = ref.read(steamGridDbKeyProvider);
+    if (_shared.errorFor(_kind) != 'badKey' &&
+        _shared.lookupFor == _SgdbShared.fingerprint(widget.game, key)) {
+      return _load();
     }
-  }
-
-  Future<void> _loadSearchGrids(SteamGridDbClient client, int gameId) async {
-    final generation = ++_generation;
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final grids = await client.gridsForGame(gameId);
-      if (!mounted || generation != _generation) return;
-      final seen = <String>{};
-      setState(() {
-        _loading = false;
-        _grids = [
-          for (final art in grids)
-            if (seen.add(art.url)) art,
-        ];
-      });
-    } on SteamGridDbBadKeyException {
-      if (!mounted || generation != _generation) return;
-      setState(() {
-        _loading = false;
-        _error = 'badKey';
-      });
-    } catch (_) {
-      if (!mounted || generation != _generation) return;
-      setState(() {
-        _loading = false;
-        _error = 'network';
-      });
-    }
+    _shared.reset();
+    return _load();
   }
 
   void _selectSearch(int id) {
-    final client = ref.read(steamGridDbClientProvider);
-    if (client == null) return;
-    setState(() => _selectedSearchId = id);
-    unawaited(_loadSearchGrids(client, id));
+    unawaited(
+      _shared.selectSearch(
+        _kind,
+        id,
+        game: widget.game,
+        key: ref.read(steamGridDbKeyProvider),
+        client: ref.read(steamGridDbClientProvider),
+      ),
+    );
+  }
+
+  void _selectSteam(int appId) {
+    unawaited(
+      _shared.selectSteam(
+        _kind,
+        appId,
+        game: widget.game,
+        key: ref.read(steamGridDbKeyProvider),
+        client: ref.read(steamGridDbClientProvider),
+      ),
+    );
   }
 
   void _saveKey() {
@@ -925,9 +1715,9 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
     setState(() => _editingKey = false);
     ref.read(steamGridDbKeyProvider.notifier).set(next);
     if (unchanged) {
-      setState(
-        () => _loadedFor = '${widget.game.id}|${next.trim()}',
-      );
+      // Same key: the lookup still stands, so just reload this tab, which
+      // retries a failed fetch or no-ops when it already loaded, instead of
+      // repeating the lookup and dropping the picked search game.
       unawaited(_load());
     }
   }
@@ -936,8 +1726,9 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
     _keyController.clear();
     setState(() => _editingKey = false);
     final key = ref.read(steamGridDbKeyProvider).trim();
-    if (key.isNotEmpty && _loadedFor != '${widget.game.id}|$key') {
-      setState(() => _loadedFor = '${widget.game.id}|$key');
+    if (key.isNotEmpty &&
+        _shared.lookupFor != _SgdbShared.fingerprint(widget.game, key) &&
+        !_shared.lookupPending) {
       unawaited(_load());
     }
   }
@@ -963,9 +1754,9 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
                   ),
                 ),
               ),
-              if (_gridCount() != null)
+              if (_artCount() != null)
                 Text(
-                  '${_gridCount()}',
+                  '${_artCount()}',
                   style: TextStyle(
                     fontSize: 12.5,
                     color: scheme.onSurfaceVariant,
@@ -981,10 +1772,14 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
     );
   }
 
-  int? _gridCount() {
-    if (_error != null || _steamIds == null && _search == null) return null;
-    if (_search != null && _selectedSearchId == null) return null;
-    return _grids.length;
+  int? _artCount() {
+    final shared = _shared;
+    if (shared.errorFor(_kind) != null ||
+        shared.steamIds == null && shared.search == null) {
+      return null;
+    }
+    if (shared.search != null && shared.selectedSearchId == null) return null;
+    return shared.artFor(_kind).length;
   }
 
   Widget _noKeyNote(ColorScheme scheme) {
@@ -995,8 +1790,7 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Covers from SteamGridDB need your own free API key. '
-              'Get one in your SteamGridDB preferences.',
+              _kind.noKeyMessage,
               style: TextStyle(color: scheme.onSurfaceVariant),
             ),
             const SizedBox(height: 12),
@@ -1071,7 +1865,12 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
   }
 
   List<Widget> _keyedBody(ColorScheme scheme) {
-    if (_error == 'badKey') {
+    final shared = _shared;
+    final arts = shared.artFor(_kind);
+    final loading = shared.loadingFor(_kind);
+    final selectedSearchId = shared.selectedSearchId;
+    final emptyMessage = _kind.emptyMessage;
+    if (shared.errorFor(_kind) == 'badKey') {
       return [
         const Text("SteamGridDB didn't accept the key."),
         const SizedBox(height: 12),
@@ -1087,7 +1886,7 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
         ),
       ];
     }
-    if (_error != null) {
+    if (shared.errorFor(_kind) != null) {
       return [
         const Text("Couldn't reach SteamGridDB."),
         const SizedBox(height: 12),
@@ -1097,64 +1896,86 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
             key: const Key('sgdb-retry'),
             height: 40,
             expand: false,
-            onPressed: _load,
+            onPressed: _retry,
             label: const Text('Try again'),
           ),
         ),
       ];
     }
-    if (_steamIds == null && _search == null) {
-      return const [
-        Padding(
-          padding: EdgeInsets.only(top: 8),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: TsumigeLogoShimmer(size: 32),
-          ),
+    if (shared.steamIds == null && shared.search == null) {
+      return const [_SgdbPending()];
+    }
+    if (shared.steamChoices.length > 1) {
+      final selectedAppId = shared.steamIds?.first;
+      return [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final app in shared.steamChoices)
+              _chip(
+                scheme,
+                id: app.appId,
+                name: app.title,
+                selected: app.appId == selectedAppId,
+                onTap: _selectSteam,
+              ),
+          ],
         ),
+        const SizedBox(height: 10),
+        if (!loading && arts.isEmpty)
+          Text(emptyMessage)
+        else
+          _grid(scheme, arts),
+        if (loading && arts.isEmpty) const _SgdbPending(),
       ];
     }
-    if (_steamIds != null && _steamIds!.isNotEmpty) {
-      if (!_loading && _grids.isEmpty) {
-        return const [Text('No SteamGridDB covers for this game.')];
-      }
-      return [_grid(scheme)];
+    if (shared.steamIds != null && shared.steamIds!.isNotEmpty) {
+      if (arts.isNotEmpty) return [_grid(scheme, arts)];
+      if (loading) return const [_SgdbPending()];
+      return [Text(emptyMessage)];
     }
-    final search = _search ?? const <SteamGridDbGame>[];
+    final search = shared.search ?? const <SteamGridDbGame>[];
     if (search.isEmpty) {
-      return const [Text('No SteamGridDB covers for this game.')];
+      return [Text(emptyMessage)];
     }
     return [
       Wrap(
         spacing: 8,
         runSpacing: 8,
         children: [
-          for (final result in search) _chip(scheme, result),
+          for (final result in search)
+            _chip(
+              scheme,
+              id: result.id,
+              name: result.name,
+              selected: result.id == shared.selectedSearchId,
+              onTap: _selectSearch,
+            ),
         ],
       ),
       const SizedBox(height: 10),
-      if (_selectedSearchId == null)
+      if (selectedSearchId == null)
         const Text('Pick the matching game.')
-      else if (!_loading && _grids.isEmpty)
-        const Text('No SteamGridDB covers for this game.')
+      else if (!loading && arts.isEmpty)
+        Text(emptyMessage)
       else
-        _grid(scheme),
-      if (_loading && _selectedSearchId != null && _grids.isEmpty)
-        const Padding(
-          padding: EdgeInsets.only(top: 8),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: TsumigeLogoShimmer(size: 32),
-          ),
-        ),
+        _grid(scheme, arts),
+      if (loading && selectedSearchId != null && arts.isEmpty)
+        const _SgdbPending(),
     ];
   }
 
-  Widget _chip(ColorScheme scheme, SteamGridDbGame result) {
-    final selected = result.id == _selectedSearchId;
+  Widget _chip(
+    ColorScheme scheme, {
+    required int id,
+    required String name,
+    required bool selected,
+    required void Function(int) onTap,
+  }) {
     return InkWell(
       borderRadius: BorderRadius.circular(8),
-      onTap: () => _selectSearch(result.id),
+      onTap: () => onTap(id),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
@@ -1165,7 +1986,7 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
           ),
         ),
         child: Text(
-          result.name,
+          name,
           style: TextStyle(
             fontSize: 12.5,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
@@ -1176,24 +1997,53 @@ class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
     );
   }
 
-  Widget _grid(ColorScheme scheme) {
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 5,
-      crossAxisSpacing: 14,
-      mainAxisSpacing: 14,
-      childAspectRatio: 2 / 3,
-      children: [
-        for (final art in _grids)
-          _ArtTile(
-            key: ValueKey('art-${art.url}'),
-            art: art,
-            selected: widget.selectedUrl == art.url,
-            current: widget.isCurrent(art),
-            onTap: () => widget.onPick(art),
+  Widget _grid(ColorScheme scheme, List<ArtCandidate> arts) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 14.0;
+        final columnWidth =
+            (constraints.maxWidth - spacing * (_kind.columns - 1)) /
+            _kind.columns;
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: _kind.columns,
+            crossAxisSpacing: spacing,
+            mainAxisSpacing: spacing,
+            mainAxisExtent:
+                columnWidth / _kind.aspectRatio + _kArtCaptionExtent,
           ),
-      ],
+          itemCount: arts.length,
+          itemBuilder: (context, index) {
+            final art = arts[index];
+            return _ArtTile(
+              key: ValueKey('art-${art.url}'),
+              art: art,
+              aspectRatio: _kind.aspectRatio,
+              selected: widget.selectedUrl == art.url,
+              current: widget.isCurrent(art),
+              onTap: () => widget.onPick(art),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+/// Small loading mark while a SteamGridDB lookup or art fetch is pending.
+class _SgdbPending extends StatelessWidget {
+  const _SgdbPending();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.only(top: 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: TsumigeLogoShimmer(size: 32),
+      ),
     );
   }
 }
@@ -1248,17 +2098,22 @@ class _DashPainter extends CustomPainter {
   bool shouldRepaint(covariant _DashPainter old) => old.color != color;
 }
 
-/// One VNDB image in a picker grid, with the grid ring and a size badge.
+/// Room under each picker image for its size caption: the gap plus one line.
+const double _kArtCaptionExtent = 18;
+
+/// One VNDB image in a picker grid, with the grid ring and its size below.
 class _ArtTile extends StatefulWidget {
   const _ArtTile({
     super.key,
     required this.art,
+    required this.aspectRatio,
     required this.selected,
     required this.current,
     required this.onTap,
   });
 
   final ArtCandidate art;
+  final double aspectRatio;
   final bool selected;
   final bool current;
   final VoidCallback onTap;
@@ -1282,82 +2137,86 @@ class _ArtTileState extends State<_ArtTile> {
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         onTap: widget.onTap,
-        child: Container(
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: scheme.surface,
-            borderRadius: radius,
-          ),
-          foregroundDecoration: BoxDecoration(
-            borderRadius: radius,
-            border: Border.all(
-              color: lit
-                  ? scheme.primary
-                  : scheme.onSurface.withValues(alpha: 0.06),
-              width: widget.selected ? 3 : (_hovered ? 2 : 1),
-            ),
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Image.network(
-                art.thumbnail,
-                fit: BoxFit.cover,
-                alignment: Alignment.topCenter,
-                loadingBuilder: (context, child, progress) =>
-                    progress == null ? child : const SizedBox.shrink(),
-                errorBuilder: (_, _, _) => Center(
-                  child: Icon(
-                    Icons.broken_image_outlined,
-                    color: scheme.onSurfaceVariant,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AspectRatio(
+              aspectRatio: widget.aspectRatio,
+              child: Container(
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: scheme.surface,
+                  borderRadius: radius,
+                ),
+                foregroundDecoration: BoxDecoration(
+                  borderRadius: radius,
+                  border: Border.all(
+                    color: lit
+                        ? scheme.primary
+                        : scheme.onSurface.withValues(alpha: 0.06),
+                    width: widget.selected ? 3 : (_hovered ? 2 : 1),
                   ),
                 ),
-              ),
-              if (widget.current)
-                Positioned(
-                  left: 6,
-                  top: 6,
-                  child: Container(
-                    height: 22,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: ArtOverlay.button,
-                      borderRadius: BorderRadius.circular(11),
-                      border: Border.all(color: ArtOverlay.buttonRing),
-                    ),
-                    child: const Text(
-                      'Current',
-                      style: TextStyle(fontSize: 11, color: OnImage.text),
-                    ),
-                  ),
-                ),
-              if (art.width > 0 && art.height > 0)
-                Positioned(
-                  right: 6,
-                  bottom: 6,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: ArtOverlay.badge,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 1,
-                      ),
-                      child: Text(
-                        '${art.width}×${art.height}',
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          color: OnImage.text,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.network(
+                      art.thumbnail,
+                      fit: BoxFit.contain,
+                      alignment: Alignment.center,
+                      loadingBuilder: (context, child, progress) =>
+                          progress == null
+                          ? child
+                          : const SizedBox.shrink(),
+                      errorBuilder: (_, _, _) => Center(
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
                     ),
-                  ),
+                    if (widget.current)
+                      Positioned(
+                        left: 6,
+                        top: 6,
+                        child: Container(
+                          height: 22,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: ArtOverlay.button,
+                            borderRadius: BorderRadius.circular(11),
+                            border: Border.all(color: ArtOverlay.buttonRing),
+                          ),
+                          child: const Text(
+                            'Current',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: OnImage.text,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-            ],
-          ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            SizedBox(
+              height: 14,
+              child: Text(
+                art.width > 0 && art.height > 0
+                    ? '${art.width}×${art.height}'
+                    : '',
+                maxLines: 1,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

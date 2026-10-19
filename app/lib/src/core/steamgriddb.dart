@@ -49,6 +49,9 @@ class SteamGridDbGame {
 const String _gridQuery =
     'dimensions=600x900,342x482,660x930&types=static&nsfw=false&humor=false';
 
+const String _heroQuery =
+    'dimensions=1920x620,3840x1240,1600x650&types=static&nsfw=false&humor=false';
+
 class SteamGridDbClient {
   final String apiKey;
   final http.Client _client;
@@ -154,6 +157,26 @@ class SteamGridDbClient {
 
   Future<List<ArtCandidate>> gridsForGame(int gameId) async {
     final uri = Uri.parse('$baseUrl/grids/game/$gameId?$_gridQuery');
+    final response = await _get(uri);
+    if (response.statusCode == 404) return const [];
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _throwForStatus(response.statusCode);
+    }
+    return _parseGrids(_decode(response));
+  }
+
+  Future<List<ArtCandidate>> heroesForSteamApp(int appId) async {
+    final uri = Uri.parse('$baseUrl/heroes/steam/$appId?$_heroQuery');
+    final response = await _get(uri);
+    if (response.statusCode == 404) return const [];
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _throwForStatus(response.statusCode);
+    }
+    return _parseGrids(_decode(response));
+  }
+
+  Future<List<ArtCandidate>> heroesForGame(int gameId) async {
+    final uri = Uri.parse('$baseUrl/heroes/game/$gameId?$_heroQuery');
     final response = await _get(uri);
     if (response.statusCode == 404) return const [];
     if (response.statusCode < 200 || response.statusCode >= 300) {

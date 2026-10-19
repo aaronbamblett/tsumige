@@ -18,6 +18,7 @@ import '../../../domain/cover_source.dart';
 import '../../../domain/selection.dart';
 import '../art_image.dart';
 import '../art_overlay.dart';
+import '../game_cover_grid_delegate.dart';
 import 'info_tab.dart';
 
 /// Opens a VNDB page in the browser. Overridden in tests so no browser opens.
@@ -166,7 +167,7 @@ class _RelationTileState extends ConsumerState<_RelationTile> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           AspectRatio(
-            aspectRatio: 3 / 4,
+            aspectRatio: kGameCoverAspectRatio,
             child: Container(
               clipBehavior: Clip.antiAlias,
               decoration: const BoxDecoration(borderRadius: coverRadius),
@@ -219,6 +220,7 @@ class _OwnedCover extends ConsumerWidget {
     return Image(
       image: artFileImage(File(source.path), version: version(source.path)),
       fit: BoxFit.cover,
+      alignment: game.coverAlignment ?? kLibraryCoverAlignment,
       gaplessPlayback: true,
       errorBuilder: (_, _, _) => const _NoCover(),
     );

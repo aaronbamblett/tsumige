@@ -220,7 +220,7 @@ class GameDetailPane extends HookConsumerWidget {
             cacheWidth: physicalWidth,
           ),
           fit: BoxFit.cover,
-          alignment: Alignment.topCenter,
+          alignment: game.backgroundAlignment ?? kDetailPaneArtAlignment,
           gaplessPlayback: true,
           frameBuilder: (context, child, frame, _) =>
               frame == null ? const SizedBox.shrink() : child,
@@ -231,6 +231,7 @@ class GameDetailPane extends HookConsumerWidget {
     if (game.cover == null || game.cover!.isEmpty) return const SizedBox.shrink();
     final thumb = thumbPath(dir, game.id, 512);
     final original = File(p.join(dir.coversOriginal.path, game.cover!));
+    final alignment = game.backgroundAlignment ?? kDetailPaneArtAlignment;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -238,7 +239,7 @@ class GameDetailPane extends HookConsumerWidget {
           Image(
             image: artFileImage(File(thumb), version: version(thumb)),
             fit: BoxFit.cover,
-            alignment: Alignment.topCenter,
+            alignment: alignment,
             gaplessPlayback: true,
             errorBuilder: (_, _, _) => const SizedBox.shrink(),
           ),
@@ -249,7 +250,7 @@ class GameDetailPane extends HookConsumerWidget {
             cacheWidth: physicalWidth,
           ),
           fit: BoxFit.cover,
-          alignment: Alignment.topCenter,
+          alignment: alignment,
           gaplessPlayback: true,
           frameBuilder: (context, child, frame, _) =>
               frame == null ? const SizedBox.shrink() : child,
@@ -301,7 +302,7 @@ class _HeroTitle extends StatelessWidget {
           style: TextStyle(
             color: OnImage.text,
             fontSize: 30,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
             height: 1.15,
             shadows: [
               Shadow(
@@ -502,7 +503,10 @@ class _HeroControls extends ConsumerWidget {
                 value: 'adult-vndb',
                 child: Text("Use VNDB's adult flag"),
               ),
-            const PopupMenuItem(value: 'delete', child: Text('Delete game…')),
+            const PopupMenuItem(
+              value: 'delete',
+              child: Text('Remove from library…'),
+            ),
           ],
         ),
         _HeroButton(
@@ -519,11 +523,7 @@ Future<void> _deleteGame(BuildContext context, WidgetRef ref, Game game) async {
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: Text('Delete ${game.title}?'),
-      content: const Text(
-        "It moves to the trash folder in Tsumige's data "
-        'folder and can be restored by hand.',
-      ),
+      title: Text('Remove ${game.title}?'),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -534,7 +534,7 @@ Future<void> _deleteGame(BuildContext context, WidgetRef ref, Game game) async {
             foregroundColor: Theme.of(dialogContext).colorScheme.error,
           ),
           onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: const Text('Delete'),
+          child: const Text('Remove'),
         ),
       ],
     ),
@@ -559,9 +559,6 @@ class _Footer extends ConsumerWidget {
     final platform = ref.watch(hostPlatformProvider);
     final LaunchMode mode = effectiveLaunchMode(game, platform);
     final phase = ref.watch(runningGamesProvider)[game.id];
-    final busy = phase != null;
-    final showRunExe = platform.isLinux &&
-        (mode == LaunchMode.proton || mode == LaunchMode.wine);
     final launchTip = _launchTooltip(ref, phase, mode);
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
@@ -602,18 +599,6 @@ class _Footer extends ConsumerWidget {
               }),
             ),
           ),
-          if (showRunExe)
-            Tooltip(
-              message: _phaseLabel(phase),
-              child: BrandGlassButton(
-                height: 44,
-                onPressed: busy
-                    ? null
-                    : () => actions.runExeInPrefix(context, game),
-                icon: const Icon(Icons.terminal_rounded),
-                label: const Text('Run .exe inside prefix…'),
-              ),
-            ),
         ],
       ),
     );

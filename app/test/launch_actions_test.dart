@@ -167,6 +167,14 @@ Future<void> openPane(WidgetTester tester, String title) async {
   await tester.pump();
 }
 
+Future<void> openLaunchTab(WidgetTester tester) async {
+  await tester.tap(find.descendant(
+    of: find.byType(TabBar),
+    matching: find.text('Launch'),
+  ));
+  await tester.pumpAndSettle();
+}
+
 Finder launchButton() => find.widgetWithText(BrandButton, 'Play');
 Finder runningButton() => find.widgetWithText(BrandButton, 'Running');
 
@@ -228,6 +236,8 @@ void main() {
     await openPane(tester, 'Alpha');
     expect(tester.widget<BrandButton>(launchButton()).onPressed, isNull);
     expect(launchTooltip(tester), 'umu-run not found on PATH');
+    expect(find.text('Run .exe inside prefix…'), findsNothing);
+    await openLaunchTab(tester);
     expect(find.text('Run .exe inside prefix…'), findsOneWidget);
   });
 
@@ -249,7 +259,17 @@ void main() {
     ], umu: '/usr/bin/umu-run');
     await openPane(tester, 'Alpha');
     expect(tester.widget<BrandButton>(launchButton()).onPressed, isNotNull);
+    expect(find.text('Run .exe inside prefix…'), findsNothing);
+    await openLaunchTab(tester);
     expect(find.text('Run .exe inside prefix…'), findsOneWidget);
+  });
+
+  testWidgets('the footer holds only Play, not run-exe', (tester) async {
+    await pumpLaunch(tester, [protonGame('g1', 'Alpha')],
+        umu: '/usr/bin/umu-run');
+    await openPane(tester, 'Alpha');
+    expect(launchButton(), findsOneWidget);
+    expect(find.text('Run .exe inside prefix…'), findsNothing);
   });
 
   testWidgets('pressing launch calls the runner once', (tester) async {
@@ -470,6 +490,8 @@ void main() {
     await pumpLaunch(tester, [protonGame('g1', 'Alpha')],
         umu: '/usr/bin/umu-run', runner: runner, picker: noPick);
     await openPane(tester, 'Alpha');
+    await openLaunchTab(tester);
+    await tester.ensureVisible(find.text('Run .exe inside prefix…'));
     await tester.tap(find.text('Run .exe inside prefix…'));
     await tester.pump();
     await tester.pump();
@@ -482,6 +504,8 @@ void main() {
     await pumpLaunch(tester, [protonGame('g1', 'Alpha')],
         umu: '/usr/bin/umu-run', runner: runner, picker: pickPatch);
     await openPane(tester, 'Alpha');
+    await openLaunchTab(tester);
+    await tester.ensureVisible(find.text('Run .exe inside prefix…'));
     await tester.tap(find.text('Run .exe inside prefix…'));
     await tester.pump();
     await tester.pump();

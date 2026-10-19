@@ -148,10 +148,12 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
     final file = File(source.path);
     // Thumbnails decode at their own size, keeping a stable image-cache key
     // while the slider moves. Only the original decodes at the settled width.
+    final alignment = widget.game.coverAlignment ?? kLibraryCoverAlignment;
     final image = source.isThumbnail
         ? Image(
             image: artFileImage(file, version: version(source.path)),
             fit: BoxFit.cover,
+            alignment: alignment,
             gaplessPlayback: true,
             errorBuilder: (_, _, _) => const Center(child: Text('No cover')),
           )
@@ -162,6 +164,7 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
               cacheWidth: settledPhysical.round().clamp(1, 1 << 16),
             ),
             fit: BoxFit.cover,
+            alignment: alignment,
             gaplessPlayback: true,
             errorBuilder: (_, _, _) => const Center(child: Text('No cover')),
           );

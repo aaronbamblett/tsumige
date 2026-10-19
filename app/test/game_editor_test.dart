@@ -19,6 +19,7 @@ import 'package:tsumige/src/core/store.dart';
 import 'package:tsumige/src/features/library/data/library_repository.dart';
 import 'package:tsumige/src/features/library/domain/cover_source.dart';
 import 'package:tsumige/src/features/library/domain/game_editor.dart';
+import 'package:tsumige/src/features/library/domain/launch_actions.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_detail_pane.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 
@@ -77,6 +78,7 @@ Future<EditorFakeRepository> pumpEditorLibrary(
       dataDirProvider.overrideWithValue(core.DataDir(temp.path)),
       libraryRepositoryProvider.overrideWithValue(fake),
       coverExistsProvider.overrideWithValue((_) => false),
+      umuRunPathProvider.overrideWithValue('/usr/bin/umu-run'),
     ],
     child: const TsumigeApp(),
   ));

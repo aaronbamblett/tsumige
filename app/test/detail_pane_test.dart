@@ -601,7 +601,7 @@ void main() {
         await tester.tap(find.byKey(const Key('settings-close')));
         await tester.pumpAndSettle();
       }
-      if (find.text('Delete game…').evaluate().isNotEmpty) {
+      if (find.text('Remove from library…').evaluate().isNotEmpty) {
         await tester.sendKeyEvent(LogicalKeyboardKey.escape);
         await tester.pumpAndSettle();
       }
@@ -846,20 +846,11 @@ void main() {
     expect(find.widgetWithText(BrandButton, 'Play'), findsOneWidget);
   });
 
-  testWidgets('run exe button shows for a Proton game', (tester) async {
+  testWidgets('the footer holds only Play for a Proton game', (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
-    expect(find.widgetWithText(BrandGlassButton, 'Run .exe inside prefix…'),
-        findsOneWidget);
-  });
-
-  testWidgets('play sits above run exe inside prefix', (tester) async {
-    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
-    await openPane(tester, 'Alpha');
-    final play = tester.getTopLeft(find.widgetWithText(BrandButton, 'Play'));
-    final runExe = tester.getTopLeft(
-        find.widgetWithText(BrandGlassButton, 'Run .exe inside prefix…'));
-    expect(play.dy, lessThan(runExe.dy));
+    expect(find.widgetWithText(BrandButton, 'Play'), findsOneWidget);
+    expect(find.text('Run .exe inside prefix…'), findsNothing);
   });
 
   testWidgets('launch tab falls back to global defaults', (tester) async {
@@ -1367,7 +1358,7 @@ void main() {
     expect(games.single.favourite, isTrue);
   });
 
-  testWidgets('delete asks first: Cancel does nothing', (tester) async {
+  testWidgets('remove asks first: Cancel does nothing', (tester) async {
     final games = [
       core.Game(id: 'g1', title: 'Alpha'),
       core.Game(id: 'g2', title: 'Beta'),
@@ -1376,16 +1367,21 @@ void main() {
     await openPane(tester, 'Alpha');
     await tester.tap(find.byTooltip('More'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete game…'));
+    await tester.tap(find.text('Remove from library…'));
     await tester.pumpAndSettle();
-    expect(find.text('Delete Alpha?'), findsOneWidget);
+    expect(find.text('Remove Alpha?'), findsOneWidget);
+    expect(find.textContaining('moves to the trash'), findsNothing);
+    expect(
+      tester.widget<AlertDialog>(find.byType(AlertDialog)).content,
+      isNull,
+    );
     await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
     await tester.pumpAndSettle();
     expect(find.byType(GameDetailPane), findsOneWidget);
     expect(games, hasLength(2));
   });
 
-  testWidgets('delete moves to trash and clears the selection',
+  testWidgets('remove moves to trash and clears the selection',
       (tester) async {
     late Directory temp;
     final games = [
@@ -1398,9 +1394,9 @@ void main() {
     await runRealFlow(tester, () async {
       await tester.tap(find.byTooltip('More'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Delete game…'));
+      await tester.tap(find.text('Remove from library…'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(TextButton, 'Delete'));
+      await tester.tap(find.widgetWithText(TextButton, 'Remove'));
       await tester.pumpAndSettle();
     }, () {
       if (games.length != 1) return false;
@@ -1873,5 +1869,147 @@ void main() {
     await tester.pumpAndSettle();
     expect(games.single.adultOverride, isNull);
     expect(games.single.isAdult, isFalse);
+  });
+
+  testWidgets('the pane background draws the saved background position',
+      (tester) async {
+    late Directory temp;
+    final bytes = Uint8List.fromList(
+        img.encodePng(img.Image(width: 16, height: 16)));
+    await pumpLibrary(
+      tester,
+      [
+        core.Game(
+          id: 'g1',
+          title: 'Alpha',
+          cover: 'g1.png',
+          background: 'g1.png',
+          backgroundAlignment: const Alignment(0.5, 0.5),
+        )
+      ],
+      exposeTemp: (dir) {
+        temp = dir;
+        Directory(p.join(dir.path, 'covers', 'background'))
+            .createSync(recursive: true);
+        File(p.join(dir.path, 'covers', 'background', 'g1.png'))
+            .writeAsBytesSync(bytes);
+      },
+      exists: (path) => File(path).existsSync(),
+    );
+    await openPane(tester, 'Alpha');
+    final bgPath = p.join(temp.path, 'covers', 'background', 'g1.png');
+    expect(
+      tester.widget<Image>(_paneFileImage(bgPath)).alignment,
+      const Alignment(0.5, 0.5),
+    );
+  });
+
+  testWidgets('the pane cover fallback draws the saved background position',
+      (tester) async {
+    late Directory temp;
+    final bytes = Uint8List.fromList(
+        img.encodePng(img.Image(width: 16, height: 16)));
+    await pumpLibrary(
+      tester,
+      [
+        core.Game(
+          id: 'g1',
+          title: 'Alpha',
+          cover: 'g1.png',
+          coverAlignment: const Alignment(0.5, 0.5),
+          backgroundAlignment: const Alignment(-0.5, 0.5),
+        )
+      ],
+      exposeTemp: (dir) {
+        temp = dir;
+        Directory(p.join(dir.path, 'covers', 'original'))
+            .createSync(recursive: true);
+        File(p.join(dir.path, 'covers', 'original', 'g1.png'))
+            .writeAsBytesSync(bytes);
+      },
+      exists: (path) => File(path).existsSync(),
+    );
+    await openPane(tester, 'Alpha');
+    final coverPath = p.join(temp.path, 'covers', 'original', 'g1.png');
+    expect(
+      tester.widget<Image>(_paneFileImage(coverPath)).alignment,
+      const Alignment(-0.5, 0.5),
+    );
+  });
+
+  testWidgets('the pane cover fallback ignores the saved cover position',
+      (tester) async {
+    late Directory temp;
+    final bytes = Uint8List.fromList(
+        img.encodePng(img.Image(width: 16, height: 16)));
+    await pumpLibrary(
+      tester,
+      [
+        core.Game(
+          id: 'g1',
+          title: 'Alpha',
+          cover: 'g1.png',
+          coverAlignment: const Alignment(-0.5, 0.5),
+        )
+      ],
+      exposeTemp: (dir) {
+        temp = dir;
+        Directory(p.join(dir.path, 'covers', 'original'))
+            .createSync(recursive: true);
+        File(p.join(dir.path, 'covers', 'original', 'g1.png'))
+            .writeAsBytesSync(bytes);
+      },
+      exists: (path) => File(path).existsSync(),
+    );
+    await openPane(tester, 'Alpha');
+    final coverPath = p.join(temp.path, 'covers', 'original', 'g1.png');
+    expect(
+      tester.widget<Image>(_paneFileImage(coverPath)).alignment,
+      Alignment.topCenter,
+    );
+  });
+
+  testWidgets('a related owned game draws its saved cover position',
+      (tester) async {
+    late Directory temp;
+    final bytes = Uint8List.fromList(
+        img.encodePng(img.Image(width: 16, height: 16)));
+    await pumpLibrary(
+      tester,
+      [
+        core.Game(id: 'g1', title: 'Alpha', relations: const [
+          core.VnRelation(
+              vndbId: 'v2', relation: 'seq', title: 'Beta', official: true),
+        ]),
+        core.Game(
+          id: 'g2',
+          title: 'Beta',
+          vndbId: 'v2',
+          cover: 'g2.png',
+          coverAlignment: const Alignment(-0.5, 0.5),
+        ),
+      ],
+      exposeTemp: (dir) {
+        temp = dir;
+        Directory(p.join(dir.path, 'covers', 'original'))
+            .createSync(recursive: true);
+        File(p.join(dir.path, 'covers', 'original', 'g2.png'))
+            .writeAsBytesSync(bytes);
+      },
+      exists: (path) => File(path).existsSync(),
+    );
+    await openPane(tester, 'Alpha');
+    await openTab(tester, 'Related');
+    final coverPath = p.join(temp.path, 'covers', 'original', 'g2.png');
+    final images = tester.widgetList<Image>(
+      find.descendant(
+        of: find.byType(RelatedTab),
+        matching: _fileImage(coverPath),
+      ),
+    );
+    expect(images, isNotEmpty);
+    for (final image in images) {
+      expect(image.alignment, const Alignment(-0.5, 0.5));
+    }
   });
 }

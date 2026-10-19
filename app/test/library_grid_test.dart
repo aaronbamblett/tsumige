@@ -333,8 +333,12 @@ void main() {
       final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
       return (image, data!);
     }) as (ui.Image, ByteData);
-    final top = (pane.top - LibraryGrid.topInset).round();
-    final bottom = pane.top.round() - 1;
+    // The band is the documented 12 px above the viewport, whose top is the
+    // clip line: measuring from the pane top leaks the viewport's first row
+    // into the band once covers grow past it.
+    final viewportTop = gridViewportRect(tester).top;
+    final top = (viewportTop - LibraryGrid.topInset).round();
+    final bottom = viewportTop.round() - 1;
     final left = grid.left.round();
     final right = track.left.round();
     expect(bottom - top, greaterThanOrEqualTo(8));
@@ -708,6 +712,73 @@ void main() {
       expect(cover.top, greaterThan(top));
       expect(cover.top, greaterThanOrEqualTo(viewport.top));
       expect(cover.bottom, lessThanOrEqualTo(viewport.bottom));
+    });
+  });
+
+  group('saved cover position', () {
+    Future<void> pumpTile(
+      WidgetTester tester,
+      core.Game game,
+      Directory temp,
+    ) async {
+      SharedPreferences.setMockInitialValues({});
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(
+              await SharedPreferences.getInstance(),
+            ),
+            dataDirProvider.overrideWithValue(core.DataDir(temp.path)),
+            coverExistsProvider.overrideWithValue((_) => false),
+            artVersionProvider.overrideWithValue((_) => 'test'),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 300,
+                height: 600,
+                child: GameCoverTile(game: game),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    testWidgets('a tile draws the saved cover position', (tester) async {
+      final temp = Directory.systemTemp.createTempSync('tsumige_tile_align_');
+      addTearDown(() => temp.deleteSync(recursive: true));
+      await pumpTile(
+        tester,
+        core.Game(
+          id: 'g1',
+          title: 'Alpha',
+          cover: 'g1.png',
+          coverAlignment: const Alignment(0.25, -0.5),
+        ),
+        temp,
+      );
+      expect(
+        tester.widget<Image>(find.byType(Image)).alignment,
+        const Alignment(0.25, -0.5),
+      );
+    });
+
+    testWidgets('a tile without a saved position stays centred', (
+      tester,
+    ) async {
+      final temp = Directory.systemTemp.createTempSync('tsumige_tile_align_');
+      addTearDown(() => temp.deleteSync(recursive: true));
+      await pumpTile(
+        tester,
+        core.Game(id: 'g1', title: 'Alpha', cover: 'g1.png'),
+        temp,
+      );
+      expect(
+        tester.widget<Image>(find.byType(Image)).alignment,
+        Alignment.center,
+      );
     });
   });
 }

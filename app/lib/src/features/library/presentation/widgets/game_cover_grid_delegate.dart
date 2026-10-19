@@ -10,8 +10,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
-/// Game covers are portrait art; 3:4 fits the library's covers.
-const kGameCoverAspectRatio = 3 / 4;
+/// Game covers are portrait art; 2:3 fits the library's covers.
+const kGameCoverAspectRatio = 2 / 3;
 
 /// 8 px of padding between the cover and the title.
 const double _kTitleTopPadding = 8;
@@ -29,8 +29,7 @@ double gameTitleBlockHeight(BuildContext context) {
       scaler.scale(kGameTitleFontSize) * kGameTitleHeight * 2;
 }
 
-/// Row height comes from the resolved column width, so the cover keeps its 3:4
-/// shape at every column count.
+/// Row height follows the column width, so the cover stays 2:3.
 SliverGridRegularTileLayout _coverTileLayout(
   SliverConstraints constraints, {
   required int crossAxisCount,
