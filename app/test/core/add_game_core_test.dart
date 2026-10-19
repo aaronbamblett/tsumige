@@ -126,6 +126,32 @@ void main() {
     expect([for (final r in exact) r.id], ['v2', 'v1']);
   });
 
+  test('gameFromVn stores the resolved executable path', () {
+    final temp = Directory.systemTemp.createTempSync('tsumige_add_exe_test_');
+    addTearDown(() => temp.deleteSync(recursive: true));
+    final real = Directory('${temp.path}/real')..createSync();
+    File('${real.path}/game.exe').writeAsBytesSync([0]);
+    Link('${temp.path}/link').createSync(real.path);
+    final game = gameFromVn(
+      _result(),
+      exe: '${temp.path}/link/game.exe',
+    );
+    expect(game.launch.executable, '${real.path}/game.exe');
+  });
+
+  test('plainGame stores the resolved executable path', () {
+    final temp = Directory.systemTemp.createTempSync('tsumige_add_exe_test_');
+    addTearDown(() => temp.deleteSync(recursive: true));
+    final real = Directory('${temp.path}/real')..createSync();
+    File('${real.path}/game.exe').writeAsBytesSync([0]);
+    Link('${temp.path}/link').createSync(real.path);
+    final game = plainGame(
+      title: 'Plain',
+      exe: '${temp.path}/link/game.exe',
+    );
+    expect(game.launch.executable, '${real.path}/game.exe');
+  });
+
   test('parseTagsField trims, drops empties and dedupes', () {
     expect(parseTagsField('Romance, sci-fi ,Romance,,  '),
         ['Romance', 'sci-fi']);

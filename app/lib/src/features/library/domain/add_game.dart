@@ -41,7 +41,7 @@ Game gameFromVn(VnSearchResult r,
     vndbFetchedAt: at,
     launch: LaunchOverrides(
       mode: mode,
-      executable: exe.isEmpty ? null : exe,
+      executable: exe.isEmpty ? null : realPath(exe),
     ),
   );
 }
@@ -63,7 +63,7 @@ Game plainGame({
     addedAt: (now ?? DateTime.now()).toUtc(),
     launch: LaunchOverrides(
       mode: mode,
-      executable: exe.isEmpty ? null : exe,
+      executable: exe.isEmpty ? null : realPath(exe),
     ),
   );
 }

@@ -4,7 +4,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:tsumige/src/core/host_platform.dart';
 import 'package:tsumige/src/core/paths.dart';
 
@@ -40,6 +43,29 @@ void main() {
         'APPDATA': r'C:\Users\v\AppData\Roaming',
       }, platform: _windows).root,
       r'C:\Users\v\AppData\Roaming\Tsumige',
+    );
+  });
+
+  test('realPath resolves a symlinked directory', () {
+    final temp = Directory.systemTemp.createTempSync('tsumige_realpath_test_');
+    addTearDown(() => temp.deleteSync(recursive: true));
+    final real = Directory(p.join(temp.path, 'real'))..createSync();
+    File(p.join(real.path, 'game.exe')).writeAsBytesSync([0]);
+    Link(p.join(temp.path, 'link')).createSync(real.path);
+    expect(
+      realPath(p.join(temp.path, 'link', 'game.exe')),
+      p.join(real.path, 'game.exe'),
+    );
+  });
+
+  test('realPath resolves the existing part of a missing file', () {
+    final temp = Directory.systemTemp.createTempSync('tsumige_realpath_test_');
+    addTearDown(() => temp.deleteSync(recursive: true));
+    final real = Directory(p.join(temp.path, 'real'))..createSync();
+    Link(p.join(temp.path, 'link')).createSync(real.path);
+    expect(
+      realPath(p.join(temp.path, 'link', 'New', 'game.exe')),
+      p.join(real.path, 'New', 'game.exe'),
     );
   });
 
