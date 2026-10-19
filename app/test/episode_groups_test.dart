@@ -22,6 +22,7 @@ import 'package:tsumige/src/features/library/domain/cover_source.dart';
 import 'package:tsumige/src/features/library/domain/game_editor.dart';
 import 'package:tsumige/src/features/library/domain/launch_actions.dart';
 import 'package:tsumige/src/features/library/domain/selection.dart';
+import 'package:tsumige/src/features/library/presentation/widgets/detail_tabs/related_tab.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_cover_tile.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_detail_pane.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/multi_selection_pane.dart';
@@ -81,7 +82,10 @@ core.LoadedLibrary groupLibrary({String? lastPickedId, bool firstPlayed = false}
 }
 
 Future<GroupFakeRepository> pumpGroups(
-    WidgetTester tester, core.LoadedLibrary loaded) async {
+  WidgetTester tester,
+  core.LoadedLibrary loaded, {
+  Future<bool> Function(Uri)? urlOpener,
+}) async {
   tester.view.physicalSize = const Size(1280, 800);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(() {
@@ -107,6 +111,8 @@ Future<GroupFakeRepository> pumpGroups(
         libraryRepositoryProvider.overrideWithValue(fake),
         coverExistsProvider.overrideWithValue((_) => false),
         umuRunPathProvider.overrideWithValue('/usr/bin/umu-run'),
+        if (urlOpener != null)
+          vndbUrlOpenerProvider.overrideWithValue(urlOpener),
       ],
       child: const TsumigeApp(),
     ),
@@ -282,9 +288,9 @@ void main() {
     await ctrlClick(tester, find.text('Solo A'));
     await ctrlClick(tester, find.text('Solo B'));
     expect(find.text('2 games selected'), findsOneWidget);
-    await tester.tap(find.text('Combine into one tile…'));
+    await tester.tap(find.text('Group…'));
     await tester.pumpAndSettle();
-    expect(find.text('Combine into one tile'), findsOneWidget);
+    expect(find.text('Group games'), findsOneWidget);
     expect(groupNameFieldText(tester), 'Solo');
     await tester.enterText(groupNameField(), 'Test');
     await tester.pump();
@@ -333,7 +339,7 @@ void main() {
         );
     expect(paneRow('Solo A'), findsOneWidget);
     expect(paneRow('Solo B'), findsOneWidget);
-    await tester.tap(find.text('Combine into one tile…'));
+    await tester.tap(find.text('Group…'));
     await tester.pumpAndSettle();
     await tester.enterText(groupNameField(), 'Pair');
     await tester.pump();
@@ -436,7 +442,7 @@ void main() {
     await ctrlClick(tester, find.text('Lone Wolf'));
     expect(find.text('3 games selected'), findsOneWidget);
     expect(find.text('Duo (2)'), findsOneWidget);
-    await tester.tap(find.text('Combine into one tile…'));
+    await tester.tap(find.text('Group…'));
     await tester.pumpAndSettle();
     expect(groupNameFieldText(tester), 'Duo Episode 1');
     await tester.enterText(groupNameField(), 'Trio');
@@ -527,7 +533,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.byTooltip('More'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Split into separate tiles'));
+    await tester.tap(find.text('Ungroup'));
     await tester.pump();
     await tester.pump();
     expect(fake.loaded.library.groups, isEmpty);
@@ -568,14 +574,14 @@ void main() {
     await pumpGroups(tester, suggestionLibrary());
     expect(
       find.text(
-          '2 series in your library can be grouped into one tile each.'),
+          '2 series can be grouped'),
       findsOneWidget,
     );
     await tester.tap(find.text('Review'));
     await tester.pumpAndSettle();
-    expect(find.text('Group these into one tile each?'), findsOneWidget);
-    expect(find.text('Alpha · 2 entries'), findsOneWidget);
-    expect(find.text('Beta · 2 entries'), findsOneWidget);
+    expect(find.text('Group series'), findsOneWidget);
+    expect(find.text('Alpha · 2 games'), findsOneWidget);
+    expect(find.text('Beta · 2 games'), findsOneWidget);
     expect(find.text('Episode 1, Episode 2'), findsNWidgets(2));
     expect(
       find.text('They share a VNDB entry, and each title names a part.'),
@@ -637,8 +643,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('suggest-group:a1,a2')));
     await tester.pumpAndSettle();
-    expect(find.text('Alpha · 2 entries'), findsNothing);
-    expect(find.text('Beta · 2 entries'), findsOneWidget);
+    expect(find.text('Alpha · 2 games'), findsNothing);
+    expect(find.text('Beta · 2 games'), findsOneWidget);
     expect(fake.loaded.library.groups, hasLength(1));
     final created = fake.loaded.library.groups.single;
     expect(created.name, 'Alpha');
@@ -660,7 +666,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('suggest-group:a1,a2')));
     await tester.pumpAndSettle();
-    expect(find.text('Group these into one tile each?'), findsNothing);
+    expect(find.text('Group series'), findsNothing);
     expect(find.text('Alpha'), findsOneWidget);
   });
 
@@ -671,15 +677,15 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('suggest-dismiss:a1,a2')));
     await tester.pumpAndSettle();
-    expect(find.text('Alpha · 2 entries'), findsNothing);
-    expect(find.text('Beta · 2 entries'), findsOneWidget);
+    expect(find.text('Alpha · 2 games'), findsNothing);
+    expect(find.text('Beta · 2 games'), findsOneWidget);
     expect(fake.loaded.library.dismissedGroupSuggestions, {'a1,a2'});
     await tester.tap(find.text('Close'));
     await tester.pump();
     await tester.pump();
     await tester.pump();
     expect(
-      find.text('1 series in your library can be grouped into one tile.'),
+      find.text('1 series can be grouped'),
       findsOneWidget,
     );
     final container = ProviderScope.containerOf(
@@ -689,7 +695,7 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(
-      find.text('1 series in your library can be grouped into one tile.'),
+      find.text('1 series can be grouped'),
       findsOneWidget,
     );
   });
@@ -698,7 +704,7 @@ void main() {
       (tester) async {
     await pumpGroups(tester, suggestionLibrary(beta: false));
     expect(
-      find.text('1 series in your library can be grouped into one tile.'),
+      find.text('1 series can be grouped'),
       findsOneWidget,
     );
     await tester.tap(find.byTooltip('Dismiss'));
@@ -727,9 +733,41 @@ void main() {
     await tester.pump();
     expect(
       find.text(
-          '2 series in your library can be grouped into one tile each.'),
+          '2 series can be grouped'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('Open on VNDB uses the shown group member', (tester) async {
+    final opened = <Uri>[];
+    final ep1 = game('ep1', '9-nine- Episode 1');
+    final ep2 = core.Game(id: 'ep2', title: '9-nine- Episode 2', vndbId: 'v777');
+    final library = core.Library(games: [ep1, ep2]);
+    library.groups.add(
+      core.GameGroup(
+        id: 'gr1',
+        name: '9-nine-',
+        memberIds: ['ep1', 'ep2'],
+        lastPickedId: 'ep2',
+      ),
+    );
+    await pumpGroups(
+      tester,
+      core.LoadedLibrary(library: library),
+      urlOpener: (uri) async {
+        opened.add(uri);
+        return true;
+      },
+    );
+    await tester.tap(find.text('9-nine-'));
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    expect(find.text('Open on VNDB'), findsOneWidget);
+    await tester.tap(find.text('Open on VNDB'));
+    await tester.pumpAndSettle();
+    expect(opened.single.toString(), 'https://vndb.org/v777');
   });
 }
 

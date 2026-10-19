@@ -123,6 +123,11 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   List<Game>? _cachedGames;
   Set<String> _cachedLibraryExes = const {};
 
+  /// The library set the match queue last synced against. When the cached
+  /// set changes (a new games list), membership is recomputed and newly
+  /// eligible rows join the queue.
+  Set<String>? _syncedLibraryExes;
+
   Set<String> _libraryExes(List<Game> games) {
     if (!identical(games, _cachedGames)) {
       _cachedGames = games;
@@ -202,7 +207,9 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     final id = _rows[index].vn?.id;
     if (id == null) return null;
     for (final game in games) {
-      if (game.vndbId == id) return 'Same VNDB entry as ${game.title}';
+      if (game.vndbId == id) {
+        return 'Already in library as ${game.title}';
+      }
     }
     for (var j = 0; j < index; j++) {
       if (_rows[j].vn?.id == id) {
@@ -289,9 +296,10 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
         found.addAll(await scanImportFolder(root, platform));
       }
     } on FileSystemException catch (e) {
+      debugPrint('$e');
       if (!mounted || token != _scanToken) return;
       setState(() => _scanning = false);
-      Toast(context).showError('$e');
+      Toast(context).showError("Couldn't read ${e.path ?? roots.join(', ')}");
       return;
     }
     if (!mounted || token != _scanToken) return;
@@ -311,14 +319,21 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     await _matchPending();
   }
 
-  /// Matches every row still waiting for a result, in order. Only one loop
-  /// runs per generation, so an appended scan's rows join the running loop.
+  /// Matches every row still waiting for a result, in display order, skipping
+  /// rows already in the library by the folder rule: they need no VNDB data.
+  /// Only one loop runs per generation, so an appended scan's rows join the
+  /// running loop. Membership is rechecked every iteration so a library
+  /// change mid-scan drops newly covered rows and picks up uncovered ones.
   Future<void> _matchPending() async {
     final generation = _generation;
     if (_matchingGeneration == generation) return;
     _matchingGeneration = generation;
     while (mounted && generation == _generation) {
-      final index = _rows.indexWhere((row) => row.state == null);
+      final games = ref.read(libraryProvider).value?.library.games ?? const [];
+      final libraryExes = _libraryExes(games);
+      final index = _rows.indexWhere(
+        (row) => row.state == null && !_inLibrary(row, libraryExes),
+      );
       if (index == -1) break;
       await _match(_rows[index], generation);
     }
@@ -419,10 +434,11 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     try {
       results = rankSearchResults(await _vndb.run(query), query);
     } catch (e) {
+      debugPrint('$e');
       if (!mounted || token != _pickToken) return;
       setState(() {
         _pickLoading = false;
-        _pickError = '$e';
+        _pickError = "Couldn't reach VNDB.";
       });
       return;
     }
@@ -521,7 +537,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     Toast(context).show(
       coverFailures == 0
           ? 'Added $count'
-          : 'Added $count ($coverFailures covers failed)',
+          : 'Added $count. ${_games(coverFailures)} failed to download.',
     );
     _pop(ImportFolderResult.added);
   }
@@ -538,6 +554,17 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     // Resolved once per library value so every row compares against the
     // same set without re-resolving symlinks on every rebuild.
     final libraryExes = _libraryExes(games);
+    // The library changed while the dialog is open: rows that stopped being
+    // in-library join the match queue; rows that became in-library drop out
+    // of it and of the progress count on this rebuild.
+    if (!identical(_syncedLibraryExes, libraryExes)) {
+      _syncedLibraryExes = libraryExes;
+      if (_rows.any(
+        (row) => row.state == null && !_inLibrary(row, libraryExes),
+      )) {
+        unawaited(_matchPending());
+      }
+    }
     final plan = _plan(libraryExes);
     if (pick != null) {
       return DialogShell(
@@ -625,11 +652,45 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                     Expanded(flex: 5, child: Text('Name', style: headerStyle)),
                     const SizedBox(width: 12),
                     Expanded(flex: 6, child: Text('Path', style: headerStyle)),
+                    const SizedBox(width: 12),
+                    InkWell(
+                      key: const Key('import-hide-imported'),
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: _saving
+                          ? null
+                          : () =>
+                                setState(() => _hideImported = !_hideImported),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 4,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IgnorePointer(
+                              child: Checkbox(
+                                value: _hideImported,
+                                onChanged: (_) {},
+                              ),
+                            ),
+                            Text(
+                              'Hide imported',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
               if (_scanning) const LinearProgressIndicator(),
-              if (_matching case (done: final done, total: final total))
+              if (_matching(libraryExes)
+                  case (done: final done, total: final total))
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
                   child: Column(
@@ -638,7 +699,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                       LinearProgressIndicator(value: done / total),
                       const SizedBox(height: 4),
                       Text(
-                        'Matching with VNDB… $done of $total',
+                        'Matching on VNDB… $done of $total',
                         style: muted,
                       ),
                     ],
@@ -672,12 +733,18 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     );
   }
 
-  /// Finished and total rows while matching runs. Null once every row
-  /// has a result (or there is nothing to match), which hides the bar.
-  ({int done, int total})? get _matching {
-    if (_rows.isEmpty) return null;
-    final done = _rows.where((row) => row.state != null).length;
-    return done < _rows.length ? (done: done, total: _rows.length) : null;
+  /// Finished and total rows that need matching while matching runs. Rows
+  /// already in the library by the folder rule are never queued, so they
+  /// count for neither number. Null once every such row has a result (or
+  /// there is nothing to match), which hides the bar.
+  ({int done, int total})? _matching(Set<String> libraryExes) {
+    final need = [
+      for (final row in _rows)
+        if (!_inLibrary(row, libraryExes)) row,
+    ];
+    if (need.isEmpty) return null;
+    final done = need.where((row) => row.state != null).length;
+    return done < need.length ? (done: done, total: need.length) : null;
   }
 
   void _setAllTicked(List<int> indices, bool ticked) {
@@ -719,7 +786,9 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       ),
     );
     Widget cover;
-    if (row.state == null) {
+    // In-library rows are never queued, so a pending state on them means
+    // skipped, not loading: no spinner.
+    if (row.state == null && !inLibrary) {
       cover = Container(
         width: 36,
         height: 48,
@@ -950,16 +1019,12 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
 
   Widget _listFooter(List<Game> games, _Plan plan) {
     final count = plan.selected.where((added) => added).length;
-    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
       child: Row(
         children: [
           Expanded(
-            child: Wrap(
-              spacing: 10,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            child: Row(
               children: [
                 IntrinsicWidth(
                   child: BrandGlassButton(
@@ -967,47 +1032,17 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                     height: 40,
                     expand: false,
                     onPressed: _saving ? null : () => _browse(),
-                    label: const Text('Browse…'),
+                    label: const Text('Choose folder…'),
                   ),
                 ),
+                const SizedBox(width: 10),
                 IntrinsicWidth(
                   child: BrandGlassButton(
                     key: const Key('import-scan'),
                     height: 40,
                     expand: false,
                     onPressed: _saving ? null : () => _browse(append: true),
-                    label: const Text('Scan Folder…'),
-                  ),
-                ),
-                InkWell(
-                  key: const Key('import-hide-imported'),
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: _saving
-                      ? null
-                      : () => setState(() => _hideImported = !_hideImported),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 4,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IgnorePointer(
-                          child: Checkbox(
-                            value: _hideImported,
-                            onChanged: (_) {},
-                          ),
-                        ),
-                        Text(
-                          'Hide imported',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
+                    label: const Text('Add folder…'),
                   ),
                 ),
               ],
@@ -1019,7 +1054,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
             height: 40,
             expand: false,
             onPressed: _saving || count == 0 ? null : _add,
-            label: Text(_saving ? 'Adding $_done of $_total…' : 'Add Games'),
+            label: Text(_saving ? 'Adding $_done of $_total…' : 'Add games'),
           ),
           const SizedBox(width: 10),
           BrandGlassButton(
@@ -1090,7 +1125,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                                   _runPickSearch(value.trim());
                                 },
                                 decoration: InputDecoration.collapsed(
-                                  hintText: 'Search VNDB',
+                                  hintText: 'Title, VNDB link or ID (v12345)',
                                   hintStyle: TextStyle(
                                     color: scheme.outline,
                                     fontSize: 14,
@@ -1101,11 +1136,6 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                           ],
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Search by title, or paste a VNDB link or ID (v12345).',
-                      style: muted,
                     ),
                   ],
                 ),

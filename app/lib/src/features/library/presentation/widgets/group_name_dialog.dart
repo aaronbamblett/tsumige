@@ -88,10 +88,10 @@ Future<String?> showCombineDialog(
   final gameCount = titles.length;
   return showGroupNameDialog(
     context: context,
-    eyebrow: 'Combine',
-    title: 'Combine into one tile',
+    eyebrow: 'Group',
+    title: 'Group games',
     initialName: combineDefaultName(titles),
-    confirmLabel: 'Combine',
+    confirmLabel: 'Group',
     canConfirm: (name) => name.trim().isNotEmpty && gameCount >= 2,
   );
 }

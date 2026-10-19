@@ -16,9 +16,6 @@ import '../../../settings/presentation/sections/settings_widgets.dart';
 import '../../domain/game_editor.dart';
 import 'dialog_shell.dart';
 
-const String _refreshNote =
-    'Your values are kept when Tsumige refreshes data from VNDB.';
-
 const String _releaseErrorText = 'Enter a valid release date.';
 
 Future<void> showEditDetailsDialog(BuildContext context, Game game) {
@@ -210,7 +207,7 @@ class _EditDetailsDialogState extends ConsumerState<EditDetailsDialog> {
     return DialogShell(
       frameKey: const Key('edit-details-frame'),
       size: _dialogSize(context),
-      eyebrow: 'Edit…',
+      eyebrow: 'Edit',
       title: _heading,
       onClose: _close,
       closeKey: const Key('edit-details-close'),
@@ -221,7 +218,7 @@ class _EditDetailsDialogState extends ConsumerState<EditDetailsDialog> {
           children: [
             _field(
               context,
-              label: 'Name',
+              label: 'Title',
               vndbKey: vndbTitleKey,
               fieldKey: const Key('edit-details-name'),
               controller: _name,
@@ -250,7 +247,7 @@ class _EditDetailsDialogState extends ConsumerState<EditDetailsDialog> {
               vndbKey: vndbReleasedKey,
               fieldKey: const Key('edit-details-released'),
               controller: _released,
-              hint: 'year-month-day; month and day are optional',
+              hint: 'YYYY-MM-DD, YYYY-MM or YYYY',
             ),
             if (_releaseError != null) ...[
               const SizedBox(height: 6),
@@ -258,15 +255,6 @@ class _EditDetailsDialogState extends ConsumerState<EditDetailsDialog> {
                 _releaseError!,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: scheme.error,
-                ),
-              ),
-            ],
-            if (_hasVndb) ...[
-              const SizedBox(height: 18),
-              Text(
-                _refreshNote,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
                 ),
               ),
             ],

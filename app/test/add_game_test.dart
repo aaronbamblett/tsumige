@@ -25,6 +25,7 @@ import 'package:tsumige/src/core/paths.dart' as core;
 import 'package:tsumige/src/core/vndb.dart' as core;
 import 'package:tsumige/src/features/library/data/library_repository.dart';
 import 'package:tsumige/src/features/library/domain/add_game.dart';
+import 'package:tsumige/src/features/library/domain/folder_import.dart';
 import 'package:tsumige/src/features/library/domain/game_editor.dart';
 import 'package:tsumige/src/features/library/domain/selection.dart';
 import 'package:tsumige/src/features/library/presentation/add_game/add_game_dialog.dart';
@@ -139,6 +140,8 @@ Future<(_FakeRepository, _Http, ProviderContainer)> _pump(
   List<Map<String, Object?>> rows = const [],
   Size surface = const Size(1280, 800),
   bool openMatch = true,
+  String Function(String folder)? pickFolder,
+  FolderGameCount? countGames,
 }) async {
   tester.view.physicalSize = surface;
   tester.view.devicePixelRatio = 1.0;
@@ -163,9 +166,14 @@ Future<(_FakeRepository, _Http, ProviderContainer)> _pump(
         dataDirProvider.overrideWithValue(core.DataDir(temp.path)),
         libraryRepositoryProvider.overrideWithValue(fake),
         addGameHttpClientProvider.overrideWithValue(http.client),
+        folderGameCountProvider.overrideWithValue(
+          countGames ?? countImportGames,
+        ),
         pathPickerProvider.overrideWithValue(
           ({String? initialDirectory, PathPickMode? mode}) async =>
-              mode == PathPickMode.file ? exe : folder,
+              mode == PathPickMode.file
+                  ? exe
+                  : (pickFolder?.call(folder) ?? folder),
         ),
       ],
       child: MaterialApp(
@@ -257,6 +265,43 @@ Future<void> _drainToast(WidgetTester tester) =>
     tester.pump(const Duration(seconds: 6));
 
 void main() {
+  testWidgets('choosing a folder shows Checking folder while the probe runs', (
+    tester,
+  ) async {
+    final gate = Completer<int>();
+    final probed = <String>[];
+    await _pump(
+      tester,
+      openMatch: false,
+      countGames: (path, platform) {
+        probed.add(path);
+        return gate.future;
+      },
+    );
+    await tester.tap(find.byKey(const Key('add-game-choose-folder')));
+    await tester.pump();
+    expect(find.text('Checking folder…'), findsOneWidget);
+    // Further picks are ignored until the probe resolves.
+    await tester.tap(find.byKey(const Key('add-game-choose-folder')));
+    await tester.pump();
+    expect(probed, hasLength(1));
+    expect(find.text('Checking folder…'), findsOneWidget);
+    gate.complete(1);
+    for (
+      var i = 0;
+      i < 100 && find.text('Match on VNDB').evaluate().isEmpty;
+      i++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    expect(find.text('Match on VNDB'), findsOneWidget);
+    expect(find.text('Checking folder…'), findsNothing);
+  });
+
   testWidgets('typing searches once after the debounce', (tester) async {
     final (_, http, _) = await _pump(
       tester,
@@ -313,7 +358,7 @@ void main() {
     await tester.tap(_resultRow('DEMO'));
     await tester.pumpAndSettle();
     await _next(tester);
-    expect(find.text('Set it up'), findsOneWidget);
+    expect(find.text('Details'), findsOneWidget);
   });
 
   testWidgets('picking moves to step 2 with the fields filled', (tester) async {
@@ -583,7 +628,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(fake.saves, 1);
     expect(fake.games.single.cover, isNull);
-    expect(find.text('Added DEMO (cover download failed)'), findsOneWidget);
+    expect(find.text('Added DEMO. Cover download failed.'), findsOneWidget);
     await _drainToast(tester);
   });
 
@@ -593,7 +638,7 @@ void main() {
     await _pump(tester);
     await tester.tap(find.byKey(const Key('add-game-manual')));
     await tester.pumpAndSettle();
-    expect(find.text('Set it up'), findsOneWidget);
+    expect(find.text('Details'), findsOneWidget);
     expect(find.byKey(const Key('add-game-description')), findsOneWidget);
     expect(find.text('New game'), findsOneWidget);
     expect(find.byIcon(Icons.image_not_supported_outlined), findsOneWidget);
@@ -633,7 +678,7 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('add-game-manual')));
     await tester.pumpAndSettle();
-    expect(find.text('Set it up'), findsOneWidget);
+    expect(find.text('Details'), findsOneWidget);
     await tester.enterText(find.byKey(const Key('add-game-title')), '');
     await tester.tap(find.byKey(const Key('add-game-add')));
     await tester.pumpAndSettle();
@@ -815,7 +860,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(find.text('Set it up'), findsOneWidget);
+    expect(find.text('Details'), findsOneWidget);
     fake.saveGate!.complete();
     await _waitForSave(tester, fake);
     expect(fake.games.single.title, 'Manual game');
@@ -826,11 +871,12 @@ void main() {
     tester,
   ) async {
     await _pump(tester, openMatch: false);
-    expect(find.text('Drop a game folder or game file here'), findsOneWidget);
+    expect(find.text('Drop a game folder or file here'), findsOneWidget);
     expect(find.text('Choose folder…'), findsOneWidget);
     expect(find.text('Choose game file…'), findsOneWidget);
-    expect(find.text('By Steam app ID, no folder needed'), findsOneWidget);
-    expect(find.text('Add every game in a folder'), findsOneWidget);
+    expect(find.text('Steam game'), findsOneWidget);
+    expect(find.text('By App ID'), findsOneWidget);
+    expect(find.text('Import folder'), findsOneWidget);
   });
 
   testWidgets('Choose game file matches the file folder with that file', (
@@ -854,8 +900,8 @@ void main() {
     await _pump(tester, openMatch: false);
     await tester.tap(find.byKey(const Key('add-game-steam')));
     await tester.pumpAndSettle();
-    expect(find.text('Set it up'), findsOneWidget);
-    expect(find.text('Steam app ID'), findsOneWidget);
+    expect(find.text('Details'), findsOneWidget);
+    expect(find.text('Steam App ID'), findsOneWidget);
     expect(find.text('Game file'), findsNothing);
     expect(find.byKey(const Key('add-game-find-vndb')), findsOneWidget);
   });
@@ -885,8 +931,8 @@ void main() {
     await tester.tap(_resultRow('DEMO'));
     await tester.pumpAndSettle();
     await _next(tester);
-    expect(find.text('Set it up'), findsOneWidget);
-    expect(find.text('Steam app ID'), findsOneWidget);
+    expect(find.text('Details'), findsOneWidget);
+    expect(find.text('Steam App ID'), findsOneWidget);
     expect(find.text('DEMO'), findsWidgets);
   });
 
@@ -896,7 +942,7 @@ void main() {
     await _pump(tester, rows: [_row('v900017', 'DEMO', imageUrl: null)]);
     expect(find.text('Best match'), findsOneWidget);
     await _next(tester);
-    expect(find.text('Set it up'), findsOneWidget);
+    expect(find.text('Details'), findsOneWidget);
     expect(find.text('DEMO'), findsWidgets);
   });
 
@@ -950,7 +996,7 @@ void main() {
       p.join(temp.path, 'link', 'Alpha.exe'),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Already in your library as Alpha.'), findsOneWidget);
+    expect(find.text('Already in library as Alpha.'), findsOneWidget);
     final add = tester.widget<BrandButton>(
       find.byKey(const Key('add-game-add')),
     );
@@ -989,6 +1035,39 @@ void main() {
     expect(find.text('Match on VNDB'), findsOneWidget);
     expect(find.text('DEMO.exe'), findsWidgets);
   });
+
+  testWidgets('a dropped folder of several games opens the import dialog',
+      (tester) async {
+    await _pump(tester, openMatch: false);
+    final root = _multiGameFolder();
+    _dropOn(tester, [DropItemDirectory(root, const [])]);
+    await _untilShown(tester, 'Alpha');
+    expect(find.byKey(const Key('import-close')), findsOneWidget);
+    expect(find.text('Alpha'), findsWidgets);
+    expect(find.text('Beta'), findsWidgets);
+  });
+
+  testWidgets('Choose folder with several games opens the import dialog',
+      (tester) async {
+    final root = _multiGameFolder();
+    await _pump(tester, openMatch: false, pickFolder: (_) => root);
+    await tester.tap(find.byKey(const Key('add-game-choose-folder')));
+    await _untilShown(tester, 'Alpha');
+    expect(find.byKey(const Key('import-close')), findsOneWidget);
+    expect(find.text('Alpha'), findsWidgets);
+    expect(find.text('Beta'), findsWidgets);
+  });
+}
+
+/// A throwaway folder holding two game folders, deleted with the test run.
+String _multiGameFolder() {
+  final root = Directory.systemTemp.createTempSync('tsumige_multi_test_');
+  addTearDown(() => root.deleteSync(recursive: true));
+  for (final name in ['Alpha', 'Beta']) {
+    final game = Directory(p.join(root.path, name))..createSync();
+    File(p.join(game.path, '$name.exe')).writeAsBytesSync([0, 1, 2]);
+  }
+  return root.path;
 }
 
 /// A throwaway folder holding DEMO.exe, deleted with the test directory.

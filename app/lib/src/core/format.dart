@@ -29,4 +29,4 @@ String formatPlayDay(DateTime at, DateTime now) {
 }
 
 String formatVndbRating(double rating) =>
-    'VNDB Rating ${(rating / 10).toStringAsFixed(1)}';
+    'VNDB rating ${(rating / 10).toStringAsFixed(1)}';

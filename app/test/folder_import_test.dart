@@ -240,6 +240,88 @@ void main() {
     });
   });
 
+  group('countImportGames', () {
+    test('stops after the second game without reading the rest', () async {
+      final root = p.normalize(p.join(temp.path, 'Story'));
+      final children = {
+        root: [for (var i = 0; i < 50; i++) p.join(root, 'Game$i')],
+      };
+      var lists = 0;
+      var gameVisits = 0;
+      Future<List<String>> lister(String dir) async {
+        lists++;
+        return children[dir] ?? const [];
+      }
+
+      Future<bool> holds(String dir) async {
+        if (dir != root) gameVisits++;
+        return dir != root;
+      }
+
+      final count = await countImportGames(
+        root,
+        _linux,
+        listSubfolders: lister,
+        holdsLaunchable: holds,
+      );
+      expect(count, 2);
+      expect(lists, 1);
+      expect(gameVisits, lessThanOrEqualTo(5));
+    });
+
+    test('a single game with nested tools dirs is one', () async {
+      _exe(temp.path, 'Game/bin/game.exe');
+      _exe(temp.path, 'Game/tools/config.exe');
+      expect(await countImportGames(temp.path, _linux), 1);
+    });
+
+    test('two exe dirs under one game folder are one', () async {
+      _exe(temp.path, 'Game/bin/Game.exe', size: 10);
+      _exe(temp.path, 'Game/x64/Game64.exe', size: 20);
+      expect(await countImportGames(temp.path, _linux), 1);
+    });
+
+    test('an empty folder is zero', () async {
+      expect(await countImportGames(temp.path, _linux), 0);
+    });
+
+    test('a folder with no launchable is zero', () async {
+      _exe(temp.path, 'Empty/readme.txt');
+      expect(await countImportGames(temp.path, _linux), 0);
+    });
+
+    test('a junk-only folder is zero', () async {
+      _exe(temp.path, 'JunkOnly/unins000.exe');
+      _exe(temp.path, 'JunkOnly/setup.exe');
+      expect(await countImportGames(temp.path, _linux), 0);
+    });
+
+    test('a picked folder holding its own exe is one', () async {
+      _exe(temp.path, 'Solo/Solo.exe');
+      _exe(temp.path, 'Solo/Extra/Extra.exe');
+      expect(await countImportGames(p.join(temp.path, 'Solo'), _linux), 1);
+    });
+
+    test('three games cap at two', () async {
+      _exe(temp.path, 'Alpha/Alpha.exe');
+      _exe(temp.path, 'Beta/Beta.exe');
+      _exe(temp.path, 'Gamma/Gamma.exe');
+      expect(await countImportGames(temp.path, _linux), 2);
+    });
+
+    test('agrees with the full scan capped at two', () async {
+      _exe(temp.path, 'Game/Game.exe');
+      _exe(temp.path, 'Game/movie/intro.exe');
+      _exe(temp.path, 'Game/savedata/save.exe');
+      _exe(temp.path, 'Game/system/system.exe');
+      _exe(temp.path, 'Studio/GameA/a.exe');
+      _exe(temp.path, 'Studio/GameB/b.exe');
+      final scanned = await scanImportFolder(temp.path, _linux);
+      final count = await countImportGames(temp.path, _linux);
+      expect(count, scanned.length >= 2 ? 2 : scanned.length);
+    });
+  });
+
   group('cleanFolderName', () {
     test('strips bracketed tags, versions and punctuation', () {
       expect(cleanFolderName('Game [1.02]'), 'Game');

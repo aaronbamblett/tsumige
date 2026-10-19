@@ -59,6 +59,9 @@ class ChangedOnDisk extends StoreException {
   String toString() => 'Library changed on disk: $path';
 }
 
+const String changedOnDiskMessage =
+    'Library changed on disk and was reloaded. Try again.';
+
 String _backupName(DateTime u) {
   String two(int n) => n.toString().padLeft(2, '0');
   String three(int n) => n.toString().padLeft(3, '0');

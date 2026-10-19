@@ -98,10 +98,7 @@ void main() {
     await _pumpLibrary(tester);
     expect(find.text('SteamGridDB'), findsOneWidget);
     expect(
-      find.text(
-        'Optional. Adds covers and backgrounds from steamgriddb.com to Change art. '
-        'Uses your own API key, stored on this computer.',
-      ),
+      find.text('API key for covers and backgrounds in Change art.'),
       findsOneWidget,
     );
     final field = tester.widget<TextField>(

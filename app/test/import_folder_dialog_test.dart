@@ -36,15 +36,20 @@ import 'package:tsumige/src/utils/theme/brand.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 
 class _FakeRepository implements LibraryRepository {
-  _FakeRepository(this.games);
+  _FakeRepository(this.games, {this.copyOnLoad = false});
 
   final List<core.Game> games;
+
+  /// Return a fresh games list per load, like a disk read does, so the
+  /// dialog notices a changed library.
+  final bool copyOnLoad;
   int saves = 0;
   Completer<void>? saveGate;
 
   @override
-  Future<core.LoadedLibrary> load() async =>
-      core.LoadedLibrary(library: core.Library(games: games));
+  Future<core.LoadedLibrary> load() async => core.LoadedLibrary(
+    library: core.Library(games: copyOnLoad ? [...games] : games),
+  );
 
   @override
   Future<void> save(core.LoadedLibrary loaded) async {
@@ -75,6 +80,9 @@ class _Vndb {
 
   final List<String> heldQueries = [];
 
+  /// Every search query the dialog sent, in order.
+  final List<String> queries = [];
+
   /// Queries that fail this many times with a 500 before succeeding.
   final Map<String, int> failCounts = {};
 
@@ -87,6 +95,7 @@ class _Vndb {
       if (filters.first == 'search') {
         final query = filters[2] as String;
         searches++;
+        queries.add(query);
         if (query == gateQuery) await gate!.future;
         final hold = holds[query];
         if (hold != null) {
@@ -200,6 +209,14 @@ class _Harness {
 /// Opens the import dialog directly over a fixture folder.
 core.Game _ownedGame() => core.Game(id: 'g1', title: 'Owned', vndbId: 'v99');
 
+/// A library game whose executable sits in [folder] under [root], so the
+/// import row for that folder counts as in-library by the folder rule.
+core.Game _folderGame(String root, String folder, String exe) => core.Game(
+  id: 'lib-$folder',
+  title: folder,
+  launch: core.LaunchOverrides(executable: p.join(root, folder, exe)),
+);
+
 Future<_Harness> _open(
   WidgetTester tester, {
   List<core.Game>? games,
@@ -214,6 +231,7 @@ Future<_Harness> _open(
   Completer<String?>? picker,
   HostPlatform? platform,
   Map<String, int>? failCounts,
+  bool copyOnLoad = false,
 }) async {
   tester.view.physicalSize = surface;
   tester.view.devicePixelRatio = 1.0;
@@ -236,9 +254,10 @@ Future<_Harness> _open(
   }
   var picks = 0;
   SharedPreferences.setMockInitialValues({});
-  final repo = _FakeRepository([
-    ...(games ?? gamesForRoot?.call(root) ?? [_ownedGame()]),
-  ]);
+  final repo = _FakeRepository(
+    [...(games ?? gamesForRoot?.call(root) ?? [_ownedGame()])],
+    copyOnLoad: copyOnLoad,
+  );
   final vndb = _Vndb(
     results ?? _defaultResults(),
     gate: gate,
@@ -381,7 +400,7 @@ void main() {
     (tester) async {
       final h = await _openAndMatch(tester);
       expect(find.text('Select games to import'), findsOneWidget);
-      expect(find.text('Add games'), findsOneWidget);
+      expect(find.widgetWithText(BrandButton, 'Add games'), findsOneWidget);
       expect(find.text('DEMO'), findsOneWidget);
       expect(find.text('Rena-sensei to Pool Ryokou'), findsOneWidget);
       expect(find.text('Solo Quest'), findsNothing);
@@ -389,7 +408,7 @@ void main() {
       expect(find.text('Best match'), findsOneWidget);
       expect(find.text('Nothing Here'), findsOneWidget);
       expect(find.text('Owned Game'), findsOneWidget);
-      expect(find.text('Same VNDB entry as Owned'), findsOneWidget);
+      expect(find.text('Already in library as Owned'), findsOneWidget);
       expect(find.text('Matched'), findsNothing);
       expect(find.text('Check match'), findsNothing);
       expect(find.text('Pick the game file'), findsNothing);
@@ -412,7 +431,7 @@ void main() {
       games: [core.Game(id: 'g1', title: 'Alpha', vndbId: 'v99')],
     );
     expect(find.byKey(const Key('import-check-2')), findsOneWidget);
-    expect(find.text('Same VNDB entry as Alpha'), findsOneWidget);
+    expect(find.text('Already in library as Alpha'), findsOneWidget);
     expect(_checked(tester, 2), isFalse);
     expect(
       tester
@@ -425,7 +444,7 @@ void main() {
     expect(_checked(tester, 2), isTrue);
   });
 
-  testWidgets('Scan Folder does not list a folder twice', (tester) async {
+  testWidgets('Add folder does not list a folder twice', (tester) async {
     await _openAndMatch(tester);
     await tester.tap(find.byKey(const Key('import-scan')));
     await _settle(tester);
@@ -456,10 +475,6 @@ void main() {
     await tester.pump();
     expect(_dialogTitle('Search VNDB'), findsOneWidget);
     expect(find.text('Solo Quest'), findsWidgets);
-    expect(
-      find.text('Search by title, or paste a VNDB link or ID (v12345).'),
-      findsOneWidget,
-    );
     expect(find.text('Selected'), findsOneWidget);
     expect(
       tester
@@ -559,7 +574,7 @@ void main() {
     for (
       var i = 0;
       i < 200 &&
-          find.text('Matching with VNDB… 4 of 5').evaluate().isEmpty;
+          find.text('Matching on VNDB… 4 of 5').evaluate().isEmpty;
       i++
     ) {
       await tester.runAsync(
@@ -567,13 +582,13 @@ void main() {
       );
       await tester.pump();
     }
-    expect(find.text('Matching with VNDB… 4 of 5'), findsOneWidget);
+    expect(find.text('Matching on VNDB… 4 of 5'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
     gate.complete();
     for (
       var i = 0;
       i < 200 &&
-          find.textContaining('Matching with VNDB').evaluate().isNotEmpty;
+          find.textContaining('Matching on VNDB').evaluate().isNotEmpty;
       i++
     ) {
       await tester.runAsync(
@@ -581,7 +596,7 @@ void main() {
       );
       await tester.pump();
     }
-    expect(find.textContaining('Matching with VNDB'), findsNothing);
+    expect(find.textContaining('Matching on VNDB'), findsNothing);
     expect(find.text('Solo Quest Remake'), findsOneWidget);
   });
 
@@ -611,6 +626,115 @@ void main() {
       isNull,
     );
     expect(h.repo.saves, 0);
+  });
+
+  testWidgets('in-library folders skip matching and count only the rest', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    final h = await _open(
+      tester,
+      gamesForRoot: (root) => [
+        _folderGame(root, 'DEMO', 'DEMO.exe'),
+        _folderGame(root, 'Owned Game', 'Owned.exe'),
+        _folderGame(root, 'Rena sensei', 'RenaPool.exe'),
+      ],
+      gate: gate,
+      gateQuery: 'Solo Quest',
+    );
+    // Nothing Here resolves while Solo Quest waits on the gate: the bar
+    // counts the 2 rows that need matching, not the 5 on disk.
+    for (
+      var i = 0;
+      i < 200 &&
+          find.text('Matching on VNDB… 1 of 2').evaluate().isEmpty;
+      i++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(find.text('Matching on VNDB… 1 of 2'), findsOneWidget);
+    gate.complete();
+    await _waitFor(
+      tester,
+      () => find.textContaining('Matching on VNDB').evaluate().isEmpty,
+    );
+    expect(find.textContaining('Matching on VNDB'), findsNothing);
+    expect(find.text('Solo Quest Remake'), findsOneWidget);
+    expect(h.vndb.queries, contains('Nothing Here'));
+    expect(h.vndb.queries, contains('Solo Quest'));
+    for (final query in h.vndb.queries) {
+      expect(query, isNot(contains('DEMO')));
+      expect(query, isNot(contains('Owned')));
+      expect(query, isNot(contains('Rena')));
+    }
+  });
+
+  testWidgets('a library change mid-scan drops and queues rows', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    final h = await _open(
+      tester,
+      gamesForRoot: (root) => [
+        _folderGame(root, 'Rena sensei', 'RenaPool.exe'),
+      ],
+      gate: gate,
+      gateQuery: 'DEMO',
+      copyOnLoad: true,
+    );
+    // The first lookup is in flight; the rest are still pending.
+    await _waitFor(tester, () => h.vndb.queries.contains('DEMO'));
+    await _waitFor(
+      tester,
+      () => find.text('Select games to import').evaluate().isNotEmpty,
+    );
+    // Nothing Here joins the library, Rena sensei leaves it.
+    h.repo.games.add(_folderGame(h.root, 'Nothing Here', 'Nothing.exe'));
+    h.repo.games.removeWhere((game) => game.id == 'lib-Rena sensei');
+    ProviderScope.containerOf(
+      tester.element(find.text('Select games to import')),
+    ).invalidate(libraryProvider);
+    await tester.pump();
+    gate.complete();
+    await _waitFor(
+      tester,
+      () => find.textContaining('Matching on VNDB').evaluate().isEmpty,
+    );
+    expect(find.textContaining('Matching on VNDB'), findsNothing);
+    // Newly covered: never looked up. Newly uncovered: queued and matched.
+    for (final query in h.vndb.queries) {
+      expect(query, isNot(contains('Nothing')));
+    }
+    expect(h.vndb.queries, contains('Rena sensei'));
+    expect(find.text('Rena-sensei to Pool Ryokou'), findsOneWidget);
+  });
+
+  testWidgets('every row in the library means no lookups and no bar', (
+    tester,
+  ) async {
+    final h = await _openAndMatch(
+      tester,
+      gamesForRoot: (root) => [
+        _folderGame(root, 'DEMO', 'DEMO.exe'),
+        _folderGame(root, 'Nothing Here', 'Nothing.exe'),
+        _folderGame(root, 'Owned Game', 'Owned.exe'),
+        _folderGame(root, 'Rena sensei', 'RenaPool.exe'),
+        _folderGame(root, 'Solo Quest', 'Solo.exe'),
+      ],
+    );
+    expect(h.vndb.searches, 0);
+    expect(find.textContaining('Matching on VNDB'), findsNothing);
+    expect(find.text('No games in this folder'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('import-hide-imported')));
+    await tester.pump();
+    expect(find.text('DEMO'), findsOneWidget);
+    expect(
+      tester.widget<Checkbox>(find.byKey(const Key('import-check-0'))).onChanged,
+      isNull,
+    );
   });
 
   testWidgets('a game scanned through a symlink is hidden as imported', (
@@ -774,7 +898,7 @@ void main() {
     await tester.tap(find.byKey(const Key('import-add')));
     await _waitForSave(tester, h.repo);
     expect(_added(h), hasLength(2));
-    expect(find.text('Added 2 games (1 covers failed)'), findsOneWidget);
+    expect(find.text('Added 2 games. 1 game failed to download.'), findsOneWidget);
     await _drainToast(tester);
   });
 
@@ -842,10 +966,10 @@ void main() {
       tester,
       () =>
           find.byKey(const Key('import-check-6')).evaluate().isNotEmpty &&
-          find.textContaining('Matching with VNDB').evaluate().isEmpty,
+          find.textContaining('Matching on VNDB').evaluate().isEmpty,
     );
     expect(find.byKey(const Key('import-check-6')), findsOneWidget);
-    expect(find.textContaining('Matching with VNDB'), findsNothing);
+    expect(find.textContaining('Matching on VNDB'), findsNothing);
   });
 
   testWidgets('a manual pick survives the late VNDB result of its row', (
@@ -995,7 +1119,6 @@ void main() {
     const keys = [
       'import-browse',
       'import-scan',
-      'import-hide-imported',
       'import-add',
       'import-cancel',
     ];
@@ -1006,18 +1129,30 @@ void main() {
     await _openAndMatch(tester, surface: const Size(1400, 980));
     final wide = [
       for (final key in keys) tester.getCenter(find.byKey(Key(key))).dy,
-      tester.getCenter(hideBox()).dy,
     ];
     for (var i = 0; i < wide.length; i++) {
       expect(wide[i], closeTo(wide.first, 1), reason: 'control $i $wide');
     }
+    final pathHeader = tester.getRect(find.text('Path'));
+    expect(
+      tester.getCenter(hideBox()).dy,
+      closeTo(pathHeader.center.dy, 2),
+    );
+    expect(tester.getRect(hide()).left, greaterThan(pathHeader.right));
+    expect(tester.widget<Checkbox>(hideBox()).value, isTrue);
+    await tester.tap(hide());
+    await tester.pump();
+    expect(tester.widget<Checkbox>(hideBox()).value, isFalse);
+    await tester.tap(hide());
+    await tester.pump();
+    expect(tester.widget<Checkbox>(hideBox()).value, isTrue);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
 
     await _openAndMatch(tester, surface: const Size(1000, 640));
     final shell = tester.getRect(find.byType(DialogShell));
-    for (final key in keys) {
+    for (final key in [...keys, 'import-hide-imported']) {
       final rect = tester.getRect(find.byKey(Key(key)));
       expect(shell.contains(rect.topLeft), isTrue, reason: key);
       expect(shell.contains(rect.bottomRight), isTrue, reason: key);

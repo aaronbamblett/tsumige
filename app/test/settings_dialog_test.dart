@@ -233,7 +233,7 @@ void main() {
     await openSection(tester, 'launching');
     expect(find.byKey(const Key('launch-mode-card-proton')), findsNothing);
     await openSection(tester, 'advanced');
-    expect(find.text('UMU game id'), findsOneWidget);
+    expect(find.text('UMU game ID'), findsOneWidget);
     await openSection(tester, 'about');
     expect(find.text('Version 0.1.0'), findsOneWidget);
     expect(find.text('MPL-2.0'), findsOneWidget);
@@ -272,7 +272,7 @@ void main() {
   testWidgets('details panel fields list four checked boxes', (tester) async {
     final container = await pumpSettings(tester, SettingsFakeRepository());
     expect(
-      find.text('Game fields to be displayed on details panel:'),
+      find.text('Show in details pane'),
       findsOneWidget,
     );
     const labels = ['Description', 'Tags', 'VNDB tags', 'Notes'];

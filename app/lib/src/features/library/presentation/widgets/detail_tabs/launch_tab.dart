@@ -324,7 +324,7 @@ class _LaunchTextField extends ConsumerStatefulWidget {
   final TextInputType? keyboardType;
   final bool isPath;
   final String? Function(String text)? validate;
-  final Widget Function(BuildContext context, String text)? footerBuilder;
+  final Widget? Function(BuildContext context, String text)? footerBuilder;
   final void Function(GameEditor editor, String gameId, String text) onSave;
 
   @override
@@ -636,7 +636,7 @@ class _WineRunnerFieldState extends ConsumerState<_WineRunnerField> {
                   key: const Key('launch-runner-custom'),
                   gameId: widget.game.id,
                   initial: _selected() == _customKey ? (stored ?? '') : '',
-                  hint: widget.defaultRunner ?? 'umu default',
+                  hint: widget.defaultRunner ?? 'wine',
                   isPath: true,
                   onSave: (editor, id, text) =>
                       editor.update(id, (g) => g.launch.runner = text),
@@ -938,7 +938,7 @@ class _RunExeButton extends ConsumerWidget {
               ? null
               : () => actions.runExeInPrefix(context, game),
           icon: const Icon(Icons.terminal_rounded),
-          label: const Text('Run .exe inside prefix…'),
+          label: const Text('Run EXE inside prefix…'),
         ),
       ),
     );
@@ -1032,7 +1032,7 @@ class _UmuField extends ConsumerWidget {
     return _LaunchTextField(
       key: const Key('launch-umu'),
       gameId: game.id,
-      label: 'UMU game id',
+      label: 'UMU game ID',
       initial: game.launch.umuGameId ?? '',
       hint: defaultUmu,
       isDefault: game.launch.umuGameId == null,
@@ -1055,7 +1055,7 @@ class _SteamAppIdField extends ConsumerWidget {
     return _LaunchTextField(
       key: const Key('launch-steam-app-id'),
       gameId: gameId,
-      label: 'Steam app ID',
+      label: 'Steam App ID',
       initial: initial.steamAppId?.toString() ?? '',
       keyboardType: TextInputType.number,
       validate: (text) {
@@ -1095,13 +1095,8 @@ class _ArgumentsField extends ConsumerWidget {
       },
       footerBuilder: (context, text) {
         try {
-          final count = splitArgs(text).length;
-          return Text(
-            'Splits into $count argument${count == 1 ? '' : 's'}',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          );
+          splitArgs(text);
+          return null;
         } on FormatException catch (e) {
           return Text(
             e.message,

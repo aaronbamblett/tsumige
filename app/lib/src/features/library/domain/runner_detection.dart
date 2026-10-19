@@ -60,7 +60,6 @@ String localeLabel(String locale) {
 
 /// Toast shown when a picked path came through the Flatpak portal.
 const String portalPathMessage =
-    'That path came through the Flatpak portal. '
-    'Pick it from its real location.';
+    "Can't use a Flatpak portal path. Choose it from its real location.";
 
 bool isPortalPath(String path) => path.startsWith('/run/user/');

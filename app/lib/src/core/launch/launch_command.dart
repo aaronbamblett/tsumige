@@ -172,7 +172,7 @@ LaunchCommand buildLaunchCommand(
   if (mode == LaunchMode.steam) {
     if (overrideExe != null) {
       throw const LaunchConfigError(
-          'Run .exe inside prefix needs Proton or Wine');
+          'Run EXE inside prefix needs Proton or Wine');
     }
     final appId = game.launch.steamAppId;
     if (appId == null) {
@@ -201,11 +201,11 @@ LaunchCommand buildLaunchCommand(
   } else {
     if (overrideExe != null && mode == LaunchMode.native) {
       throw const LaunchConfigError(
-          'Run .exe inside prefix needs Proton or Wine');
+          'Run EXE inside prefix needs Proton or Wine');
     }
     final rawExe = overrideExe ?? game.launch.executable;
     if (rawExe == null || rawExe.isEmpty) {
-      throw const LaunchConfigError('No executable set');
+      throw const LaunchConfigError('No game file set');
     }
     final exe = expandTilde(rawExe, hostEnv);
     final extraArgs = splitArgs(game.launch.arguments ?? '');

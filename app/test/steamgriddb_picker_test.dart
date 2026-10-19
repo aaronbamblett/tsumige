@@ -343,8 +343,7 @@ void main() {
     expect(find.text('SteamGridDB'), findsOneWidget);
     expect(
       find.text(
-        'Covers from SteamGridDB need your own free API key. '
-        'Get one in your SteamGridDB preferences.',
+        'SteamGridDB covers need a free API key.',
       ),
       findsOneWidget,
     );
@@ -366,7 +365,7 @@ void main() {
       find.byWidgetPredicate(
         (w) =>
             w is TextField &&
-            w.decoration?.hintText == 'Paste your SteamGridDB API key' &&
+            w.decoration?.hintText == 'SteamGridDB API key' &&
             w.obscureText,
       ),
       findsOneWidget,
@@ -686,8 +685,7 @@ void main() {
     expect(find.byKey(const Key('sgdb-key-field')), findsNothing);
     expect(
       find.text(
-        'Covers from SteamGridDB need your own free API key. '
-        'Get one in your SteamGridDB preferences.',
+        'SteamGridDB covers need a free API key.',
       ),
       findsOneWidget,
     );
@@ -860,8 +858,7 @@ void main() {
     await _settle(tester);
     expect(
       find.text(
-        'Backgrounds from SteamGridDB need your own free API key. '
-        'Get one in your SteamGridDB preferences.',
+        'SteamGridDB backgrounds need a free API key.',
       ),
       findsOneWidget,
     );

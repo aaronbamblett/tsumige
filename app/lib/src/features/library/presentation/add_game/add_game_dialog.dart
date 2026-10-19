@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:path/path.dart' as p;
 
+import '../../../../core/host_platform.dart';
 import '../../../../core/launch/launch_modes.dart';
 import '../../../../core/model.dart';
 import '../../../../core/vndb.dart';
@@ -47,6 +48,14 @@ Future<void> showAddGameDialog(
   );
 }
 
+/// Counts the distinct games under a folder: 0, 1, or 2 meaning two or
+/// more. Overridden in widget tests with a completer-backed fake.
+typedef FolderGameCount = Future<int> Function(String path, HostPlatform platform);
+
+final folderGameCountProvider = Provider<FolderGameCount>(
+  (ref) => countImportGames,
+);
+
 /// Starts adding the items dropped on the library window. Ignored while a
 /// dialog is open over it.
 Future<void> dropOntoLibrary(BuildContext context, List<String> paths) async {
@@ -55,7 +64,29 @@ Future<void> dropOntoLibrary(BuildContext context, List<String> paths) async {
     Toast(context).show(portalPathMessage);
     return;
   }
-  final route = routeDrop(paths, isDirectory: FileSystemEntity.isDirectorySync);
+  final container = ProviderScope.containerOf(context);
+  final platform = container.read(hostPlatformProvider);
+  final countGames = container.read(folderGameCountProvider);
+  // A single folder first runs the game-count probe. It is usually instant,
+  // so feedback only appears when it is slow: the same Toast pattern other
+  // short drop outcomes (like the portal-path warning) use.
+  Timer? slow;
+  if (paths.length == 1 && FileSystemEntity.isDirectorySync(paths.single)) {
+    slow = Timer(const Duration(milliseconds: 300), () {
+      if (context.mounted) Toast(context).show('Checking folder…');
+    });
+  }
+  DropRoute? route;
+  try {
+    route = await routeDrop(
+      paths,
+      isDirectory: FileSystemEntity.isDirectorySync,
+      countGames: (path) => countGames(path, platform),
+    );
+  } finally {
+    slow?.cancel();
+  }
+  if (!context.mounted) return;
   switch (route) {
     case DropMatch(:final folder, :final file):
       await showAddGameDialog(context, folder: folder, file: file);
@@ -107,6 +138,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
   VnSearchResult? _picked;
   bool _saving = false;
   String? _formError;
+  bool _checkingFolder = false;
 
   @override
   void initState() {
@@ -221,10 +253,11 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
           : await client.search(query);
       results = rankSearchResults(found, query);
     } catch (e) {
+      debugPrint('$e');
       if (!mounted || token != _searchToken) return;
       setState(() {
         _loading = false;
-        _searchError = '$e';
+        _searchError = "Couldn't reach VNDB.";
       });
       return;
     }
@@ -261,6 +294,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
   }
 
   Future<void> _chooseFolder() async {
+    if (_checkingFolder) return;
     final picked = await ref.read(pathPickerProvider)(
       mode: PathPickMode.folder,
     );
@@ -269,10 +303,30 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
       Toast(context).show(portalPathMessage);
       return;
     }
+    setState(() => _checkingFolder = true);
+    int count;
+    try {
+      count = await ref.read(folderGameCountProvider)(
+        picked,
+        ref.read(hostPlatformProvider),
+      );
+    } on FileSystemException {
+      count = 0;
+    } finally {
+      // Clear before routing: the spinner only covers the probe, and the
+      // import dialog it can open stays up while the test clock settles.
+      if (mounted) setState(() => _checkingFolder = false);
+    }
+    if (!mounted) return;
+    if (count >= 2) {
+      await _openImport(roots: [picked]);
+      return;
+    }
     await _enterMatch(picked);
   }
 
   Future<void> _chooseGameFile() async {
+    if (_checkingFolder) return;
     final picked = await _pickGameFile();
     if (picked == null) return;
     await _enterMatch(p.dirname(picked), file: picked);
@@ -424,14 +478,26 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
   }
 
   Future<void> _dropped(List<String> paths) async {
+    if (_checkingFolder) return;
     if (paths.any(isPortalPath)) {
       Toast(context).show(portalPathMessage);
       return;
     }
-    final route = routeDrop(
-      paths,
-      isDirectory: FileSystemEntity.isDirectorySync,
-    );
+    setState(() => _checkingFolder = true);
+    final DropRoute? route;
+    try {
+      route = await routeDrop(
+        paths,
+        isDirectory: FileSystemEntity.isDirectorySync,
+        countGames: (path) => ref.read(folderGameCountProvider)(
+          path,
+          ref.read(hostPlatformProvider),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _checkingFolder = false);
+    }
+    if (!mounted) return;
     switch (route) {
       case DropMatch(:final folder, :final file):
         await _enterMatch(folder, file: file);
@@ -458,7 +524,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     );
     if (duplicate != null) {
       setState(
-        () => _formError = 'Already in your library as ${duplicate.title}.',
+        () => _formError = 'Already in library as ${duplicate.title}.',
       );
       return;
     }
@@ -515,7 +581,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     ref.read(selectedGameIdProvider.notifier).select(game.id);
     if (!mounted) return;
     Toast(context).show(
-      coverFailed ? 'Added $title (cover download failed)' : 'Added $title',
+      coverFailed ? 'Added $title. Cover download failed.' : 'Added $title',
     );
     Navigator.of(context).pop();
   }
@@ -534,7 +600,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
       title: switch (_step) {
         _AddStep.start => 'Add a game',
         _AddStep.match => 'Match on VNDB',
-        _AddStep.setup => 'Set it up',
+        _AddStep.setup => 'Details',
       },
       onClose: _close,
       closeKey: const Key('add-game-close'),
@@ -580,7 +646,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Drop a game folder or game file here',
+                    'Drop a game folder or file here',
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -593,7 +659,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                         key: const Key('add-game-choose-folder'),
                         height: 40,
                         expand: false,
-                        onPressed: _chooseFolder,
+                        onPressed: _checkingFolder ? null : _chooseFolder,
                         icon: const Icon(Icons.folder_outlined),
                         label: const Text('Choose folder…'),
                       ),
@@ -602,11 +668,30 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                         key: const Key('add-game-choose-file'),
                         height: 40,
                         expand: false,
-                        onPressed: _chooseGameFile,
+                        onPressed: _checkingFolder ? null : _chooseGameFile,
                         label: const Text('Choose game file…'),
                       ),
                     ],
                   ),
+                  if (_checkingFolder) ...[
+                    const SizedBox(height: 14),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox.square(
+                          dimension: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Checking folder…',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -619,9 +704,9 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   context,
                   key: const Key('add-game-steam'),
                   icon: Icons.sports_esports_outlined,
-                  title: 'Add a Steam game',
-                  subtitle: 'By Steam app ID, no folder needed',
-                  onTap: _startSteam,
+                  title: 'Steam game',
+                  subtitle: 'By App ID',
+                  onTap: _checkingFolder ? null : _startSteam,
                 ),
               ),
               const SizedBox(width: 12),
@@ -630,9 +715,8 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   context,
                   key: const Key('add-game-import'),
                   icon: Icons.folder_copy_outlined,
-                  title: 'Import a folder',
-                  subtitle: 'Add every game in a folder',
-                  onTap: () => _openImport(),
+                  title: 'Import folder',
+                  onTap: _checkingFolder ? null : () => _openImport(),
                 ),
               ),
             ],
@@ -647,8 +731,8 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     required Key key,
     required IconData icon,
     required String title,
-    required String subtitle,
-    required VoidCallback onTap,
+    String? subtitle,
+    required VoidCallback? onTap,
   }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -676,13 +760,15 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -731,20 +817,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _searchBox(context),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Search by title, or paste a VNDB link or ID (v12345).',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontSize: 13,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
+                child: _searchBox(context),
               ),
               if (_loading) const LinearProgressIndicator(),
               Expanded(child: _resultsBody(context, inLibrary)),
@@ -909,7 +982,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   _runSearch(value.trim());
                 },
                 decoration: InputDecoration.collapsed(
-                  hintText: 'Search VNDB',
+                  hintText: 'Title, VNDB link or ID (v12345)',
                   hintStyle: TextStyle(color: scheme.outline, fontSize: 14),
                 ),
               ),
@@ -1098,7 +1171,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                 ),
                 const SizedBox(height: 14),
                 if (_mode == LaunchMode.steam) ...[
-                  launchFieldLabel(context, 'Steam app ID', false),
+                  launchFieldLabel(context, 'Steam App ID', false),
                   const SizedBox(height: 6),
                   Row(
                     children: [
@@ -1144,7 +1217,7 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   if (duplicate != null) ...[
                     const SizedBox(height: 6),
                     Text(
-                      'Already in your library as ${duplicate.title}.',
+                      'Already in library as ${duplicate.title}.',
                       key: const Key('add-game-duplicate'),
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: scheme.error,

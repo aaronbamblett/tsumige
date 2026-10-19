@@ -383,7 +383,7 @@ class _MetaRow extends StatelessWidget {
           ),
           Flexible(
             child: Text(
-              votes == null ? 'VNDB Rating' : 'VNDB Rating · $votes votes',
+              votes == null ? 'VNDB rating' : 'VNDB rating · $votes votes',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: style,
@@ -601,6 +601,13 @@ class _HeroControls extends ConsumerWidget {
                 }
               case 'art':
                 showArtPickerDialog(context, game);
+              case 'vndb':
+                final vndbId = game.vndbId;
+                if (vndbId != null) {
+                  await ref.read(vndbUrlOpenerProvider)(
+                    Uri.parse('https://vndb.org/$vndbId'),
+                  );
+                }
               case 'adult':
                 ref
                     .read(gameEditorProvider)
@@ -631,6 +638,11 @@ class _HeroControls extends ConsumerWidget {
           itemBuilder: (context) => [
             const PopupMenuItem(value: 'edit', child: Text('Edit…')),
             const PopupMenuItem(value: 'art', child: Text('Change art…')),
+            if (game.vndbId != null)
+              const PopupMenuItem(
+                value: 'vndb',
+                child: Text('Open on VNDB'),
+              ),
             if (group != null)
               const PopupMenuItem(
                 value: 'rename',
@@ -639,7 +651,7 @@ class _HeroControls extends ConsumerWidget {
             if (group != null)
               const PopupMenuItem(
                 value: 'split',
-                child: Text('Split into separate tiles'),
+                child: Text('Ungroup'),
               ),
             PopupMenuItem(
               value: 'adult',
@@ -767,7 +779,7 @@ class _Footer extends ConsumerWidget {
       if (game.launch.steamAppId == null) return 'Steam App ID is not set';
     } else {
       final exe = game.launch.executable;
-      if (exe == null || exe.isEmpty) return 'No executable set';
+      if (exe == null || exe.isEmpty) return 'No game file set';
       if (mode == LaunchMode.proton && ref.watch(umuRunPathProvider) == null) {
         return 'umu-run not found on PATH';
       }

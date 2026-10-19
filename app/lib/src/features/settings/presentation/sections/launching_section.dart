@@ -20,27 +20,17 @@ class LaunchingSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          "Defaults for games that don't set their own.",
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 20),
         const SettingsGroup(
           rowKey: Key('settings-row-prefix'),
           title: 'Wine prefix',
-          subtitle: 'Folder Proton and Wine games run in.',
           control: _PrefixField(),
         ),
         const SettingsGroup(
           rowKey: Key('settings-row-proton'),
           title: 'Proton version',
-          subtitle: 'Which Proton build umu uses.',
           control: _ProtonVersionField(),
         ),
         const _GameLanguageGroup(),
@@ -123,7 +113,7 @@ class _ProtonVersionFieldState extends ConsumerState<_ProtonVersionField> {
             items: [
               const DropdownMenuItem(
                 value: '',
-                child: Text('umu default (recommended)'),
+                child: Text('umu default'),
               ),
               for (final runner in runners)
                 DropdownMenuItem(value: runner.path, child: Text(runner.name)),
@@ -202,7 +192,7 @@ class _GameLanguageGroupState extends ConsumerState<_GameLanguageGroup> {
     return SettingsGroup(
       rowKey: const Key('settings-row-locale'),
       title: 'Game language',
-      subtitle: 'Locale passed to Windows games. Japanese fixes most VN text.',
+      subtitle: 'Japanese fixes garbled text in most VNs.',
       divider: false,
       control: SizedBox(
         width: 320,
