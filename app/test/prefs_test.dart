@@ -114,6 +114,24 @@ void main() {
     expect(container.read(detailFieldsProvider), keys.detailFieldsAll);
   });
 
+  test('dismissed suggestion notice defaults empty and round-trips', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final container = containerFor(prefs);
+    addTearDown(container.dispose);
+
+    expect(container.read(dismissedSuggestionNoticeProvider), isEmpty);
+
+    container
+        .read(dismissedSuggestionNoticeProvider.notifier)
+        .dismiss({'a1,a2'});
+    expect(container.read(dismissedSuggestionNoticeProvider), {'a1,a2'});
+
+    final rebuilt = containerFor(prefs);
+    addTearDown(rebuilt.dispose);
+    expect(rebuilt.read(dismissedSuggestionNoticeProvider), {'a1,a2'});
+  });
+
   test('launch defaults read back', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();

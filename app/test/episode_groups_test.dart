@@ -24,6 +24,7 @@ import 'package:tsumige/src/features/library/domain/launch_actions.dart';
 import 'package:tsumige/src/features/library/domain/selection.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_cover_tile.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_detail_pane.dart';
+import 'package:tsumige/src/utils/prefs/app_prefs.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 
 class GroupFakeRepository implements LibraryRepository {
@@ -72,7 +73,7 @@ core.LoadedLibrary groupLibrary({String? lastPickedId, bool firstPlayed = false}
   ]);
   library.groups.add(core.GameGroup(
       id: 'gr1',
-      name: 'Nine Nine',
+      name: '9-nine-',
       memberIds: ['ep1', 'ep2', 'ep3'],
       lastPickedId: lastPickedId));
   return core.LoadedLibrary(library: library);
@@ -144,7 +145,7 @@ void main() {
   testWidgets('a 3-member group and 2 singles show 3 tiles', (tester) async {
     await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
     expect(find.byType(GameCoverTile), findsNWidgets(3));
-    expect(find.text('Nine Nine'), findsOneWidget);
+    expect(find.text('9-nine-'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
     expect(find.text('9-nine- Episode 1'), findsNothing);
     expect(find.text('Solo A'), findsOneWidget);
@@ -156,12 +157,12 @@ void main() {
     await tester.enterText(toolbarSearch(), 'Episode 2');
     await tester.pump();
     expect(find.byType(GameCoverTile), findsOneWidget);
-    expect(find.text('Nine Nine'), findsOneWidget);
+    expect(find.text('9-nine-'), findsOneWidget);
   });
 
   testWidgets('selecting the group shows the remembered member', (tester) async {
     await pumpGroups(tester, groupLibrary(lastPickedId: 'ep3'));
-    await tester.tap(find.text('Nine Nine'));
+    await tester.tap(find.text('9-nine-'));
     await tester.pump();
     await tester.pump();
     expect(paneText('9-nine- NewEpisode'), findsOneWidget);
@@ -170,7 +171,7 @@ void main() {
   testWidgets('with no lastPickedId it opens the first unplayed member',
       (tester) async {
     await pumpGroups(tester, groupLibrary(firstPlayed: true));
-    await tester.tap(find.text('Nine Nine'));
+    await tester.tap(find.text('9-nine-'));
     await tester.pump();
     await tester.pump();
     expect(paneText('9-nine- Episode 2'), findsOneWidget);
@@ -179,7 +180,7 @@ void main() {
   testWidgets('the picker lists short names and picking switches the hero',
       (tester) async {
     final fake = await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
-    await tester.tap(find.text('Nine Nine'));
+    await tester.tap(find.text('9-nine-'));
     await tester.pump();
     await tester.pump();
     expect(paneText('9-nine- Episode 1'), findsOneWidget);
@@ -213,7 +214,7 @@ void main() {
       ),
     );
     final fake = await pumpGroups(tester, loaded);
-    await tester.tap(find.text('Nine Nine'));
+    await tester.tap(find.text('9-nine-'));
     await tester.pump();
     await tester.pump();
     await tester.tap(find.text('Related'));
@@ -231,7 +232,7 @@ void main() {
 
   testWidgets('removing the shown member keeps the group open', (tester) async {
     final fake = await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
-    await tester.tap(find.text('Nine Nine'));
+    await tester.tap(find.text('9-nine-'));
     await tester.pump();
     await tester.pump();
     final container = ProviderScope.containerOf(
@@ -352,14 +353,14 @@ void main() {
   testWidgets('rename changes the tile name and the saved file',
       (tester) async {
     final fake = await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
-    await tester.tap(find.text('Nine Nine'));
+    await tester.tap(find.text('9-nine-'));
     await tester.pump();
     await tester.pump();
     await tester.tap(find.byTooltip('More'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Rename group…'));
     await tester.pumpAndSettle();
-    expect(groupNameFieldText(tester), 'Nine Nine');
+    expect(groupNameFieldText(tester), '9-nine-');
     await tester.enterText(groupNameField(), 'Renamed');
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('group-name-confirm')));
@@ -371,7 +372,7 @@ void main() {
   testWidgets('split restores separate tiles and drops the group',
       (tester) async {
     final fake = await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
-    await tester.tap(find.text('Nine Nine'));
+    await tester.tap(find.text('9-nine-'));
     await tester.pump();
     await tester.pump();
     await tester.tap(find.byTooltip('More'));
@@ -391,6 +392,16 @@ void main() {
     expect(paneText('9-nine- Episode 1'), findsOneWidget);
   });
 
+  testWidgets('no suggestions means no notice', (tester) async {
+    final library = core.Library(games: [
+      game('a', 'Alpha'),
+      game('b', 'Beta'),
+    ]);
+    await pumpGroups(tester, core.LoadedLibrary(library: library));
+    expect(find.textContaining('can be grouped'), findsNothing);
+    expect(find.text('Review'), findsNothing);
+  });
+
   testWidgets('esc clears a multi-selection', (tester) async {
     await pumpGroups(tester, groupLibrary(lastPickedId: 'ep1'));
     await ctrlClick(tester, find.text('Solo A'));
@@ -401,4 +412,154 @@ void main() {
     expect(find.text('2 games selected'), findsNothing);
     expect(find.byType(GameDetailPane), findsNothing);
   });
+
+  testWidgets('two suggestions show the notice and list both in Review',
+      (tester) async {
+    await pumpGroups(tester, suggestionLibrary());
+    expect(
+      find.text(
+          '2 series in your library can be grouped into one tile each.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Review'));
+    await tester.pumpAndSettle();
+    expect(find.text('Group these into one tile each?'), findsOneWidget);
+    expect(find.text('Alpha · 2 entries'), findsOneWidget);
+    expect(find.text('Beta · 2 entries'), findsOneWidget);
+    expect(find.text('Episode 1, Episode 2'), findsNWidgets(2));
+    expect(
+      find.text('They share a VNDB entry, and each title names a part.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+          'VNDB lists them as a sequel chain, and each title names a part.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Group creates the group and its tile', (tester) async {
+    final fake = await pumpGroups(tester, suggestionLibrary());
+    await tester.tap(find.text('Review'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('suggest-group:a1,a2')));
+    await tester.pumpAndSettle();
+    expect(find.text('Alpha · 2 entries'), findsNothing);
+    expect(find.text('Beta · 2 entries'), findsOneWidget);
+    expect(fake.loaded.library.groups, hasLength(1));
+    final created = fake.loaded.library.groups.single;
+    expect(created.name, 'Alpha');
+    expect(created.memberIds, hasLength(2));
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    Finder gridText(String text) => find.descendant(
+          of: find.byType(GameCoverTile),
+          matching: find.text(text),
+        );
+    expect(gridText('Alpha'), findsOneWidget);
+    expect(gridText('2'), findsOneWidget);
+  });
+
+  testWidgets('grouping the last suggestion closes Review by itself',
+      (tester) async {
+    await pumpGroups(tester, suggestionLibrary(beta: false));
+    await tester.tap(find.text('Review'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('suggest-group:a1,a2')));
+    await tester.pumpAndSettle();
+    expect(find.text('Group these into one tile each?'), findsNothing);
+    expect(find.text('Alpha'), findsOneWidget);
+  });
+
+  testWidgets('Not a series persists and the notice drops to 1',
+      (tester) async {
+    final fake = await pumpGroups(tester, suggestionLibrary());
+    await tester.tap(find.text('Review'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('suggest-dismiss:a1,a2')));
+    await tester.pumpAndSettle();
+    expect(find.text('Alpha · 2 entries'), findsNothing);
+    expect(find.text('Beta · 2 entries'), findsOneWidget);
+    expect(fake.loaded.library.dismissedGroupSuggestions, {'a1,a2'});
+    await tester.tap(find.text('Close'));
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    expect(
+      find.text('1 series in your library can be grouped into one tile.'),
+      findsOneWidget,
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(GameCoverTile).first),
+    );
+    await container.read(libraryProvider.notifier).reload();
+    await tester.pump();
+    await tester.pump();
+    expect(
+      find.text('1 series in your library can be grouped into one tile.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Dismiss hides the notice until a new series appears',
+      (tester) async {
+    await pumpGroups(tester, suggestionLibrary(beta: false));
+    expect(
+      find.text('1 series in your library can be grouped into one tile.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byTooltip('Dismiss'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('can be grouped'), findsNothing);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(GameCoverTile).first),
+    );
+    expect(container.read(dismissedSuggestionNoticeProvider), {'a1,a2'});
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+      prefs.getStringList('library.dismissedSuggestionNotice'),
+      ['a1,a2'],
+    );
+    await container.read(gameEditorProvider).addAll([
+      core.Game(
+        id: 'b1',
+        title: 'Beta Episode 1',
+        vndbId: 'v2',
+        relations: [seqRelation('v3')],
+      ),
+      core.Game(id: 'b2', title: 'Beta Episode 2', vndbId: 'v3'),
+    ]);
+    await tester.pump();
+    await tester.pump();
+    expect(
+      find.text(
+          '2 series in your library can be grouped into one tile each.'),
+      findsOneWidget,
+    );
+  });
+}
+
+core.VnRelation seqRelation(String vndbId) => core.VnRelation(
+      vndbId: vndbId,
+      relation: 'seq',
+      title: '',
+      official: true,
+    );
+
+/// Two suggestable series: Alpha shares one VNDB id, Beta is a sequel chain.
+core.LoadedLibrary suggestionLibrary({bool beta = true}) {
+  final games = [
+    core.Game(id: 'a1', title: 'Alpha Episode 1', vndbId: 'v9'),
+    core.Game(id: 'a2', title: 'Alpha Episode 2', vndbId: 'v9'),
+    if (beta)
+      core.Game(
+        id: 'b1',
+        title: 'Beta Episode 1',
+        vndbId: 'v2',
+        relations: [seqRelation('v3')],
+      ),
+    if (beta) core.Game(id: 'b2', title: 'Beta Episode 2', vndbId: 'v3'),
+  ];
+  return core.LoadedLibrary(library: core.Library(games: games));
 }

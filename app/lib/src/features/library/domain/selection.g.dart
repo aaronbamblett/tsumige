@@ -62,7 +62,7 @@ final class SelectedGameIdProvider
   }
 }
 
-String _$selectedGameIdHash() => r'c5f2aa2753005f82535c77221eb1aa66bbb6f0c9';
+String _$selectedGameIdHash() => r'e07b4077cc43928645432404a0f92a98a187b4c3';
 
 /// Selected tile id: a game id, or a group id. Null means the detail pane is
 /// closed. When a group is selected, the pane shows one of its members (see

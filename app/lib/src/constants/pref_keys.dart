@@ -40,6 +40,7 @@ enum PrefKey {
   favouritesOnly('library.favouritesOnly', false),
   adultFilter('library.adultFilter', 0),
   tagFilter('library.tagFilter', null),
+  dismissedSuggestionNotice('library.dismissedSuggestionNotice', null),
   launchPrefix('launch.prefix', '~/Games/tsumige/prefix'),
   launchRunner('launch.runner', null),
   launchLocale('launch.locale', 'ja_JP.UTF-8'),

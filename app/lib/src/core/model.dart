@@ -38,9 +38,17 @@ class Library {
   List<Game> games;
   List<GameGroup> groups;
 
-  Library({this.schemaVersion = 1, List<Game>? games, List<GameGroup>? groups})
-      : games = games ?? [],
-        groups = groups ?? [];
+  /// Keys of group suggestions the user marked "Not a series".
+  Set<String> dismissedGroupSuggestions;
+
+  Library({
+    this.schemaVersion = 1,
+    List<Game>? games,
+    List<GameGroup>? groups,
+    Set<String>? dismissedGroupSuggestions,
+  })  : games = games ?? [],
+        groups = groups ?? [],
+        dismissedGroupSuggestions = dismissedGroupSuggestions ?? {};
 }
 
 /// A named set of episodes or chapters shown as one library tile.

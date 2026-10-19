@@ -24,6 +24,7 @@ import '../domain/launch_actions.dart';
 import '../domain/selection.dart';
 import 'add_game/add_game_dialog.dart';
 import 'widgets/game_detail_pane.dart';
+import 'widgets/group_suggestion_notice.dart';
 import 'widgets/library_grid.dart';
 import 'widgets/library_toolbar.dart';
 import 'widgets/multi_selection_pane.dart';
@@ -170,7 +171,17 @@ class LibraryScreen extends HookConsumerWidget {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Expanded(child: LibraryGrid(tiles: tiles)),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const GroupSuggestionNotice(),
+                                Expanded(
+                                  child: LibraryGrid(tiles: tiles),
+                                ),
+                              ],
+                            ),
+                          ),
                           if (paneOpen)
                             _PaneSlot(
                               child: showSummary

@@ -253,6 +253,28 @@ class GameEditor {
     return group.id;
   }
 
+  /// Marks a group suggestion as "Not a series": it is never suggested again.
+  Future<void> dismissGroupSuggestion(String key,
+      {BuildContext? context}) async {
+    final loaded = _ref.read(libraryProvider).value;
+    if (loaded == null) return;
+    loaded.library.dismissedGroupSuggestions.add(key);
+    try {
+      await _ref.read(libraryRepositoryProvider).save(loaded);
+    } on ChangedOnDisk {
+      _ref.invalidate(libraryProvider);
+      if (context?.mounted == false) return;
+      _tell(context, changedOnDiskMessage, error: false);
+      return;
+    } catch (e) {
+      _ref.invalidate(libraryProvider);
+      if (context?.mounted == false) return;
+      _tell(context, '$e', error: true);
+      return;
+    }
+    _ref.invalidate(libraryProvider);
+  }
+
   /// Renames the group; the tile shows the new name.
   Future<void> renameGroup(String groupId, String name,
       {BuildContext? context}) async {
