@@ -846,20 +846,11 @@ void main() {
     expect(find.widgetWithText(BrandButton, 'Play'), findsOneWidget);
   });
 
-  testWidgets('run exe button shows for a Proton game', (tester) async {
+  testWidgets('the footer holds only Play for a Proton game', (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
     await openPane(tester, 'Alpha');
-    expect(find.widgetWithText(BrandGlassButton, 'Run .exe inside prefix…'),
-        findsOneWidget);
-  });
-
-  testWidgets('play sits above run exe inside prefix', (tester) async {
-    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
-    await openPane(tester, 'Alpha');
-    final play = tester.getTopLeft(find.widgetWithText(BrandButton, 'Play'));
-    final runExe = tester.getTopLeft(
-        find.widgetWithText(BrandGlassButton, 'Run .exe inside prefix…'));
-    expect(play.dy, lessThan(runExe.dy));
+    expect(find.widgetWithText(BrandButton, 'Play'), findsOneWidget);
+    expect(find.text('Run .exe inside prefix…'), findsNothing);
   });
 
   testWidgets('launch tab falls back to global defaults', (tester) async {

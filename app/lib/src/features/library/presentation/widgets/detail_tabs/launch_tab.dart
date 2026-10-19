@@ -20,7 +20,9 @@ import '../../../../../utils/theme/brand.dart';
 import '../../../../../utils/toast.dart';
 import '../../../../settings/presentation/sections/settings_widgets.dart';
 import '../../../domain/game_editor.dart';
+import '../../../domain/launch_actions.dart';
 import '../../../domain/runner_detection.dart';
+import '../../../domain/running_games.dart';
 import '../library_toolbar.dart';
 import 'info_tab.dart';
 
@@ -69,7 +71,8 @@ class _LaunchTabState extends ConsumerState<LaunchTab> {
     final defaultRunner = ref.watch(launchRunnerProvider);
     final defaultLocale = ref.watch(launchLocaleProvider);
     final defaultUmu = ref.watch(launchUmuGameIdProvider);
-    final mode = effectiveLaunchMode(game, ref.watch(hostPlatformProvider));
+    final platform = ref.watch(hostPlatformProvider);
+    final mode = effectiveLaunchMode(game, platform);
     final wines = ref.watch(wineRunnersProvider).value ?? const <WineRunner>[];
     final protons =
         ref.watch(protonRunnersProvider).value ?? const <ProtonRunner>[];
@@ -96,6 +99,7 @@ class _LaunchTabState extends ConsumerState<LaunchTab> {
           prefixes: prefixes,
           defaultPrefix: defaultPrefix,
         ),
+      if (showRunExeInPrefix(platform, mode)) _RunExeButton(game: game),
       if (runnerMode) _LocaleField(game: game, defaultLocale: defaultLocale),
     ];
     final advancedFields = <Widget>[
@@ -906,6 +910,36 @@ class _PrefixFieldState extends ConsumerState<_PrefixField> {
     await ref
         .read(gameEditorProvider)
         .update(widget.game.id, (g) => g.launch.prefix = picked);
+  }
+}
+
+/// Runs an arbitrary .exe inside the game's prefix. It sits directly under
+/// the prefix field it acts on, styled as a plain outlined action sized to
+/// its label. Disabled while the game is launching or running.
+class _RunExeButton extends ConsumerWidget {
+  const _RunExeButton({required this.game});
+
+  final Game game;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final actions = ref.watch(launchActionsProvider);
+    final phase = ref.watch(runningGamesProvider)[game.id];
+    final busy = phase != null;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Tooltip(
+        message: runExePhaseLabel(phase),
+        child: OutlinedButton.icon(
+          key: const Key('launch-run-exe'),
+          onPressed: busy
+              ? null
+              : () => actions.runExeInPrefix(context, game),
+          icon: const Icon(Icons.terminal_rounded),
+          label: const Text('Run .exe inside prefix…'),
+        ),
+      ),
+    );
   }
 }
 

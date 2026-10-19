@@ -18,10 +18,12 @@ import 'package:tsumige/src/core/launch/detect.dart' as detect;
 import 'package:tsumige/src/core/model.dart' as core;
 import 'package:tsumige/src/core/paths.dart' as core;
 import 'package:tsumige/src/core/vndb.dart' as core;
+import 'package:tsumige/src/core/launch/game_runner.dart';
 import 'package:tsumige/src/features/library/data/library_repository.dart';
 import 'package:tsumige/src/features/library/domain/cover_source.dart';
 import 'package:tsumige/src/features/library/domain/game_editor.dart';
 import 'package:tsumige/src/features/library/domain/runner_detection.dart';
+import 'package:tsumige/src/features/library/domain/running_games.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/detail_tabs/launch_tab.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/library_toolbar.dart';
 import 'package:tsumige/src/features/settings/presentation/sections/settings_widgets.dart';
@@ -557,6 +559,65 @@ void main() {
     expect(clip.bottom, closeTo(box.bottom - 1, 0.5));
     expect(clip.left, closeTo(box.left + 1, 0.5));
     expect(clip.right, closeTo(box.right - 1, 0.5));
+  });
+
+  testWidgets('run exe sits below the prefix field and is enabled',
+      (tester) async {
+    await pumpLaunch(
+      tester,
+      [core.Game(id: 'g1', title: 'Alpha', launch: core.LaunchOverrides(
+        mode: core.LaunchMode.proton,
+        executable: '/games/alpha/game.exe',
+      ))],
+      hostPlatform: const HostPlatform(HostOs.linux),
+    );
+    await openLaunch(tester, 'Alpha');
+    final button = find.byKey(const Key('launch-run-exe'));
+    expect(button, findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Run .exe inside prefix…'),
+        findsOneWidget);
+    expect(tester.widget<OutlinedButton>(button).enabled, isTrue);
+    final prefixBottom =
+        tester.getRect(find.byKey(const Key('launch-prefix'))).bottom;
+    expect(tester.getRect(button).top, greaterThanOrEqualTo(prefixBottom));
+  });
+
+  testWidgets('run exe is absent for a native game', (tester) async {
+    await pumpLaunch(
+      tester,
+      [core.Game(id: 'g1', title: 'Alpha', launch: core.LaunchOverrides(
+        mode: core.LaunchMode.native,
+        executable: '/games/alpha/run.sh',
+      ))],
+      hostPlatform: const HostPlatform(HostOs.linux),
+    );
+    await openLaunch(tester, 'Alpha');
+    expect(find.byKey(const Key('launch-run-exe')), findsNothing);
+    expect(find.text('Run .exe inside prefix…'), findsNothing);
+  });
+
+  testWidgets('run exe is disabled while the game is running',
+      (tester) async {
+    await pumpLaunch(
+      tester,
+      [core.Game(id: 'g1', title: 'Alpha', launch: core.LaunchOverrides(
+        mode: core.LaunchMode.proton,
+        executable: '/games/alpha/game.exe',
+      ))],
+      hostPlatform: const HostPlatform(HostOs.linux),
+    );
+    await openLaunch(tester, 'Alpha');
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(LaunchTab)));
+    container
+        .read(runningGamesProvider.notifier)
+        .setPhase('g1', LaunchPhase.running);
+    await tester.pump();
+    final button = find.byKey(const Key('launch-run-exe'));
+    expect(button, findsOneWidget);
+    expect(tester.widget<OutlinedButton>(button).enabled, isFalse);
+    final tip = find.ancestor(of: button, matching: find.byType(Tooltip));
+    expect(tester.widget<Tooltip>(tip.first).message, 'Running');
   });
 
   testWidgets('single-line text is centred in each box, unfocused and focused',

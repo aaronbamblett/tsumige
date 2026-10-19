@@ -560,9 +560,6 @@ class _Footer extends ConsumerWidget {
     final platform = ref.watch(hostPlatformProvider);
     final LaunchMode mode = effectiveLaunchMode(game, platform);
     final phase = ref.watch(runningGamesProvider)[game.id];
-    final busy = phase != null;
-    final showRunExe = platform.isLinux &&
-        (mode == LaunchMode.proton || mode == LaunchMode.wine);
     final launchTip = _launchTooltip(ref, phase, mode);
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
@@ -603,18 +600,6 @@ class _Footer extends ConsumerWidget {
               }),
             ),
           ),
-          if (showRunExe)
-            Tooltip(
-              message: _phaseLabel(phase),
-              child: BrandGlassButton(
-                height: 44,
-                onPressed: busy
-                    ? null
-                    : () => actions.runExeInPrefix(context, game),
-                icon: const Icon(Icons.terminal_rounded),
-                label: const Text('Run .exe inside prefix…'),
-              ),
-            ),
         ],
       ),
     );

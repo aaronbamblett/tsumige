@@ -11,6 +11,7 @@ import 'package:flutter/widgets.dart';
 import 'package:path/path.dart' as p;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../core/host_platform.dart';
 import '../../../core/launch/game_runner.dart';
 import '../../../core/launch/launch_command.dart';
 import '../../../core/launch/process_table.dart';
@@ -160,3 +161,18 @@ class LaunchActions {
 /// its end through this ref. An auto-dispose ref could be dead by then.
 @Riverpod(keepAlive: true)
 LaunchActions launchActions(Ref ref) => LaunchActions(ref);
+
+/// Whether the "Run .exe inside prefix…" action applies: Linux with a
+/// Wine/Proton (runner) mode. Shared by the detail footer and the Launch tab
+/// so the condition cannot drift between the two.
+bool showRunExeInPrefix(HostPlatform platform, core.LaunchMode mode) =>
+    platform.isLinux &&
+    (mode == core.LaunchMode.proton || mode == core.LaunchMode.wine);
+
+/// Tooltip for the run-exe action: the launch phase label while busy, else ''.
+String runExePhaseLabel(LaunchPhase? phase) => switch (phase) {
+  LaunchPhase.starting => 'Launching…',
+  LaunchPhase.running => 'Running',
+  // `ended` entries are removed, so this is unreachable.
+  LaunchPhase.ended || null => '',
+};
