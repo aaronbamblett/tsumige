@@ -15,7 +15,10 @@ import 'host_platform.dart';
 /// Atomic Fedora and Bazzite) compares equal. Pure and synchronous. When
 /// [path] does not exist, the nearest existing parent is resolved and the
 /// rest joined back on, then normalised.
+void Function(String path)? onRealPath;
+
 String realPath(String path) {
+  onRealPath?.call(path);
   if (path.isEmpty) return path;
   try {
     return File(path).resolveSymbolicLinksSync();

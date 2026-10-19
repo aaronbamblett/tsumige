@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:tsumige/src/core/host_platform.dart';
 import 'package:tsumige/src/core/model.dart';
+import 'package:tsumige/src/core/paths.dart';
 import 'package:tsumige/src/core/vndb.dart';
 import 'package:tsumige/src/features/library/domain/folder_import.dart';
 
@@ -455,7 +456,7 @@ void main() {
       final exes = libraryRealExePaths(games);
       expect(
         importRowInLibrary(
-          folder: p.join(temp.path, 'link', 'Game'),
+          realFolder: realPath(p.join(temp.path, 'link', 'Game')),
           libraryExes: exes,
         ),
         isTrue,
@@ -472,7 +473,7 @@ void main() {
       ];
       expect(
         importRowInLibrary(
-          folder: folder.path,
+          realFolder: realPath(folder.path),
           libraryExes: libraryRealExePaths(games),
         ),
         isTrue,
@@ -485,7 +486,7 @@ void main() {
       final games = [game('Owned', p.join(temp.path, 'Game', 'game.exe'))];
       expect(
         importRowInLibrary(
-          folder: folder.path,
+          realFolder: realPath(folder.path),
           libraryExes: libraryRealExePaths(games),
         ),
         isFalse,
@@ -496,7 +497,7 @@ void main() {
       final games = [game('Owned', '', vndbId: 'v99')];
       expect(
         importRowInLibrary(
-          folder: p.join(temp.path, 'Missing'),
+          realFolder: realPath(p.join(temp.path, 'Missing')),
           libraryExes: libraryRealExePaths(games),
         ),
         isFalse,

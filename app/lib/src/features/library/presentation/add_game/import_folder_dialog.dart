@@ -59,17 +59,22 @@ final importVndbRetryWaitProvider = Provider<Duration>(
 typedef _Plan = ({List<bool> selected, List<bool> duplicate});
 
 class _ImportRow {
-  _ImportRow(this.folder);
+  _ImportRow(this.folder) : realFolder = realPath(folder.path);
 
   final ImportFolder folder;
+  final String realFolder;
 
   /// Null while the VNDB lookup is pending.
   ImportMatchState? state;
   VnSearchResult? vn;
   String? error;
   String? exePath;
+  String? realExe;
   bool ticked = false;
   bool tickTouched = false;
+
+  Set<String>? libraryExes;
+  bool inLibrary = false;
 }
 
 class ImportFolderDialog extends ConsumerStatefulWidget {
@@ -160,8 +165,16 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     _pop(ImportFolderResult.cancel);
   }
 
-  bool _inLibrary(_ImportRow row, Set<String> libraryExes) =>
-      importRowInLibrary(folder: row.folder.path, libraryExes: libraryExes);
+  bool _inLibrary(_ImportRow row, Set<String> libraryExes) {
+    if (!identical(row.libraryExes, libraryExes)) {
+      row.libraryExes = libraryExes;
+      row.inLibrary = importRowInLibrary(
+        realFolder: row.realFolder,
+        libraryExes: libraryExes,
+      );
+    }
+    return row.inLibrary;
+  }
 
   bool _eligible(_ImportRow row, Set<String> libraryExes) =>
       row.state != null &&
@@ -171,11 +184,9 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   /// Two rows with the same real exe path stay deduplicated. A repeated
   /// VNDB id only warns, it doesn't deduplicate.
   bool _sameGame(_ImportRow a, _ImportRow b) {
-    final ae = a.exePath;
-    final be = b.exePath;
-    return ae != null &&
-        be != null &&
-        p.equals(realPath(ae), realPath(be));
+    final ae = a.realExe;
+    final be = b.realExe;
+    return ae != null && be != null && p.equals(ae, be);
   }
 
   /// The warning when a row repeats a VNDB entry: the library game's
@@ -227,10 +238,12 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
 
   void _applyExe(_ImportRow row) {
     final vn = row.vn;
-    row.exePath = chooseExe(
+    final exe = chooseExe(
       row.folder,
       vn == null ? const [] : vnTitles(vn),
     )?.path;
+    row.exePath = exe;
+    row.realExe = exe == null ? null : realPath(exe);
   }
 
   Future<void> _browse({bool append = false}) async {

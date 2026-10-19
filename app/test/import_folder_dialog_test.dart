@@ -764,6 +764,36 @@ void main() {
     await _drainToast(tester);
   });
 
+  testWidgets('hovering a row and ticking one resolve no paths again', (
+    tester,
+  ) async {
+    await _openAndMatch(
+      tester,
+      gamesForRoot: (root) => [
+        core.Game(
+          id: 'g2',
+          title: 'Alpha',
+          launch: core.LaunchOverrides(
+            executable: p.join(root, 'Rena sensei', 'RenaPool.exe'),
+          ),
+        ),
+      ],
+    );
+    final resolved = <String>[];
+    core.onRealPath = resolved.add;
+    addTearDown(() => core.onRealPath = null);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+    await mouse.moveTo(
+      tester.getCenter(find.byKey(const Key('import-name-0'))),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('import-check-1')));
+    await tester.pump();
+    expect(resolved, isEmpty);
+  });
+
   testWidgets('closing the dialog mid-lookup sends no more VNDB searches', (
     tester,
   ) async {
