@@ -4,6 +4,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import 'dart:async';
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -12,7 +14,9 @@ import 'package:path/path.dart' as p;
 
 import '../../../../core/model.dart';
 import '../../../../core/paths.dart';
+import '../../../../core/steamgriddb.dart';
 import '../../../../core/vndb.dart';
+import '../../../../utils/prefs/app_prefs.dart';
 import '../../../../utils/theme/brand.dart';
 import '../../../../utils/toast.dart';
 import '../../../../widgets/tsumige_logo.dart';
@@ -23,6 +27,7 @@ import '../../domain/game_editor.dart';
 import 'art_image.dart';
 import 'art_overlay.dart';
 import 'art_store.dart';
+import 'detail_tabs/related_tab.dart';
 import 'dialog_shell.dart';
 import 'library_toolbar.dart';
 
@@ -261,42 +266,74 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
   }
 
   Widget _body() {
-    if (widget.game.vndbId == null) {
+    if (_tab == _ArtTab.background && widget.game.vndbId == null) {
       return _note('No VNDB id, so pick a file.');
     }
+    if (_tab == _ArtTab.cover && widget.game.vndbId == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _note('No VNDB id, so pick a file.'),
+          _steamGridDbSection(),
+        ],
+      );
+    }
+    // One FutureBuilder for both tabs, so a tab switch keeps the snapshot.
     return FutureBuilder<ArtCandidates>(
       future: _art,
       builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Padding(
-            padding: const EdgeInsets.only(top: 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("Couldn't reach VNDB."),
-                const SizedBox(height: 12),
-                BrandGlassButton(
-                  height: 40,
-                  expand: false,
-                  onPressed: () => setState(_load),
-                  label: const Text('Try again'),
-                ),
-              ],
-            ),
-          );
-        }
-        final art = snapshot.data;
-        if (art == null) {
-          return const Padding(
-            padding: EdgeInsets.only(top: 48),
-            child: Center(child: TsumigeLogoShimmer(size: 48)),
-          );
-        }
-        return _tab == _ArtTab.cover
-            ? _coverSections(art)
-            : _backgroundSections(art);
+        final vndb = _vndbSnapshot(
+          snapshot,
+          background: _tab == _ArtTab.background,
+        );
+        if (_tab == _ArtTab.background) return vndb;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [vndb, _steamGridDbSection()],
+        );
       },
     );
+  }
+
+  Widget _steamGridDbSection() => _SteamGridDbSection(
+    game: widget.game,
+    selectedUrl: _coverPick is _RemotePick
+        ? (_coverPick as _RemotePick).art.url
+        : null,
+    isCurrent: _isCurrentCover,
+    onPick: (art) => setState(() => _coverPick = _RemotePick(art)),
+  );
+
+  Widget _vndbSnapshot(
+    AsyncSnapshot<ArtCandidates> snapshot, {
+    required bool background,
+  }) {
+    if (snapshot.hasError) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("Couldn't reach VNDB."),
+            const SizedBox(height: 12),
+            BrandGlassButton(
+              height: 40,
+              expand: false,
+              onPressed: () => setState(_load),
+              label: const Text('Try again'),
+            ),
+          ],
+        ),
+      );
+    }
+    final art = snapshot.data;
+    if (art == null) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 48),
+        child: Center(child: TsumigeLogoShimmer(size: 48)),
+      );
+    }
+    return background ? _backgroundSections(art) : _coverSections(art);
   }
 
   Widget _note(String text) {
@@ -665,6 +702,550 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
       ),
     );
   }
+}
+
+/// SteamGridDB covers on the Cover tab. Loads independently of VNDB so one
+/// source never blocks the other.
+class _SteamGridDbSection extends ConsumerStatefulWidget {
+  const _SteamGridDbSection({
+    required this.game,
+    required this.selectedUrl,
+    required this.isCurrent,
+    required this.onPick,
+  });
+
+  final Game game;
+  final String? selectedUrl;
+  final bool Function(ArtCandidate) isCurrent;
+  final void Function(ArtCandidate) onPick;
+
+  @override
+  ConsumerState<_SteamGridDbSection> createState() =>
+      _SteamGridDbSectionState();
+}
+
+class _SteamGridDbSectionState extends ConsumerState<_SteamGridDbSection> {
+  var _editingKey = false;
+  late final TextEditingController _keyController;
+  var _loading = false;
+  String? _error;
+  List<int>? _steamIds;
+  List<SteamGridDbGame>? _search;
+  int? _selectedSearchId;
+  var _grids = const <ArtCandidate>[];
+  var _loadedFor = '';
+  var _generation = 0;
+  late final ProviderSubscription<String> _keySub;
+
+  @override
+  void initState() {
+    super.initState();
+    _keyController = TextEditingController();
+    _keyController.addListener(() => setState(() {}));
+    _keySub = ref.listenManual<String>(steamGridDbKeyProvider, (
+      previous,
+      next,
+    ) {
+      if (!mounted) return;
+      final wasEmpty = (previous ?? '').trim().isEmpty;
+      final isEmpty = next.trim().isEmpty;
+      if (wasEmpty && isEmpty) return;
+      if (isEmpty) {
+        setState(_reset);
+      } else if (!_editingKey) {
+        setState(() => _loadedFor = '${widget.game.id}|${next.trim()}');
+        unawaited(_load());
+      }
+    });
+    if (ref.read(steamGridDbKeyProvider).trim().isNotEmpty) {
+      _loadedFor =
+          '${widget.game.id}|${ref.read(steamGridDbKeyProvider).trim()}';
+      Future.microtask(_load);
+    }
+  }
+
+  @override
+  void dispose() {
+    _keySub.close();
+    _keyController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(_SteamGridDbSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.game.id != widget.game.id) {
+      _reset();
+      if (ref.read(steamGridDbKeyProvider).trim().isNotEmpty) {
+        _loadedFor =
+            '${widget.game.id}|${ref.read(steamGridDbKeyProvider).trim()}';
+        Future.microtask(_load);
+      }
+    }
+  }
+
+  void _reset() {
+    _generation++;
+    _editingKey = false;
+    _loading = false;
+    _error = null;
+    _steamIds = null;
+    _search = null;
+    _selectedSearchId = null;
+    _grids = const [];
+    _loadedFor = '';
+  }
+
+  Future<void> _load() async {
+    final client = ref.read(steamGridDbClientProvider);
+    if (client == null) return;
+    final generation = ++_generation;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final game = widget.game;
+      List<int> ids = const [];
+      if (game.launch.steamAppId != null) {
+        ids = [game.launch.steamAppId!];
+      } else if (game.vndbId != null) {
+        try {
+          ids = await ref
+              .read(vndbSearchClientProvider)
+              .fetchSteamAppIds(game.vndbId!);
+        } catch (_) {
+          ids = const [];
+        }
+      }
+      if (!mounted || generation != _generation) return;
+      if (ids.isNotEmpty) {
+        final merged = <ArtCandidate>[];
+        final seen = <String>{};
+        for (final id in ids) {
+          final arts = await client.gridsForSteamApp(id);
+          if (!mounted || generation != _generation) return;
+          for (final art in arts) {
+            if (seen.add(art.url)) merged.add(art);
+          }
+        }
+        if (!mounted || generation != _generation) return;
+        setState(() {
+          _loading = false;
+          _steamIds = ids;
+          _search = null;
+          _grids = merged;
+        });
+      } else {
+        final results = await client.searchGames(game.title);
+        if (!mounted || generation != _generation) return;
+        final folded = normalizeGridTitle(game.title);
+        int? selected;
+        for (final result in results) {
+          if (normalizeGridTitle(result.name) == folded) {
+            selected = result.id;
+            break;
+          }
+        }
+        setState(() {
+          _steamIds = const [];
+          _search = results;
+          _selectedSearchId = selected;
+        });
+        if (selected != null) {
+          await _loadSearchGrids(client, selected);
+        } else {
+          if (!mounted || generation != _generation) return;
+          setState(() {
+            _loading = false;
+            _grids = const [];
+          });
+        }
+      }
+    } on SteamGridDbBadKeyException {
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _loading = false;
+        _error = 'badKey';
+      });
+    } catch (_) {
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _loading = false;
+        _error = 'network';
+      });
+    }
+  }
+
+  Future<void> _loadSearchGrids(SteamGridDbClient client, int gameId) async {
+    final generation = ++_generation;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final grids = await client.gridsForGame(gameId);
+      if (!mounted || generation != _generation) return;
+      final seen = <String>{};
+      setState(() {
+        _loading = false;
+        _grids = [
+          for (final art in grids)
+            if (seen.add(art.url)) art,
+        ];
+      });
+    } on SteamGridDbBadKeyException {
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _loading = false;
+        _error = 'badKey';
+      });
+    } catch (_) {
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _loading = false;
+        _error = 'network';
+      });
+    }
+  }
+
+  void _selectSearch(int id) {
+    final client = ref.read(steamGridDbClientProvider);
+    if (client == null) return;
+    setState(() => _selectedSearchId = id);
+    unawaited(_loadSearchGrids(client, id));
+  }
+
+  void _saveKey() {
+    final next = _keyController.text;
+    final unchanged =
+        ref.read(steamGridDbKeyProvider).trim() == next.trim() &&
+        next.trim().isNotEmpty;
+    _keyController.clear();
+    setState(() => _editingKey = false);
+    ref.read(steamGridDbKeyProvider.notifier).set(next);
+    if (unchanged) {
+      setState(
+        () => _loadedFor = '${widget.game.id}|${next.trim()}',
+      );
+      unawaited(_load());
+    }
+  }
+
+  void _cancelKeyEdit() {
+    _keyController.clear();
+    setState(() => _editingKey = false);
+    final key = ref.read(steamGridDbKeyProvider).trim();
+    if (key.isNotEmpty && _loadedFor != '${widget.game.id}|$key') {
+      setState(() => _loadedFor = '${widget.game.id}|$key');
+      unawaited(_load());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final key = ref.watch(steamGridDbKeyProvider);
+    final hasKey = key.trim().isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 18, bottom: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'SteamGridDB',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              if (_gridCount() != null)
+                Text(
+                  '${_gridCount()}',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (_editingKey) _keyForm(scheme),
+        if (!_editingKey && !hasKey) _noKeyNote(scheme),
+        if (!_editingKey && hasKey) ..._keyedBody(scheme),
+      ],
+    );
+  }
+
+  int? _gridCount() {
+    if (_error != null || _steamIds == null && _search == null) return null;
+    if (_search != null && _selectedSearchId == null) return null;
+    return _grids.length;
+  }
+
+  Widget _noKeyNote(ColorScheme scheme) {
+    return _DashedOutline(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Covers from SteamGridDB need your own free API key. '
+              'Get one in your SteamGridDB preferences.',
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 12),
+            BrandGlassButton(
+              key: const Key('sgdb-set-key'),
+              height: 40,
+              expand: false,
+              onPressed: () => setState(() => _editingKey = true),
+              label: const Text('Set API key'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _keyForm(ColorScheme scheme) {
+    return _DashedOutline(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              key: const Key('sgdb-key-field'),
+              controller: _keyController,
+              obscureText: true,
+              decoration: InputDecoration(
+                hintText: 'Paste your SteamGridDB API key',
+                hintStyle: TextStyle(color: scheme.onSurfaceVariant),
+                border: InputBorder.none,
+                isDense: true,
+              ),
+              onSubmitted: (_) {
+                if (_keyController.text.trim().isNotEmpty) _saveKey();
+              },
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () => ref
+                      .read(vndbUrlOpenerProvider)(
+                        Uri.parse(steamGridDbPreferencesUrl),
+                      ),
+                  child: const Text('Get a key'),
+                ),
+                const Spacer(),
+                BrandGlassButton(
+                  key: const Key('sgdb-key-cancel'),
+                  height: 40,
+                  expand: false,
+                  onPressed: _cancelKeyEdit,
+                  label: const Text('Cancel'),
+                ),
+                const SizedBox(width: 10),
+                BrandButton(
+                  key: const Key('sgdb-key-save'),
+                  height: 40,
+                  expand: false,
+                  onPressed: _keyController.text.trim().isEmpty
+                      ? null
+                      : _saveKey,
+                  label: const Text('Save'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _keyedBody(ColorScheme scheme) {
+    if (_error == 'badKey') {
+      return [
+        const Text("SteamGridDB didn't accept the key."),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: BrandGlassButton(
+            key: const Key('sgdb-set-key'),
+            height: 40,
+            expand: false,
+            onPressed: () => setState(() => _editingKey = true),
+            label: const Text('Set API key'),
+          ),
+        ),
+      ];
+    }
+    if (_error != null) {
+      return [
+        const Text("Couldn't reach SteamGridDB."),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: BrandGlassButton(
+            key: const Key('sgdb-retry'),
+            height: 40,
+            expand: false,
+            onPressed: _load,
+            label: const Text('Try again'),
+          ),
+        ),
+      ];
+    }
+    if (_steamIds == null && _search == null) {
+      return const [
+        Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: TsumigeLogoShimmer(size: 32),
+          ),
+        ),
+      ];
+    }
+    if (_steamIds != null && _steamIds!.isNotEmpty) {
+      if (!_loading && _grids.isEmpty) {
+        return const [Text('No SteamGridDB covers for this game.')];
+      }
+      return [_grid(scheme)];
+    }
+    final search = _search ?? const <SteamGridDbGame>[];
+    if (search.isEmpty) {
+      return const [Text('No SteamGridDB covers for this game.')];
+    }
+    return [
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final result in search) _chip(scheme, result),
+        ],
+      ),
+      const SizedBox(height: 10),
+      if (_selectedSearchId == null)
+        const Text('Pick the matching game.')
+      else if (!_loading && _grids.isEmpty)
+        const Text('No SteamGridDB covers for this game.')
+      else
+        _grid(scheme),
+      if (_loading && _selectedSearchId != null && _grids.isEmpty)
+        const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: TsumigeLogoShimmer(size: 32),
+          ),
+        ),
+    ];
+  }
+
+  Widget _chip(ColorScheme scheme, SteamGridDbGame result) {
+    final selected = result.id == _selectedSearchId;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => _selectSearch(result.id),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected ? scheme.primary : scheme.outlineVariant,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Text(
+          result.name,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            color: selected ? scheme.primary : scheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _grid(ColorScheme scheme) {
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 5,
+      crossAxisSpacing: 14,
+      mainAxisSpacing: 14,
+      childAspectRatio: 2 / 3,
+      children: [
+        for (final art in _grids)
+          _ArtTile(
+            key: ValueKey('art-${art.url}'),
+            art: art,
+            selected: widget.selectedUrl == art.url,
+            current: widget.isCurrent(art),
+            onTap: () => widget.onPick(art),
+          ),
+      ],
+    );
+  }
+}
+
+/// Dashed rounded outline for the SteamGridDB key note and key form.
+class _DashedOutline extends StatelessWidget {
+  const _DashedOutline({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return CustomPaint(
+      painter: _DashPainter(scheme.outlineVariant),
+      child: child,
+    );
+  }
+}
+
+class _DashPainter extends CustomPainter {
+  _DashPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          Offset.zero & size,
+          const Radius.circular(10),
+        ),
+      );
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    const dash = 6.0;
+    const gap = 4.0;
+    for (final metric in path.computeMetrics()) {
+      var start = 0.0;
+      while (start < metric.length) {
+        final end = (start + dash).clamp(0.0, metric.length);
+        canvas.drawPath(metric.extractPath(start, end), paint);
+        start += dash + gap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashPainter old) => old.color != color;
 }
 
 /// One VNDB image in a picker grid, with the grid ring and a size badge.

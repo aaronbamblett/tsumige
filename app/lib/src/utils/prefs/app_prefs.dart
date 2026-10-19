@@ -110,6 +110,15 @@ class LaunchUmuGameId extends _$LaunchUmuGameId with PrefsMixin<String> {
   void set(String value) => state = value;
 }
 
+/// SteamGridDB API key, user-supplied. Empty means the source is off.
+@riverpod
+class SteamGridDbKey extends _$SteamGridDbKey with PrefsMixin<String> {
+  @override
+  String build() => initStringWithDefault(keys.PrefKey.steamGridDbKey);
+
+  void set(String value) => state = value.trim();
+}
+
 /// Info tab sections shown on the details panel. Stored as a string list, a
 /// missing key or any unknown entry means every field is shown.
 @riverpod

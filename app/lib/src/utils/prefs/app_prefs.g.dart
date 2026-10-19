@@ -588,6 +588,64 @@ abstract class _$LaunchUmuGameId extends $Notifier<String> {
   }
 }
 
+/// SteamGridDB API key, user-supplied. Empty means the source is off.
+
+@ProviderFor(SteamGridDbKey)
+final steamGridDbKeyProvider = SteamGridDbKeyProvider._();
+
+/// SteamGridDB API key, user-supplied. Empty means the source is off.
+final class SteamGridDbKeyProvider
+    extends $NotifierProvider<SteamGridDbKey, String> {
+  /// SteamGridDB API key, user-supplied. Empty means the source is off.
+  SteamGridDbKeyProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'steamGridDbKeyProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$steamGridDbKeyHash();
+
+  @$internal
+  @override
+  SteamGridDbKey create() => SteamGridDbKey();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(String value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<String>(value),
+    );
+  }
+}
+
+String _$steamGridDbKeyHash() => r'18684dedf18e948deca7b701a74a8558b1cbffd4';
+
+/// SteamGridDB API key, user-supplied. Empty means the source is off.
+
+abstract class _$SteamGridDbKey extends $Notifier<String> {
+  String build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<String, String>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<String, String>,
+              String,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
 /// Info tab sections shown on the details panel. Stored as a string list, a
 /// missing key or any unknown entry means every field is shown.
 

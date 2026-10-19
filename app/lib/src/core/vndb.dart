@@ -449,6 +449,41 @@ class VndbClient {
     );
   }
 
+  /// Steam app ids linked to [vndbId] through its releases' extlinks,
+  /// deduplicated in first-seen order.
+  Future<List<int>> fetchSteamAppIds(String vndbId) async {
+    final out = <int>[];
+    final seen = <int>{};
+    for (var page = 1;; page++) {
+      final result = await _postPage('/release', {
+        'filters': [
+          'and',
+          ['vn', '=', ['id', '=', vndbId]],
+          ['extlink', '=', 'steam'],
+        ],
+        'fields': 'extlinks.name,extlinks.id',
+        'results': 100,
+        'page': page,
+      });
+      for (final release in result.results) {
+        final extlinks = release['extlinks'];
+        if (extlinks is! List) continue;
+        for (final link in extlinks) {
+          if (link is! Map || link['name'] != 'steam') continue;
+          final raw = link['id'];
+          final appId = raw is int
+              ? raw
+              : raw is String
+              ? int.tryParse(raw)
+              : null;
+          if (appId != null && seen.add(appId)) out.add(appId);
+        }
+      }
+      if (!result.more) break;
+    }
+    return out;
+  }
+
   /// VN ids, among [ids], that have at least one release with `has_ero`.
   Future<Set<String>> fetchAdultVnIds(List<String> ids) async {
     final out = <String>{};

@@ -9,10 +9,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../../core/steamgriddb.dart';
 import '../../../../core/store.dart' as core;
+import '../../../../utils/prefs/app_prefs.dart';
 import '../../../../utils/theme/brand.dart';
 import '../../../../utils/toast.dart';
 import '../../../library/data/library_repository.dart';
+import '../../../library/presentation/widgets/detail_tabs/related_tab.dart';
 import 'settings_widgets.dart';
 
 class LibrarySection extends ConsumerStatefulWidget {
@@ -121,6 +124,39 @@ class _LibrarySectionState extends ConsumerState<LibrarySection> {
               onPressed: _refreshing ? null : _refreshRatings,
               label: const Text('Refresh now'),
             ),
+          ),
+        ),
+        SettingsGroup(
+          rowKey: const Key('settings-row-steamgriddb'),
+          title: 'SteamGridDB',
+          subtitle:
+              'Optional. Adds covers from steamgriddb.com to Change art. Uses your own API key, stored on this computer.',
+          control: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              SizedBox(
+                width: 220,
+                child: PrefTextField(
+                  key: const Key('settings-steamgriddb-key'),
+                  initial: ref.watch(steamGridDbKeyProvider),
+                  obscureText: true,
+                  onSave: (text) =>
+                      ref.read(steamGridDbKeyProvider.notifier).set(text),
+                ),
+              ),
+              TextButton(
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: () => ref.read(vndbUrlOpenerProvider)(
+                  Uri.parse(steamGridDbPreferencesUrl),
+                ),
+                child: const Text('Get a key'),
+              ),
+            ],
           ),
         ),
         SettingsGroup(
