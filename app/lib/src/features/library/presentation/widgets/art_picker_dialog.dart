@@ -168,7 +168,10 @@ class _ArtPickerDialogState extends ConsumerState<ArtPickerDialog> {
   void _close() => Navigator.of(context).pop();
 
   Future<void> _pickFile() async {
-    final picked = await ref.read(coverPickerProvider)();
+    final picked = await runPicker(
+      context,
+      () => ref.read(coverPickerProvider)(),
+    );
     if (picked == null || picked.isEmpty || !mounted) return;
     if (picked.startsWith('/run/user/')) {
       Toast(context).show(portalPathMessage);

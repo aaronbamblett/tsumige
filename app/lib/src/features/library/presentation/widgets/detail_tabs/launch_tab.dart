@@ -533,11 +533,14 @@ class _ExecutableField extends ConsumerWidget {
 
   Future<void> _choose(BuildContext context, WidgetRef ref) async {
     final current = game.launch.executable;
-    final picked = await ref.read(pathPickerProvider)(
-      initialDirectory: current != null && current.isNotEmpty
-          ? p.dirname(current)
-          : null,
-      mode: PathPickMode.file,
+    final picked = await runPicker(
+      context,
+      () => ref.read(pathPickerProvider)(
+        initialDirectory: current != null && current.isNotEmpty
+            ? p.dirname(current)
+            : null,
+        mode: PathPickMode.file,
+      ),
     );
     if (picked == null || picked.isEmpty || !context.mounted) return;
     if (isPortalPath(picked)) {
@@ -659,11 +662,14 @@ class _WineRunnerFieldState extends ConsumerState<_WineRunnerField> {
 
   Future<void> _choose(BuildContext context, WidgetRef ref) async {
     final stored = widget.game.launch.runner;
-    final picked = await ref.read(pathPickerProvider)(
-      initialDirectory: stored != null && stored.isNotEmpty
-          ? p.dirname(stored)
-          : null,
-      mode: PathPickMode.file,
+    final picked = await runPicker(
+      context,
+      () => ref.read(pathPickerProvider)(
+        initialDirectory: stored != null && stored.isNotEmpty
+            ? p.dirname(stored)
+            : null,
+        mode: PathPickMode.file,
+      ),
     );
     if (picked == null || picked.isEmpty || !context.mounted) return;
     if (isPortalPath(picked)) {
@@ -778,8 +784,9 @@ class _ProtonRunnerFieldState extends ConsumerState<_ProtonRunnerField> {
   }
 
   Future<void> _choose(BuildContext context, WidgetRef ref) async {
-    final picked = await ref.read(pathPickerProvider)(
-      mode: PathPickMode.folder,
+    final picked = await runPicker(
+      context,
+      () => ref.read(pathPickerProvider)(mode: PathPickMode.folder),
     );
     if (picked == null || picked.isEmpty || !context.mounted) return;
     if (isPortalPath(picked)) {
@@ -901,8 +908,9 @@ class _PrefixFieldState extends ConsumerState<_PrefixField> {
   }
 
   Future<void> _choose(BuildContext context, WidgetRef ref) async {
-    final picked = await ref.read(pathPickerProvider)(
-      mode: PathPickMode.folder,
+    final picked = await runPicker(
+      context,
+      () => ref.read(pathPickerProvider)(mode: PathPickMode.folder),
     );
     if (picked == null || picked.isEmpty || !context.mounted) return;
     if (isPortalPath(picked)) {

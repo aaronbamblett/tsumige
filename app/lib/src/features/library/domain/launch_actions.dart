@@ -21,6 +21,7 @@ import '../../../utils/platform/platform_runtime.dart';
 import '../../../utils/prefs/app_prefs.dart';
 import '../../../utils/toast.dart';
 import '../data/library_repository.dart';
+import 'game_editor.dart';
 import 'running_games.dart';
 
 part 'launch_actions.g.dart';
@@ -106,7 +107,10 @@ class LaunchActions {
       _run(context, game);
 
   Future<void> runExeInPrefix(BuildContext context, core.Game game) async {
-    final picked = await _ref.read(exePickerProvider)(game);
+    final picked = await runPicker(
+      context,
+      () => _ref.read(exePickerProvider)(game),
+    );
     if (picked == null || !context.mounted) return;
     await _run(context, game, overrideExe: picked);
   }

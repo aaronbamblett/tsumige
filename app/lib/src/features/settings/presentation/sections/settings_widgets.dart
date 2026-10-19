@@ -21,7 +21,10 @@ final folderOpenerProvider = Provider<Future<bool> Function(Uri)>(
 
 /// Picks a folder, rejecting Flatpak-portal paths with a toast.
 Future<String?> pickFolderOrNull(WidgetRef ref, BuildContext context) async {
-  final picked = await ref.read(pathPickerProvider)(mode: PathPickMode.folder);
+  final picked = await runPicker(
+    context,
+    () => ref.read(pathPickerProvider)(mode: PathPickMode.folder),
+  );
   if (picked == null || picked.isEmpty || !context.mounted) return null;
   if (isPortalPath(picked)) {
     Toast(context).show(portalPathMessage);

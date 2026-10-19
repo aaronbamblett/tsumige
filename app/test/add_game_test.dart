@@ -142,6 +142,7 @@ Future<(_FakeRepository, _Http, ProviderContainer)> _pump(
   bool openMatch = true,
   String Function(String folder)? pickFolder,
   FolderGameCount? countGames,
+  PlatformException? pickError,
 }) async {
   tester.view.physicalSize = surface;
   tester.view.devicePixelRatio = 1.0;
@@ -170,10 +171,12 @@ Future<(_FakeRepository, _Http, ProviderContainer)> _pump(
           countGames ?? countImportGames,
         ),
         pathPickerProvider.overrideWithValue(
-          ({String? initialDirectory, PathPickMode? mode}) async =>
-              mode == PathPickMode.file
-                  ? exe
-                  : (pickFolder?.call(folder) ?? folder),
+          ({String? initialDirectory, PathPickMode? mode}) async {
+            if (pickError != null) throw pickError;
+            return mode == PathPickMode.file
+                ? exe
+                : (pickFolder?.call(folder) ?? folder);
+          },
         ),
       ],
       child: MaterialApp(
@@ -1045,6 +1048,21 @@ void main() {
     expect(find.byKey(const Key('import-close')), findsOneWidget);
     expect(find.text('Alpha'), findsWidgets);
     expect(find.text('Beta'), findsWidgets);
+  });
+
+  testWidgets('a failing folder dialog shows a toast instead of nothing', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      openMatch: false,
+      pickError: PlatformException(code: 'picker'),
+    );
+    await tester.tap(find.byKey(const Key('add-game-choose-folder')));
+    await tester.pumpAndSettle();
+    expect(find.text("Couldn't open the file dialog."), findsOneWidget);
+    expect(find.text('Match on VNDB'), findsNothing);
+    await _drainToast(tester);
   });
 
   testWidgets('Choose folder with several games opens the import dialog',

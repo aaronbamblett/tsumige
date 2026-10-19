@@ -284,7 +284,10 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
   void _pick(VnSearchResult result) => setState(() => _picked = result);
 
   Future<String?> _pickGameFile() async {
-    final picked = await ref.read(pathPickerProvider)(mode: PathPickMode.file);
+    final picked = await runPicker(
+      context,
+      () => ref.read(pathPickerProvider)(mode: PathPickMode.file),
+    );
     if (picked == null || picked.isEmpty || !mounted) return null;
     if (isPortalPath(picked)) {
       Toast(context).show(portalPathMessage);
@@ -295,8 +298,9 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
 
   Future<void> _chooseFolder() async {
     if (_checkingFolder) return;
-    final picked = await ref.read(pathPickerProvider)(
-      mode: PathPickMode.folder,
+    final picked = await runPicker(
+      context,
+      () => ref.read(pathPickerProvider)(mode: PathPickMode.folder),
     );
     if (picked == null || picked.isEmpty || !mounted) return;
     if (isPortalPath(picked)) {

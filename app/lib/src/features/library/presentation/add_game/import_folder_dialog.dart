@@ -260,8 +260,9 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   }
 
   Future<void> _browse({bool append = false}) async {
-    final picked = await ref.read(pathPickerProvider)(
-      mode: PathPickMode.folder,
+    final picked = await runPicker(
+      context,
+      () => ref.read(pathPickerProvider)(mode: PathPickMode.folder),
     );
     if (!mounted) return;
     if (picked == null || picked.isEmpty) {
