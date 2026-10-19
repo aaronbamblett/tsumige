@@ -243,6 +243,44 @@ void main() {
     expect(sortEpisodeIds(members), ['c', 'b', 'a']);
   });
 
+  test('dismissed suggestions round trip through the library file', () async {
+    final dir = DataDir(
+        (await Directory.systemTemp.createTemp('tsumige-groups-')).path);
+    addTearDown(() => Directory(dir.root).deleteSync(recursive: true));
+    resetBackupSessionForTest();
+    final games = [game(const Uuid().v4(), 'Ep 1'), game(const Uuid().v4(), 'Ep 2')];
+    final library = Library(
+      games: games,
+      dismissedGroupSuggestions: {'a,b', 'c,d'},
+    );
+    await saveLibrary(dir, LoadedLibrary(library: library));
+    final saved = jsonDecode(await dir.libraryJson.readAsString())
+        as Map<String, Object?>;
+    expect(saved['dismissed_group_suggestions'], ['a,b', 'c,d']);
+    final again = await loadLibrary(dir);
+    expect(again.library.dismissedGroupSuggestions, {'a,b', 'c,d'});
+  });
+
+  test('no dismissed suggestions omits the key and loads empty', () async {
+    final dir = DataDir(
+        (await Directory.systemTemp.createTemp('tsumige-groups-')).path);
+    addTearDown(() => Directory(dir.root).deleteSync(recursive: true));
+    resetBackupSessionForTest();
+    final id = const Uuid().v4();
+    await dir.libraryJson.writeAsString(jsonEncode({
+      'schema_version': 1,
+      'games': [
+        {'id': id, 'title': 'Solo'}
+      ],
+    }));
+    final loaded = await loadLibrary(dir);
+    expect(loaded.library.dismissedGroupSuggestions, isEmpty);
+    await saveLibrary(dir, loaded);
+    final saved = jsonDecode(await dir.libraryJson.readAsString())
+        as Map<String, Object?>;
+    expect(saved.containsKey('dismissed_group_suggestions'), isFalse);
+  });
+
   test('short name strips the group name, full title when empty', () {
     final members = [
       game('a', '9-nine- Episode 1'),

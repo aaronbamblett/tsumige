@@ -707,3 +707,70 @@ abstract class _$DetailFields extends $Notifier<Set<String>> {
     return element.handleCreate(ref, build);
   }
 }
+
+/// Suggestion keys the grouping notice was dismissed with. The notice hides
+/// while the current suggestion keys equal these; any change shows it again.
+/// Stored as a string list; a missing key means it was never dismissed.
+
+@ProviderFor(DismissedSuggestionNotice)
+final dismissedSuggestionNoticeProvider = DismissedSuggestionNoticeProvider._();
+
+/// Suggestion keys the grouping notice was dismissed with. The notice hides
+/// while the current suggestion keys equal these; any change shows it again.
+/// Stored as a string list; a missing key means it was never dismissed.
+final class DismissedSuggestionNoticeProvider
+    extends $NotifierProvider<DismissedSuggestionNotice, Set<String>> {
+  /// Suggestion keys the grouping notice was dismissed with. The notice hides
+  /// while the current suggestion keys equal these; any change shows it again.
+  /// Stored as a string list; a missing key means it was never dismissed.
+  DismissedSuggestionNoticeProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'dismissedSuggestionNoticeProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$dismissedSuggestionNoticeHash();
+
+  @$internal
+  @override
+  DismissedSuggestionNotice create() => DismissedSuggestionNotice();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(Set<String> value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<Set<String>>(value),
+    );
+  }
+}
+
+String _$dismissedSuggestionNoticeHash() =>
+    r'ce78dc8a2519f26ece9856df7cc1496cc4a75fe4';
+
+/// Suggestion keys the grouping notice was dismissed with. The notice hides
+/// while the current suggestion keys equal these; any change shows it again.
+/// Stored as a string list; a missing key means it was never dismissed.
+
+abstract class _$DismissedSuggestionNotice extends $Notifier<Set<String>> {
+  Set<String> build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<Set<String>, Set<String>>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<Set<String>, Set<String>>,
+              Set<String>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
