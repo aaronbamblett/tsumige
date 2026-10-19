@@ -48,6 +48,12 @@ class SelectedGameId extends _$SelectedGameId {
     state = id;
   }
 
+  /// Restores a tile id kept from before a multi-select, without re-picking
+  /// or saving: the id is already the tile (a group id when a member shows).
+  void restore(String? id) {
+    state = id;
+  }
+
   void clear() => state = null;
 }
 
@@ -59,6 +65,10 @@ class MultiSelection extends _$MultiSelection {
   /// The last clicked tile; a Shift+click selects the range from here.
   String? _anchor;
 
+  /// The single tile open when the multi-select started; [clear] puts the
+  /// pane back on it, or closes the pane when none was open.
+  String? _resumeId;
+
   @override
   List<String> build() {
     ref.listen(visibleTilesProvider, (_, next) {
@@ -67,6 +77,7 @@ class MultiSelection extends _$MultiSelection {
       final kept = [for (final id in state) if (visible.contains(id)) id];
       if (kept.length == state.length) return;
       _anchor = null;
+      _resumeId = null;
       if (kept.length == 1) {
         state = const [];
         ref.read(selectedGameIdProvider.notifier).select(kept.single);
@@ -80,6 +91,7 @@ class MultiSelection extends _$MultiSelection {
   /// A plain click collapses back to one tile: no multi-selection.
   void showSingle(String id) {
     _anchor = id;
+    _resumeId = null;
     state = const [];
   }
 
@@ -88,10 +100,13 @@ class MultiSelection extends _$MultiSelection {
   void toggle(String id) {
     _anchor = id;
     if (state.contains(id)) {
-      state = [for (final other in state) if (other != id) other];
+      final rest = [for (final other in state) if (other != id) other];
+      if (rest.isEmpty) _resumeId = null;
+      state = rest;
     } else {
       if (state.isEmpty) {
         final open = ref.read(selectedGameIdProvider);
+        _resumeId = open;
         if (open != null && open != id) {
           state = [open, id];
           return;
@@ -102,13 +117,19 @@ class MultiSelection extends _$MultiSelection {
   }
 
   /// Shift+click selects the range from the last clicked tile to [id] in
-  /// [orderedKeys] (the current grid order), inclusive. The anchor stays put
+  /// [orderedKeys] (the current grid order), inclusive. With no anchor (or a
+  /// hidden one) the open single tile anchors instead. The anchor stays put
   /// so another Shift+click re-anchors from the same tile.
   void selectRangeTo(String id, List<String> orderedKeys) {
-    final anchor = _anchor;
+    var anchor = _anchor;
+    if (anchor == null || !orderedKeys.contains(anchor)) {
+      final open = ref.read(selectedGameIdProvider);
+      if (open != null && orderedKeys.contains(open)) anchor = open;
+    }
     final a = anchor == null ? -1 : orderedKeys.indexOf(anchor);
     final b = orderedKeys.indexOf(id);
     if (b < 0) return;
+    if (state.isEmpty) _resumeId ??= ref.read(selectedGameIdProvider);
     if (a < 0) {
       _anchor = id;
       state = [id];
@@ -119,9 +140,15 @@ class MultiSelection extends _$MultiSelection {
     state = orderedKeys.sublist(from, to + 1);
   }
 
+  /// Clears the multi-select and the anchor, leaving the pane on the tile
+  /// open before the multi-select started (or closing it when none was).
+  /// Never opens the last Shift-clicked tile.
   void clear() {
     _anchor = null;
+    final resume = _resumeId;
+    _resumeId = null;
     state = const [];
+    ref.read(selectedGameIdProvider.notifier).restore(resume);
   }
 }
 
