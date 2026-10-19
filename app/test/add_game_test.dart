@@ -23,12 +23,15 @@ import 'package:tsumige/src/core/covers.dart' as core;
 import 'package:tsumige/src/core/model.dart' as core;
 import 'package:tsumige/src/core/paths.dart' as core;
 import 'package:tsumige/src/core/vndb.dart' as core;
+import 'package:tsumige/src/core/host_platform.dart';
 import 'package:tsumige/src/features/library/data/library_repository.dart';
 import 'package:tsumige/src/features/library/domain/add_game.dart';
 import 'package:tsumige/src/features/library/domain/folder_import.dart';
 import 'package:tsumige/src/features/library/domain/game_editor.dart';
 import 'package:tsumige/src/features/library/domain/selection.dart';
+import 'package:tsumige/src/features/library/domain/steam_library.dart';
 import 'package:tsumige/src/features/library/presentation/add_game/add_game_dialog.dart';
+import 'package:tsumige/src/features/library/presentation/add_game/import_folder_dialog.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/detail_tabs/info_tab.dart';
 import 'package:tsumige/src/features/settings/presentation/sections/settings_widgets.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
@@ -142,6 +145,8 @@ Future<(_FakeRepository, _Http, ProviderContainer)> _pump(
   bool openMatch = true,
   String Function(String folder)? pickFolder,
   FolderGameCount? countGames,
+  PlatformException? pickError,
+  Future<List<InstalledSteamGame>?> Function(HostPlatform)? steamGames,
 }) async {
   tester.view.physicalSize = surface;
   tester.view.devicePixelRatio = 1.0;
@@ -169,11 +174,15 @@ Future<(_FakeRepository, _Http, ProviderContainer)> _pump(
         folderGameCountProvider.overrideWithValue(
           countGames ?? countImportGames,
         ),
+        if (steamGames != null)
+          listSteamGamesProvider.overrideWithValue(steamGames),
         pathPickerProvider.overrideWithValue(
-          ({String? initialDirectory, PathPickMode? mode}) async =>
-              mode == PathPickMode.file
-                  ? exe
-                  : (pickFolder?.call(folder) ?? folder),
+          ({String? initialDirectory, PathPickMode? mode}) async {
+            if (pickError != null) throw pickError;
+            return mode == PathPickMode.file
+                ? exe
+                : (pickFolder?.call(folder) ?? folder);
+          },
         ),
       ],
       child: MaterialApp(
@@ -874,8 +883,8 @@ void main() {
     expect(find.text('Drop a game folder or file here'), findsOneWidget);
     expect(find.text('Choose folder…'), findsOneWidget);
     expect(find.text('Choose game file…'), findsOneWidget);
-    expect(find.text('Steam game'), findsOneWidget);
-    expect(find.text('By App ID'), findsOneWidget);
+    expect(find.text('Steam games'), findsOneWidget);
+    expect(find.text('Installed on this computer'), findsOneWidget);
     expect(find.text('Import folder'), findsOneWidget);
   });
 
@@ -896,14 +905,21 @@ void main() {
     expect(search.controller!.text, 'DEMO');
   });
 
-  testWidgets('the Steam card goes to setup in Steam mode', (tester) async {
-    await _pump(tester, openMatch: false);
+  testWidgets('the Steam card opens the installed Steam games', (tester) async {
+    await _pump(tester, openMatch: false, steamGames: (_) async => []);
     await tester.tap(find.byKey(const Key('add-game-steam')));
-    await tester.pumpAndSettle();
-    expect(find.text('Details'), findsOneWidget);
-    expect(find.text('Steam App ID'), findsOneWidget);
-    expect(find.text('Game file'), findsNothing);
-    expect(find.byKey(const Key('add-game-find-vndb')), findsOneWidget);
+    for (
+      var i = 0;
+      i < 100 && find.text('No Steam games to add.').evaluate().isEmpty;
+      i++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(find.text('Select Steam games'), findsOneWidget);
+    expect(find.text('No Steam games to add.'), findsOneWidget);
   });
 
   testWidgets('the Import card opens the import dialog', (tester) async {
@@ -917,20 +933,68 @@ void main() {
   testWidgets('Find on VNDB from Steam setup returns to setup with the pick', (
     tester,
   ) async {
+    // A game folder inside a Steam library is detected as a Steam game, so
+    // its setup step carries the Steam App ID field.
+    final steamTemp = Directory.systemTemp.createTempSync(
+      'tsumige_add_steam_test_',
+    );
+    addTearDown(() => steamTemp.deleteSync(recursive: true));
+    final gameDir =
+        Directory(p.join(steamTemp.path, 'steamapps', 'common', 'DEMO'))
+          ..createSync(recursive: true);
+    File(
+      p.join(steamTemp.path, 'steamapps', 'appmanifest_480.acf'),
+    ).writeAsStringSync(
+      '"AppState"\n{\n"appid"\t\t"480"\n"name"\t\t"DEMO"\n'
+      '"installdir"\t\t"DEMO"\n}\n',
+    );
     await _pump(
       tester,
       openMatch: false,
       rows: [_row('v900017', 'DEMO', imageUrl: null)],
+      pickFolder: (_) => gameDir.path,
     );
-    await tester.tap(find.byKey(const Key('add-game-steam')));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const Key('add-game-title')), 'DEMO');
+    await _chooseFolder(tester);
+    await _next(tester);
+    // Detection reads the Steam manifest from real files, so poll with
+    // real time the way the import tests settle their disk scan.
+    for (
+      var i = 0;
+      i < 100 && find.text('Steam App ID').evaluate().isEmpty;
+      i++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(find.text('Details'), findsOneWidget);
+    expect(find.text('Steam App ID'), findsOneWidget);
+    expect(
+      tester
+          .widget<SettingsTextBox>(
+            find.byKey(const Key('add-game-steam-app-id')),
+          )
+          .controller!
+          .text,
+      '480',
+    );
     await tester.tap(find.byKey(const Key('add-game-find-vndb')));
     await tester.pumpAndSettle();
     expect(find.text('Match on VNDB'), findsOneWidget);
     await tester.tap(_resultRow('DEMO'));
     await tester.pumpAndSettle();
     await _next(tester);
+    for (
+      var i = 0;
+      i < 100 && find.text('Match on VNDB').evaluate().isNotEmpty;
+      i++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
     expect(find.text('Details'), findsOneWidget);
     expect(find.text('Steam App ID'), findsOneWidget);
     expect(find.text('DEMO'), findsWidgets);
@@ -1045,6 +1109,21 @@ void main() {
     expect(find.byKey(const Key('import-close')), findsOneWidget);
     expect(find.text('Alpha'), findsWidgets);
     expect(find.text('Beta'), findsWidgets);
+  });
+
+  testWidgets('a failing folder dialog shows a toast instead of nothing', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      openMatch: false,
+      pickError: PlatformException(code: 'picker'),
+    );
+    await tester.tap(find.byKey(const Key('add-game-choose-folder')));
+    await tester.pumpAndSettle();
+    expect(find.text("Couldn't open the file dialog."), findsOneWidget);
+    expect(find.text('Match on VNDB'), findsNothing);
+    await _drainToast(tester);
   });
 
   testWidgets('Choose folder with several games opens the import dialog',

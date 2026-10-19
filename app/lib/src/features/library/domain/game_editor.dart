@@ -5,6 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:uuid/uuid.dart';
@@ -305,6 +306,22 @@ class GameEditor {
     } else {
       Toast(context).show(message);
     }
+  }
+}
+
+const pickerFailedMessage = "Couldn't open the file dialog.";
+
+/// Runs a native picker; a platform failure is logged and toasted, not thrown.
+Future<T?> runPicker<T>(
+  BuildContext context,
+  Future<T?> Function() pick,
+) async {
+  try {
+    return await pick();
+  } on PlatformException catch (e) {
+    debugPrint('File picker failed: ${e.code} ${e.message}');
+    if (context.mounted) Toast(context).showError(pickerFailedMessage);
+    return null;
   }
 }
 

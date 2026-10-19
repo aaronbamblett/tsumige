@@ -30,6 +30,38 @@ class RegSteamRegistry implements SteamRegistry {
   }
 }
 
+/// The Steam install path from `reg query HKCU\Software\Valve\Steam
+/// /v SteamPath` output, or null when it is missing.
+Future<String?> readWindowsSteamPathFromRegistry() async {
+  try {
+    final result = await Process.run('reg', [
+      'query',
+      r'HKCU\Software\Valve\Steam',
+      '/v',
+      'SteamPath',
+    ]);
+    if (result.exitCode != 0) return null;
+    return parseSteamPath(result.stdout as String);
+  } catch (_) {
+    return null;
+  }
+}
+
+/// The install path in `reg query ... /v SteamPath` output, or null when it
+/// is missing. The value itself can hold spaces, so it is read as everything
+/// after `REG_SZ` rather than split on whitespace.
+String? parseSteamPath(String output) {
+  for (final line in output.split('\n')) {
+    final trimmed = line.trim();
+    if (!trimmed.startsWith('SteamPath')) continue;
+    final index = trimmed.indexOf('REG_SZ');
+    if (index == -1) continue;
+    final value = trimmed.substring(index + 'REG_SZ'.length).trim();
+    return value.isEmpty ? null : value;
+  }
+  return null;
+}
+
 /// The app id in `reg query` output, or null when it is missing or 0.
 int? parseRunningAppId(String output) {
   for (final line in output.split('\n')) {

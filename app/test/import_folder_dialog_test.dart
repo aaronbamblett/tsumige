@@ -396,14 +396,31 @@ Finder _dialogTitle(String title) => find.byWidgetPredicate(
 
 void main() {
   testWidgets(
-    'rows show confident matches with their VNDB title and the rest with the folder name',
+    'rows keep the folder name with the VNDB title below the match',
     (tester) async {
       final h = await _openAndMatch(tester);
       expect(find.text('Select games to import'), findsOneWidget);
       expect(find.widgetWithText(BrandButton, 'Add games'), findsOneWidget);
-      expect(find.text('DEMO'), findsOneWidget);
+      // An exact match shows the folder name on the main line and the
+      // VNDB title below it.
+      expect(find.text('DEMO'), findsWidgets);
+      // A confident match keeps the folder name on the main line, with
+      // the VNDB title below it.
+      expect(
+        tester
+            .widget<Text>(
+              find.descendant(
+                of: find.byKey(const Key('import-name-3')),
+                matching: find.byType(Text),
+              ),
+            )
+            .data,
+        'Rena sensei',
+      );
       expect(find.text('Rena-sensei to Pool Ryokou'), findsOneWidget);
-      expect(find.text('Solo Quest'), findsNothing);
+      // A best match keeps the folder name on the main line, with the
+      // candidate title below it.
+      expect(find.text('Solo Quest'), findsOneWidget);
       expect(find.text('Solo Quest Remake'), findsOneWidget);
       expect(find.text('Best match'), findsOneWidget);
       expect(find.text('Nothing Here'), findsOneWidget);
@@ -1006,13 +1023,16 @@ void main() {
     owned.complete();
     await _settle(tester);
     expect(_dialogTitle('Search VNDB'), findsNothing);
+    // The picked row keeps its folder name on the main line, with the
+    // picked VNDB title below it.
     expect(
       find.descendant(
         of: find.byKey(const Key('import-name-2')),
-        matching: find.text('Solo Quest Remake'),
+        matching: find.text('Owned Game'),
       ),
       findsOneWidget,
     );
+    expect(find.text('Solo Quest Remake'), findsOneWidget);
   });
 
   testWidgets('closing the dialog mid-lookup sends no more VNDB searches', (

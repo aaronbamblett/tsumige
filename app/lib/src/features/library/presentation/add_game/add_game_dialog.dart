@@ -284,7 +284,10 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
   void _pick(VnSearchResult result) => setState(() => _picked = result);
 
   Future<String?> _pickGameFile() async {
-    final picked = await ref.read(pathPickerProvider)(mode: PathPickMode.file);
+    final picked = await runPicker(
+      context,
+      () => ref.read(pathPickerProvider)(mode: PathPickMode.file),
+    );
     if (picked == null || picked.isEmpty || !mounted) return null;
     if (isPortalPath(picked)) {
       Toast(context).show(portalPathMessage);
@@ -295,8 +298,9 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
 
   Future<void> _chooseFolder() async {
     if (_checkingFolder) return;
-    final picked = await ref.read(pathPickerProvider)(
-      mode: PathPickMode.folder,
+    final picked = await runPicker(
+      context,
+      () => ref.read(pathPickerProvider)(mode: PathPickMode.folder),
     );
     if (picked == null || picked.isEmpty || !mounted) return;
     if (isPortalPath(picked)) {
@@ -414,20 +418,10 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
     });
   }
 
-  void _startSteam() {
-    _title.text = '';
-    _description.text = '';
-    _exe.text = '';
-    _steamAppId.text = '';
-    setState(() {
-      _tagList = [];
-      _picked = null;
-      _manual = true;
-      _mode = LaunchMode.steam;
-      _formError = null;
-      _setupBack = _AddStep.start;
-      _step = _AddStep.setup;
-    });
+  Future<void> _openSteam() async {
+    final result = await showSteamGamesDialog(context);
+    if (!mounted || result == null || result == ImportFolderResult.back) return;
+    Navigator.of(context).pop();
   }
 
   void _findOnVndb() {
@@ -704,9 +698,9 @@ class _AddGameDialogState extends ConsumerState<AddGameDialog> {
                   context,
                   key: const Key('add-game-steam'),
                   icon: Icons.sports_esports_outlined,
-                  title: 'Steam game',
-                  subtitle: 'By App ID',
-                  onTap: _checkingFolder ? null : _startSteam,
+                  title: 'Steam games',
+                  subtitle: 'Installed on this computer',
+                  onTap: _checkingFolder ? null : _openSteam,
                 ),
               ),
               const SizedBox(width: 12),

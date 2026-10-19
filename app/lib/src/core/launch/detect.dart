@@ -9,6 +9,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../host_platform.dart';
+import '../../features/library/domain/steam_library.dart';
 
 class WineRunner {
   const WineRunner({
@@ -305,14 +306,7 @@ String? _steamGameName(String compatdataDir, String appId) {
     final manifest = File(
       p.join(grandparent, 'appmanifest_$appId.acf'),
     ).readAsStringSync();
-    for (final line in manifest.split('\n')) {
-      final trimmed = line.trim();
-      if (!trimmed.startsWith('"name"')) continue;
-      final parts = trimmed.split('"');
-      if (parts.length > 3) return parts[3];
-      return null;
-    }
-    return null;
+    return parseAppManifest(manifest)?.name;
   } catch (_) {
     return null;
   }

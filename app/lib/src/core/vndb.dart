@@ -461,6 +461,38 @@ class VndbClient {
     );
   }
 
+  /// The VNDB entry for the game Steam knows as [appId], through its
+  /// release's Steam extlink, or null when no release links it. The full
+  /// entry comes from a second request by the linked VN id, so callers get
+  /// the same search result a title search would return.
+  Future<VnSearchResult?> fetchVnBySteamAppId(int appId) async {
+    final releases = await _postPage('/release', {
+      'filters': [
+        'extlink',
+        '=',
+        ['steam', appId],
+      ],
+      'fields': 'title,vns.id',
+      'results': 1,
+    });
+    if (releases.results.isEmpty) return null;
+    final vns = releases.results.first['vns'];
+    final vnId = vns is List
+        ? vns.whereType<Map>().firstWhere(
+            (vn) => vn['id'] is String,
+            orElse: () => const {},
+          )['id']
+        : null;
+    if (vnId is! String) return null;
+    final vnsPage = await _postPage('/vn', {
+      'filters': ['id', '=', vnId],
+      'fields': _searchFields,
+      'results': 1,
+    });
+    if (vnsPage.results.isEmpty) return null;
+    return _parseSearchResult(vnsPage.results.first);
+  }
+
   /// Steam apps linked to [vndbId] through its releases' extlinks, deduplicated
   /// by app id in first-seen order, each with the title of the first release
   /// that linked it.

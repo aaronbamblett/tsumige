@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:path/path.dart' as p;
 
+import '../../../../core/host_platform.dart';
 import '../../../../core/model.dart';
 import '../../../../core/paths.dart';
 import '../../../../core/vndb.dart';
@@ -24,6 +25,7 @@ import '../../domain/folder_import.dart';
 import '../../domain/game_editor.dart';
 import '../../domain/launch_detection.dart';
 import '../../domain/runner_detection.dart';
+import '../../domain/steam_library.dart';
 import '../widgets/dialog_shell.dart';
 import '../widgets/library_toolbar.dart';
 import 'vn_result_widgets.dart';
@@ -43,6 +45,29 @@ Future<ImportFolderResult?> showImportFolderDialog(
   );
 }
 
+/// Opens the same list over the Steam games installed on this computer.
+Future<ImportFolderResult?> showSteamGamesDialog(BuildContext context) {
+  return showDialog<ImportFolderResult>(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.5),
+    builder: (context) => const ImportFolderDialog.steam(),
+  );
+}
+
+/// Lists the Steam games installed on this computer, or null when Steam
+/// isn't installed. Tests override this with fixtures; production scans
+/// the real Steam roots.
+typedef ListSteamGames =
+    Future<List<InstalledSteamGame>?> Function(HostPlatform platform);
+
+final listSteamGamesProvider = Provider<ListSteamGames>(
+  (ref) => (platform) async {
+    final env = Platform.environment;
+    if ((await steamRoots(platform, env: env)).isEmpty) return null;
+    return installedSteamGames(platform, env: env);
+  },
+);
+
 String _games(int count) => count == 1 ? '1 game' : '$count games';
 
 /// The gap between VNDB requests from one import. Overridden with zero
@@ -58,11 +83,34 @@ final importVndbRetryWaitProvider = Provider<Duration>(
 
 typedef _Plan = ({List<bool> selected, List<bool> duplicate});
 
+/// One list row: a folder's game, or an installed Steam game. Steam rows
+/// have no exe; they launch through Steam by app id.
 class _ImportRow {
-  _ImportRow(this.folder) : realFolder = realPath(folder.path);
+  _ImportRow.folder(ImportFolder game)
+    : folder = game,
+      steamGame = null,
+      realFolder = realPath(game.path);
 
-  final ImportFolder folder;
+  _ImportRow.steam(InstalledSteamGame game)
+    : folder = null,
+      steamGame = game,
+      realFolder = '';
+
+  final ImportFolder? folder;
+  final InstalledSteamGame? steamGame;
   final String realFolder;
+
+  bool get isSteam => steamGame != null;
+
+  /// The Steam name, or the folder name.
+  String get name => isSteam ? steamGame!.name : folder!.name;
+
+  /// The Path column: the exe for folders, `Steam` for Steam rows.
+  String get pathText => isSteam ? 'Steam' : exePath ?? '';
+
+  /// Whether the row can be added: Steam rows always can, folder rows need
+  /// their exe picked.
+  bool get launchReady => isSteam || exePath != null;
 
   /// Null while the VNDB lookup is pending.
   ImportMatchState? state;
@@ -76,15 +124,37 @@ class _ImportRow {
   /// Set by a manual pick so a late VNDB result does not replace it.
   bool picked = false;
 
-  Set<String>? libraryExes;
+  _LibraryIndex? libraryIndex;
   bool inLibrary = false;
 }
 
+/// The library sets import rows compare against, recomputed only when the
+/// games list instance changes so a rebuild per matched row stays cheap.
+class _LibraryIndex {
+  _LibraryIndex(this.games)
+    : exes = libraryRealExePaths(games),
+      steamIds = {
+        for (final game in games)
+          if (game.launch.steamAppId != null) game.launch.steamAppId!,
+      };
+
+  final List<Game> games;
+  final Set<String> exes;
+  final Set<int> steamIds;
+}
+
 class ImportFolderDialog extends ConsumerStatefulWidget {
-  const ImportFolderDialog({super.key, this.roots = const []});
+  const ImportFolderDialog({super.key, this.roots = const []}) : steam = false;
+
+  const ImportFolderDialog.steam({super.key})
+    : roots = const [],
+      steam = true;
 
   /// Folders to scan straight away instead of asking for one.
   final List<String> roots;
+
+  /// List installed Steam games instead of scanning folders.
+  final bool steam;
 
   @override
   ConsumerState<ImportFolderDialog> createState() => _ImportFolderDialogState();
@@ -94,6 +164,9 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   final List<String> _roots = [];
   bool _hideImported = true;
   bool _scanning = false;
+
+  /// Whether Steam is installed, in the Steam list. Null while loading.
+  bool? _steamFound;
   List<_ImportRow> _rows = const [];
   int _scanToken = 0;
   int _generation = 0;
@@ -101,6 +174,8 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   bool _saving = false;
   int _done = 0;
   int _total = 0;
+
+  bool get _isSteam => widget.steam;
 
   VndbRequestQueue? _queue;
 
@@ -117,23 +192,23 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
 
   int? _hoveredRow;
 
-  /// The resolved library exe paths for the current library value,
-  /// recomputed only when the games list instance changes so a rebuild
-  /// per matched row stays cheap.
+  /// The library sets for the current library value, recomputed only when
+  /// the games list instance changes so a rebuild per matched row stays
+  /// cheap.
   List<Game>? _cachedGames;
-  Set<String> _cachedLibraryExes = const {};
+  _LibraryIndex? _cachedIndex;
 
   /// The library set the match queue last synced against. When the cached
   /// set changes (a new games list), membership is recomputed and newly
   /// eligible rows join the queue.
-  Set<String>? _syncedLibraryExes;
+  _LibraryIndex? _syncedIndex;
 
-  Set<String> _libraryExes(List<Game> games) {
+  _LibraryIndex _libraryIndex(List<Game> games) {
     if (!identical(games, _cachedGames)) {
       _cachedGames = games;
-      _cachedLibraryExes = libraryRealExePaths(games);
+      _cachedIndex = _LibraryIndex(games);
     }
-    return _cachedLibraryExes;
+    return _cachedIndex!;
   }
 
   int? _pickIndex;
@@ -151,7 +226,9 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     _pickQuery = TextEditingController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _roots.isNotEmpty) return;
-      if (widget.roots.isEmpty) {
+      if (_isSteam) {
+        _loadSteam();
+      } else if (widget.roots.isEmpty) {
         _browse();
       } else {
         _scanRoots(widget.roots, append: false);
@@ -176,25 +253,33 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     _pop(ImportFolderResult.cancel);
   }
 
-  bool _inLibrary(_ImportRow row, Set<String> libraryExes) {
-    if (!identical(row.libraryExes, libraryExes)) {
-      row.libraryExes = libraryExes;
-      row.inLibrary = importRowInLibrary(
-        realFolder: row.realFolder,
-        libraryExes: libraryExes,
-      );
+  bool _inLibrary(_ImportRow row, _LibraryIndex index) {
+    if (!identical(row.libraryIndex, index)) {
+      row.libraryIndex = index;
+      row.inLibrary = row.isSteam
+          ? index.steamIds.contains(row.steamGame!.appId)
+          : importRowInLibrary(
+              realFolder: row.realFolder,
+              libraryExes: index.exes,
+            );
     }
     return row.inLibrary;
   }
 
-  bool _eligible(_ImportRow row, Set<String> libraryExes) =>
+  bool _eligible(_ImportRow row, _LibraryIndex index) =>
       row.state != null &&
-      row.exePath != null &&
-      !_inLibrary(row, libraryExes);
+      row.launchReady &&
+      !_inLibrary(row, index);
 
-  /// Two rows with the same real exe path stay deduplicated. A repeated
-  /// VNDB id only warns, it doesn't deduplicate.
+  /// Two rows for the same game stay deduplicated: by app id for Steam
+  /// rows, by real exe path for folder rows. A repeated VNDB id only
+  /// warns, it doesn't deduplicate.
   bool _sameGame(_ImportRow a, _ImportRow b) {
+    if (a.isSteam || b.isSteam) {
+      return a.isSteam &&
+          b.isSteam &&
+          a.steamGame!.appId == b.steamGame!.appId;
+    }
     final ae = a.realExe;
     final be = b.realExe;
     return ae != null && be != null && p.equals(ae, be);
@@ -213,7 +298,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     }
     for (var j = 0; j < index; j++) {
       if (_rows[j].vn?.id == id) {
-        return 'Same VNDB entry as ${_rows[j].folder.name}';
+        return 'Same VNDB entry as ${_rows[j].name}';
       }
     }
     return null;
@@ -232,12 +317,12 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
 
   /// Which rows are added, and which are duplicates of an earlier added row.
   /// The first ticked row for an exe wins.
-  _Plan _plan(Set<String> libraryExes) {
+  _Plan _plan(_LibraryIndex index) {
     final selected = List.filled(_rows.length, false);
     final duplicate = List.filled(_rows.length, false);
     for (var i = 0; i < _rows.length; i++) {
       final row = _rows[i];
-      if (!_eligible(row, libraryExes)) continue;
+      if (!_eligible(row, index)) continue;
       for (var j = 0; j < i; j++) {
         if (selected[j] && _sameGame(_rows[j], row)) {
           duplicate[i] = true;
@@ -250,9 +335,10 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   }
 
   void _applyExe(_ImportRow row) {
+    if (row.isSteam) return;
     final vn = row.vn;
     final exe = chooseExe(
-      row.folder,
+      row.folder!,
       vn == null ? const [] : vnTitles(vn),
     )?.path;
     row.exePath = exe;
@@ -260,8 +346,9 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   }
 
   Future<void> _browse({bool append = false}) async {
-    final picked = await ref.read(pathPickerProvider)(
-      mode: PathPickMode.folder,
+    final picked = await runPicker(
+      context,
+      () => ref.read(pathPickerProvider)(mode: PathPickMode.folder),
     );
     if (!mounted) return;
     if (picked == null || picked.isEmpty) {
@@ -303,10 +390,13 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       return;
     }
     if (!mounted || token != _scanToken) return;
-    final known = {for (final row in _rows) row.folder.path};
+    final known = {
+      for (final row in _rows)
+        if (row.folder != null) row.folder!.path,
+    };
     final fresh = <_ImportRow>[
       for (final folder in found)
-        if (known.add(folder.path)) _ImportRow(folder),
+        if (known.add(folder.path)) _ImportRow.folder(folder),
     ];
     setState(() {
       _roots.addAll(roots);
@@ -319,23 +409,54 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     await _matchPending();
   }
 
+  /// Loads the Steam list: every installed game becomes a row, or no rows
+  /// when Steam isn't installed.
+  Future<void> _loadSteam() async {
+    final token = ++_scanToken;
+    final platform = ref.read(hostPlatformProvider);
+    _generation++;
+    _queue?.cancel();
+    _queue = null;
+    setState(() {
+      _scanning = true;
+      _steamFound = null;
+      _rows = const [];
+    });
+    List<InstalledSteamGame>? found;
+    try {
+      found = await ref.read(listSteamGamesProvider)(platform);
+    } catch (e) {
+      debugPrint('$e');
+    }
+    if (!mounted || token != _scanToken) return;
+    setState(() {
+      _scanning = false;
+      _steamFound = found != null;
+      _rows = [
+        for (final game in found ?? const <InstalledSteamGame>[])
+          _ImportRow.steam(game),
+      ];
+    });
+    await _matchPending();
+  }
+
   /// Matches every row still waiting for a result, in display order, skipping
-  /// rows already in the library by the folder rule: they need no VNDB data.
-  /// Only one loop runs per generation, so an appended scan's rows join the
-  /// running loop. Membership is rechecked every iteration so a library
-  /// change mid-scan drops newly covered rows and picks up uncovered ones.
+  /// rows already in the library: they need no VNDB data. Only one loop
+  /// runs per generation, so an appended scan's rows join the running loop.
+  /// Membership is rechecked every iteration so a library change mid-scan
+  /// drops newly covered rows and picks up uncovered ones.
   Future<void> _matchPending() async {
     final generation = _generation;
     if (_matchingGeneration == generation) return;
     _matchingGeneration = generation;
     while (mounted && generation == _generation) {
       final games = ref.read(libraryProvider).value?.library.games ?? const [];
-      final libraryExes = _libraryExes(games);
-      final index = _rows.indexWhere(
-        (row) => row.state == null && !_inLibrary(row, libraryExes),
+      final index = _libraryIndex(games);
+      final rowIndex = _rows.indexWhere(
+        (row) => row.state == null && !_inLibrary(row, index),
       );
-      if (index == -1) break;
-      await _match(_rows[index], generation);
+      if (rowIndex == -1) break;
+      await _match(_rows[rowIndex], generation);
     }
     if (_matchingGeneration == generation) _matchingGeneration = null;
   }
@@ -348,25 +469,42 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   }
 
   Future<void> _match(_ImportRow row, int generation) async {
-    final query = cleanFolderName(row.folder.name);
-    final exeDir = row.exePath == null
-        ? row.folder.path
-        : p.dirname(row.exePath!);
-    final parents = parentFolderQueries(
-      exeDir: exeDir,
-      root: _rootFor(row.folder.path),
-    );
     var match = const FolderMatch(ImportMatchState.none, null);
     String? error;
-    try {
-      match = await lookupFolderMatch(
-        query: query,
-        parentQueries: parents,
-        search: _vndb.run,
+    if (row.isSteam) {
+      try {
+        match = await lookupSteamMatch(
+          game: row.steamGame!,
+          fetchByAppId: (appId) => _vndb.runTask(
+            () => ref.read(vndbSearchClientProvider).fetchVnBySteamAppId(
+              appId,
+            ),
+          ),
+          search: _vndb.run,
+        );
+      } catch (e) {
+        error = '$e';
+        match = const FolderMatch(ImportMatchState.error, null);
+      }
+    } else {
+      final query = cleanFolderName(row.folder!.name);
+      final exeDir = row.exePath == null
+          ? row.folder!.path
+          : p.dirname(row.exePath!);
+      final parents = parentFolderQueries(
+        exeDir: exeDir,
+        root: _rootFor(row.folder!.path),
       );
-    } catch (e) {
-      error = '$e';
-      match = const FolderMatch(ImportMatchState.error, null);
+      try {
+        match = await lookupFolderMatch(
+          query: query,
+          parentQueries: parents,
+          search: _vndb.run,
+        );
+      } catch (e) {
+        error = '$e';
+        match = const FolderMatch(ImportMatchState.error, null);
+      }
     }
     if (!mounted || generation != _generation || row.picked) return;
     final games = ref.read(libraryProvider).value?.library.games ?? const [];
@@ -379,7 +517,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
         final vn = match.vn;
         row.ticked =
             match.state == ImportMatchState.matched &&
-            row.exePath != null &&
+            row.launchReady &&
             (vn == null || !_vndbRepeats(vn.id, row, games));
       }
     });
@@ -395,7 +533,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
 
   void _openPick(int index) {
     final row = _rows[index];
-    final query = cleanFolderName(row.folder.name);
+    final query = cleanFolderName(row.name);
     _pickQuery.text = query;
     setState(() {
       _pickIndex = index;
@@ -473,7 +611,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       row.error = null;
       _applyExe(row);
       row.ticked =
-          row.exePath != null && !_vndbRepeats(vn.id, row, games);
+          row.launchReady && !_vndbRepeats(vn.id, row, games);
       _pickIndex = null;
       _pickSelected = null;
     });
@@ -481,13 +619,13 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
 
   Future<void> _add() async {
     final games = ref.read(libraryProvider).value?.library.games ?? const [];
-    final plan = _plan(libraryRealExePaths(games));
+    final plan = _plan(_libraryIndex(games));
     final rows = [
       for (var i = 0; i < _rows.length; i++)
         if (plan.selected[i]) _rows[i],
     ];
     if (rows.isEmpty) return;
-    if (rows.any((row) => isPortalPath(row.exePath!))) {
+    if (rows.any((row) => !row.isSteam && isPortalPath(row.exePath!))) {
       Toast(context).show(portalPathMessage);
       return;
     }
@@ -503,28 +641,61 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     final built = <Game>[];
     var coverFailures = 0;
     for (final row in rows) {
-      final exe = row.exePath!;
-      final detected = await detectLaunchMode(exe, platform);
       final vn = row.vn;
       final Game game;
-      if (vn == null) {
-        game = plainGame(title: row.folder.name, exe: exe, mode: detected.mode);
-        game.launch.steamAppId = detected.steamAppId;
+      if (row.isSteam) {
+        // Steam rows launch through Steam by app id, exactly as the old
+        // App ID flow set them.
+        final appId = row.steamGame!.appId;
+        if (vn == null) {
+          game = plainGame(
+            title: row.steamGame!.name,
+            exe: '',
+            mode: LaunchMode.steam,
+          );
+          game.launch.steamAppId = appId;
+        } else {
+          final result = await buildVnGame(
+            result: vn,
+            title: vn.title,
+            description: vn.description,
+            tags: const [],
+            exe: '',
+            mode: LaunchMode.steam,
+            steamAppId: appId,
+            vndb: vndb,
+            httpClient: httpClient,
+            dataDir: dataDir,
+          );
+          game = result.game;
+          if (result.coverFailed) coverFailures++;
+        }
       } else {
-        final result = await buildVnGame(
-          result: vn,
-          title: vn.title,
-          description: vn.description,
-          tags: const [],
-          exe: exe,
-          mode: detected.mode,
-          steamAppId: detected.steamAppId,
-          vndb: vndb,
-          httpClient: httpClient,
-          dataDir: dataDir,
-        );
-        game = result.game;
-        if (result.coverFailed) coverFailures++;
+        final exe = row.exePath!;
+        final detected = await detectLaunchMode(exe, platform);
+        if (vn == null) {
+          game = plainGame(
+            title: row.folder!.name,
+            exe: exe,
+            mode: detected.mode,
+          );
+          game.launch.steamAppId = detected.steamAppId;
+        } else {
+          final result = await buildVnGame(
+            result: vn,
+            title: vn.title,
+            description: vn.description,
+            tags: const [],
+            exe: exe,
+            mode: detected.mode,
+            steamAppId: detected.steamAppId,
+            vndb: vndb,
+            httpClient: httpClient,
+            dataDir: dataDir,
+          );
+          game = result.game;
+          if (result.coverFailed) coverFailures++;
+        }
       }
       game.needsReview = row.state != ImportMatchState.matched;
       built.add(game);
@@ -553,24 +724,24 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     final pick = _pickIndex;
     // Resolved once per library value so every row compares against the
     // same set without re-resolving symlinks on every rebuild.
-    final libraryExes = _libraryExes(games);
+    final index = _libraryIndex(games);
     // The library changed while the dialog is open: rows that stopped being
     // in-library join the match queue; rows that became in-library drop out
     // of it and of the progress count on this rebuild.
-    if (!identical(_syncedLibraryExes, libraryExes)) {
-      _syncedLibraryExes = libraryExes;
+    if (!identical(_syncedIndex, index)) {
+      _syncedIndex = index;
       if (_rows.any(
-        (row) => row.state == null && !_inLibrary(row, libraryExes),
+        (row) => row.state == null && !_inLibrary(row, index),
       )) {
         unawaited(_matchPending());
       }
     }
-    final plan = _plan(libraryExes);
+    final plan = _plan(index);
     if (pick != null) {
       return DialogShell(
         autofocus: false,
         size: dialogShellSize(context),
-        eyebrow: _rows[pick].folder.name,
+        eyebrow: _rows[pick].name,
         title: 'Search VNDB',
         onClose: _close,
         closeKey: const Key('import-close'),
@@ -582,24 +753,23 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       autofocus: false,
       size: dialogShellSize(context),
       eyebrow: 'Add games',
-      title: 'Select games to import',
+      title: _isSteam ? 'Select Steam games' : 'Select games to import',
       onClose: _close,
       closeKey: const Key('import-close'),
-      body: _listBody(context, games, plan, libraryExes),
+      body: _listBody(context, games, plan, index),
       footer: _listFooter(games, plan),
     );
   }
 
-  bool _hidden(int index, _Plan plan, Set<String> libraryExes) =>
+  bool _hidden(int index, _Plan plan, _LibraryIndex library) =>
       _hideImported &&
-      (plan.duplicate[index] ||
-          _inLibrary(_rows[index], libraryExes));
+      (plan.duplicate[index] || _inLibrary(_rows[index], library));
 
   Widget _listBody(
     BuildContext context,
     List<Game> games,
     _Plan plan,
-    Set<String> libraryExes,
+    _LibraryIndex index,
   ) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -609,11 +779,11 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     );
     final visible = [
       for (var i = 0; i < _rows.length; i++)
-        if (!_hidden(i, plan, libraryExes)) i,
+        if (!_hidden(i, plan, index)) i,
     ];
     final eligible = [
       for (final i in visible)
-        if (_eligible(_rows[i], libraryExes) && !plan.duplicate[i]) i,
+        if (_eligible(_rows[i], index) && !plan.duplicate[i]) i,
     ];
     final allChecked =
         eligible.isNotEmpty && eligible.every((i) => plan.selected[i]);
@@ -689,7 +859,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                 ),
               ),
               if (_scanning) const LinearProgressIndicator(),
-              if (_matching(libraryExes)
+              if (_matching(index)
                   case (done: final done, total: final total))
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
@@ -708,12 +878,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
               Expanded(
                 child: visible.isEmpty
                     ? Center(
-                        child: Text(
-                          _roots.isEmpty
-                              ? 'Choose a folder to import'
-                              : 'No games in this folder',
-                          style: muted,
-                        ),
+                        child: Text(_emptyText(), style: muted),
                       )
                     : ListView.builder(
                         itemCount: visible.length,
@@ -722,7 +887,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                           visible[position],
                           games,
                           plan,
-                          libraryExes,
+                          index,
                         ),
                       ),
               ),
@@ -734,17 +899,32 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
   }
 
   /// Finished and total rows that need matching while matching runs. Rows
-  /// already in the library by the folder rule are never queued, so they
-  /// count for neither number. Null once every such row has a result (or
-  /// there is nothing to match), which hides the bar.
-  ({int done, int total})? _matching(Set<String> libraryExes) {
+  /// already in the library are never queued, so they count for neither
+  /// number. Null once every such row has a result (or there is nothing
+  /// to match), which hides the bar.
+  ({int done, int total})? _matching(_LibraryIndex library) {
     final need = [
       for (final row in _rows)
-        if (!_inLibrary(row, libraryExes)) row,
+        if (!_inLibrary(row, library)) row,
     ];
     if (need.isEmpty) return null;
     final done = need.where((row) => row.state != null).length;
     return done < need.length ? (done: done, total: need.length) : null;
+  }
+
+  /// The empty list text. In the Steam list a missing Steam install reads
+  /// differently from a list with nothing new to add.
+  String _emptyText() {
+    if (_isSteam) {
+      if (_steamFound == false) {
+        return "Steam isn't installed on this computer.";
+      }
+      if (_scanning || _steamFound == null) return '';
+      return 'No Steam games to add.';
+    }
+    return _roots.isEmpty
+        ? 'Choose a folder to import'
+        : 'No games in this folder';
   }
 
   void _setAllTicked(List<int> indices, bool ticked) {
@@ -762,12 +942,12 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     int index,
     List<Game> games,
     _Plan plan,
-    Set<String> libraryExes,
+    _LibraryIndex library,
   ) {
     final row = _rows[index];
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final inLibrary = _inLibrary(row, libraryExes);
+    final inLibrary = _inLibrary(row, library);
     final vn =
         row.state == ImportMatchState.matched ||
             (!inLibrary && row.state == ImportMatchState.check)
@@ -775,8 +955,11 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
         : null;
     final canPick = !inLibrary && !_saving;
     final unmatched = vn == null;
+    // The main line is always the source name: the Steam game's name or
+    // the folder name. A VNDB title reads below it in [_statusRow], never
+    // in place of the source name.
     final nameText = Text(
-      vn?.title ?? row.folder.name,
+      row.name,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
@@ -838,7 +1021,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
                   key: Key('import-check-$index'),
                   value: plan.selected[index],
                   onChanged:
-                      _eligible(row, libraryExes) &&
+                      _eligible(row, library) &&
                               !plan.duplicate[index] &&
                               !_saving
                       ? (value) => setState(() {
@@ -878,7 +1061,7 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
               Expanded(
                 flex: 6,
                 child: MiddleEllipsisText(
-                  text: row.exePath ?? '',
+                  text: row.pathText,
                   style: TextStyle(
                     fontFamily: 'monospace',
                     fontSize: 12,
@@ -893,10 +1076,12 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
     );
   }
 
-  /// The muted status line under a row's name, with its small text button.
+  /// The muted status line under a row's source name, with its small text
+  /// button. A matched or best-match row shows its VNDB title here; rows
+  /// with no match, an error, or a pending lookup keep their status text.
   /// Library rows keep their old look and show nothing here. A repeated
-  /// VNDB entry reads in place of the other status text, with the badge
-  /// and button staying as for the row's state.
+  /// VNDB entry reads in place of the VNDB title or status text, with the
+  /// badge and button staying as for the row's state.
   Widget _statusRow(
     BuildContext context,
     int index,
@@ -935,11 +1120,12 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
           ],
         );
       case ImportMatchState.check:
+        final checkLabel = repeatWarning ?? row.vn?.title;
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             _bestMatchBadge(context),
-            if (repeatWarning != null) statusText(repeatWarning),
+            if (checkLabel != null) statusText(checkLabel),
             _statusButton(
               key: Key('import-change-$index'),
               label: 'Change…',
@@ -960,13 +1146,14 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
           ],
         );
       case ImportMatchState.matched:
-        if (repeatWarning == null && _hoveredRow != index) {
+        final matchedLabel = repeatWarning ?? row.vn?.title;
+        if (matchedLabel == null && _hoveredRow != index) {
           return const SizedBox.shrink();
         }
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (repeatWarning != null) statusText(repeatWarning),
+            if (matchedLabel != null) statusText(matchedLabel),
             if (_hoveredRow == index)
               _statusButton(
                 key: Key('import-change-$index'),
@@ -1023,32 +1210,36 @@ class _ImportFolderDialogState extends ConsumerState<ImportFolderDialog> {
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
       child: Row(
         children: [
-          Expanded(
-            child: Row(
-              children: [
-                IntrinsicWidth(
-                  child: BrandGlassButton(
-                    key: const Key('import-browse'),
-                    height: 40,
-                    expand: false,
-                    onPressed: _saving ? null : () => _browse(),
-                    label: const Text('Choose folder…'),
+          if (_isSteam)
+            const Spacer()
+          else ...[
+            Expanded(
+              child: Row(
+                children: [
+                  IntrinsicWidth(
+                    child: BrandGlassButton(
+                      key: const Key('import-browse'),
+                      height: 40,
+                      expand: false,
+                      onPressed: _saving ? null : () => _browse(),
+                      label: const Text('Choose folder…'),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                IntrinsicWidth(
-                  child: BrandGlassButton(
-                    key: const Key('import-scan'),
-                    height: 40,
-                    expand: false,
-                    onPressed: _saving ? null : () => _browse(append: true),
-                    label: const Text('Add folder…'),
+                  const SizedBox(width: 10),
+                  IntrinsicWidth(
+                    child: BrandGlassButton(
+                      key: const Key('import-scan'),
+                      height: 40,
+                      expand: false,
+                      onPressed: _saving ? null : () => _browse(append: true),
+                      label: const Text('Add folder…'),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
+            const SizedBox(width: 10),
+          ],
           BrandButton(
             key: const Key('import-add'),
             height: 40,
