@@ -854,12 +854,23 @@ class VndbRequestQueue {
   Future<List<VnSearchResult>> run(String query) {
     final done = Completer<List<VnSearchResult>>();
     _tail = _tail
-        .then((_) => _execute(query))
+        .then((_) => _execute(() => search(query)))
         .then(done.complete, onError: done.completeError);
     return done.future;
   }
 
-  Future<List<VnSearchResult>> _execute(String query) async {
+  /// Runs [task] through the queue: serialized with the other queued
+  /// requests, paced by [gap], with the same 429 retry. A Steam-id lookup
+  /// shares the import's pacing this way instead of bursting VNDB.
+  Future<T> runTask<T>(Future<T> Function() task) {
+    final done = Completer<T>();
+    _tail = _tail
+        .then((_) => _execute(task))
+        .then(done.complete, onError: done.completeError);
+    return done.future;
+  }
+
+  Future<T> _execute<T>(Future<T> Function() send) async {
     if (_cancelled) throw const VndbCancelled();
     final last = _lastStart;
     if (last != null) {
@@ -871,7 +882,7 @@ class VndbRequestQueue {
       if (_cancelled) throw const VndbCancelled();
       _lastStart = _now();
       try {
-        return await search(query);
+        return await send();
       } on VndbException catch (e) {
         if (e.statusCode != 429 || retries >= maxRetries) rethrow;
         retries++;

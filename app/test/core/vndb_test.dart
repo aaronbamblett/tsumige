@@ -623,4 +623,73 @@ void main() {
       expect(art.screenshots, isEmpty);
     });
   });
+
+  group('fetchVnBySteamAppId', () {
+    Map<String, Object?> releaseRow() => {
+      'id': 'r53689',
+      'title': 'Doki Doki Literature Club',
+      'vns': [
+        {'id': 'v21905'},
+      ],
+    };
+
+    Map<String, Object?> vnRow() => {
+      'id': 'v21905',
+      'title': 'Doki Doki Literature Club!',
+      'titles': [],
+      'released': '2017-09-22',
+      'rating': 85.0,
+      'votecount': 42,
+      'image': {
+        'url': 'https://t.vndb.org/cv/1/1.jpg',
+        'sexual': 0,
+      },
+      'description': 'A story.',
+      'developers': [
+        {'name': 'Team Salvato'},
+      ],
+      'tags': [],
+    };
+
+    test('an extlink hit maps to its VN', () async {
+      final seen = <Map<String, Object?>>[];
+      final client = _routed(
+        vn: (body) => _ok([vnRow()]),
+        release: (body) => _ok([releaseRow()]),
+        seen: seen,
+      );
+      final vn = await client.fetchVnBySteamAppId(698780);
+      expect(vn?.id, 'v21905');
+      expect(vn?.title, 'Doki Doki Literature Club!');
+      expect(seen, hasLength(2));
+      expect(seen[0]['filters'], [
+        'extlink',
+        '=',
+        ['steam', 698780],
+      ]);
+      expect(seen[0]['fields'], 'title,vns.id');
+      expect(seen[1]['filters'], ['id', '=', 'v21905']);
+    });
+
+    test('no release means no VN and no second request', () async {
+      final seen = <Map<String, Object?>>[];
+      final client = _routed(
+        vn: (body) => _ok([vnRow()]),
+        release: (body) => _ok([]),
+        seen: seen,
+      );
+      expect(await client.fetchVnBySteamAppId(123), isNull);
+      expect(seen, hasLength(1));
+    });
+
+    test('a release without a VN id means no VN', () async {
+      final client = _routed(
+        vn: (body) => _ok([vnRow()]),
+        release: (body) => _ok([
+          {'id': 'r1', 'title': 'Odd', 'vns': []},
+        ]),
+      );
+      expect(await client.fetchVnBySteamAppId(123), isNull);
+    });
+  });
 }

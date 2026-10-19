@@ -11,6 +11,8 @@ import 'package:path/path.dart' as p;
 import '../../../core/host_platform.dart';
 import '../../../core/launch/steam_registry.dart';
 import '../../../core/paths.dart';
+import '../../../core/vndb.dart';
+import 'folder_import.dart';
 
 /// A game Steam has installed on this computer.
 class InstalledSteamGame {
@@ -40,6 +42,27 @@ const steamToolNamePrefixes = <String>[
 bool isSteamTool({required int appId, required String name}) {
   if (steamToolAppIds.contains(appId)) return true;
   return steamToolNamePrefixes.any(name.startsWith);
+}
+
+/// Matches an installed Steam game on VNDB: first by its Steam App ID
+/// through the release extlink, which maps exactly, then by its Steam name
+/// with the same title matching the folder import uses (matched, check or
+/// none). A failing App ID lookup falls through to the name search; a
+/// failure with no check match rethrows from [lookupFolderMatch].
+Future<FolderMatch> lookupSteamMatch({
+  required InstalledSteamGame game,
+  required Future<VnSearchResult?> Function(int appId) fetchByAppId,
+  required Future<List<VnSearchResult>> Function(String query) search,
+}) async {
+  try {
+    final vn = await fetchByAppId(game.appId);
+    if (vn != null) return FolderMatch(ImportMatchState.matched, vn);
+  } catch (_) {}
+  return lookupFolderMatch(
+    query: cleanFolderName(game.name),
+    parentQueries: const [],
+    search: search,
+  );
 }
 
 p.Context _contextFor(HostPlatform platform) => p.Context(

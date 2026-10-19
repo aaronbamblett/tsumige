@@ -7,6 +7,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:tsumige/src/core/host_platform.dart';
+import 'package:tsumige/src/core/vndb.dart';
+import 'package:tsumige/src/features/library/domain/folder_import.dart';
 import 'package:tsumige/src/features/library/domain/steam_library.dart';
 
 class _Fs {
@@ -215,6 +217,67 @@ void main() {
       final games = await _games(fs, _linux, {'HOME': '/home/test'});
       expect(games, hasLength(1));
       expect(games.single.appId, 698780);
+    });
+  });
+
+  group('lookupSteamMatch', () {
+    const game = InstalledSteamGame(
+      appId: 698780,
+      name: 'Doki Doki Literature Club',
+      installDir: '/steam/DDLC',
+    );
+    const vn = VnSearchResult(id: 'v21905', title: 'Doki Doki Literature Club');
+
+    Future<List<VnSearchResult>> noSearch(String query) async => const [];
+
+    test('a Steam ID hit matches without searching', () async {
+      var searched = false;
+      final match = await lookupSteamMatch(
+        game: game,
+        fetchByAppId: (appId) async {
+          expect(appId, 698780);
+          return vn;
+        },
+        search: (query) async {
+          searched = true;
+          return noSearch(query);
+        },
+      );
+      expect(match.state, ImportMatchState.matched);
+      expect(match.vn?.id, 'v21905');
+      expect(searched, isFalse);
+    });
+
+    test('no Steam ID hit falls back to the Steam name', () async {
+      final match = await lookupSteamMatch(
+        game: game,
+        fetchByAppId: (_) async => null,
+        search: (query) async {
+          expect(query, 'Doki Doki Literature Club');
+          return const [vn];
+        },
+      );
+      expect(match.state, ImportMatchState.matched);
+      expect(match.vn?.id, 'v21905');
+    });
+
+    test('a failing Steam ID lookup still falls back to the name', () async {
+      final match = await lookupSteamMatch(
+        game: game,
+        fetchByAppId: (_) => throw const VndbException('HTTP 500'),
+        search: (query) async => const [vn],
+      );
+      expect(match.state, ImportMatchState.matched);
+    });
+
+    test('nothing anywhere is none', () async {
+      final match = await lookupSteamMatch(
+        game: game,
+        fetchByAppId: (_) async => null,
+        search: noSearch,
+      );
+      expect(match.state, ImportMatchState.none);
+      expect(match.vn, isNull);
     });
   });
 

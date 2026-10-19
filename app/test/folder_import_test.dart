@@ -933,5 +933,25 @@ void main() {
       expect(calls, 1);
       expect(waits, isEmpty);
     });
+
+    test('runTask shares the pacing with searches', () async {
+      final started = <DateTime>[];
+      final queue = queueWith((query) async {
+        started.add(now);
+        return const [];
+      });
+      await Future.wait([
+        queue.run('a'),
+        queue.runTask(() async {
+          started.add(now);
+          return 42;
+        }),
+      ]);
+      expect(started, hasLength(2));
+      expect(
+        started[1].difference(started[0]),
+        greaterThanOrEqualTo(const Duration(milliseconds: 1600)),
+      );
+    });
   });
 }
