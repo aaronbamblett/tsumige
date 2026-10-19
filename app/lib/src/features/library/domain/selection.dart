@@ -6,12 +6,15 @@
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../core/groups.dart';
 import '../../../core/model.dart';
 import '../data/library_repository.dart';
 
 part 'selection.g.dart';
 
-/// Selected game id; null means the detail pane is closed.
+/// Selected tile id: a game id, or a group id. Null means the detail pane is
+/// closed. When a group is selected, the pane shows one of its members (see
+/// [selectedGame]), so the selection represents "group X, showing member Y".
 @Riverpod(keepAlive: true)
 class SelectedGameId extends _$SelectedGameId {
   @override
@@ -22,16 +25,31 @@ class SelectedGameId extends _$SelectedGameId {
   void clear() => state = null;
 }
 
+/// The selected group, when the selected tile is a group.
+@riverpod
+GameGroup? selectedGroup(Ref ref) {
+  final id = ref.watch(selectedGameIdProvider);
+  if (id == null) return null;
+  final groups = ref.watch(libraryProvider).value?.library.groups;
+  if (groups == null) return null;
+  for (final group in groups) {
+    if (group.id == id) return group;
+  }
+  return null;
+}
+
 /// The selected game from the full library, so a filter hiding it leaves the
-/// pane open while a reload that drops its id closes the pane.
+/// pane open while a reload that drops its id closes the pane. When a group
+/// is selected, this is the group's picked member.
 @riverpod
 Game? selectedGame(Ref ref) {
   final id = ref.watch(selectedGameIdProvider);
   if (id == null) return null;
-  final games = ref.watch(libraryProvider).value?.library.games;
-  if (games == null) return null;
-  for (final game in games) {
-    if (game.id == id) return game;
+  final library = ref.watch(libraryProvider).value?.library;
+  if (library == null) return null;
+  final byId = {for (final game in library.games) game.id: game};
+  for (final group in library.groups) {
+    if (group.id == id) return resolvePickedMember(group, byId);
   }
-  return null;
+  return byId[id];
 }

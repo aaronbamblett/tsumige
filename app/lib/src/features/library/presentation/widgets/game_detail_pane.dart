@@ -13,6 +13,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../../core/covers.dart';
+import '../../../../core/groups.dart';
 import '../../../../core/launch/game_runner.dart';
 import '../../../../core/launch/launch_modes.dart';
 import '../../../../core/model.dart';
@@ -42,9 +43,12 @@ const double _kHeroHeight = 340;
 const double _kHeroReserve = 61 + 139 + 120;
 
 class GameDetailPane extends HookConsumerWidget {
-  const GameDetailPane({super.key, required this.game});
+  const GameDetailPane({super.key, required this.game, this.group});
 
   final Game game;
+
+  /// When the selected tile is a group, [game] is its picked member.
+  final GameGroup? group;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -109,13 +113,13 @@ class GameDetailPane extends HookConsumerWidget {
                     Positioned(
                       top: 12,
                       right: 12,
-                      child: _HeroControls(game: game),
+                      child: _HeroControls(game: game, group: group),
                     ),
                     Positioned(
                       left: 20,
                       right: 20,
                       bottom: 16,
-                      child: _HeroTitle(game: game),
+                      child: _HeroTitle(game: game, group: group),
                     ),
                   ],
                 ),
@@ -283,13 +287,14 @@ class _TabBody extends StatelessWidget {
   }
 }
 
-class _HeroTitle extends StatelessWidget {
-  const _HeroTitle({required this.game});
+class _HeroTitle extends ConsumerWidget {
+  const _HeroTitle({required this.game, required this.group});
 
   final Game game;
+  final GameGroup? group;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
     final original = game.vndbOriginalTitle;
     return Column(
@@ -314,6 +319,11 @@ class _HeroTitle extends StatelessWidget {
             ],
           ),
         ),
+        if (group != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: _EpisodePicker(game: game, group: group!),
+          ),
         if (original != null && original.isNotEmpty && original != game.title)
           Padding(
             padding: const EdgeInsets.only(top: 2),
@@ -395,6 +405,100 @@ class _MetaRow extends StatelessWidget {
   }
 }
 
+/// Compact episode picker under the hero title for a grouped game: the
+/// stacked-pages icon, the member's short name, `· N of M`, and a `▾`.
+/// The menu lists every member by short name, with a check on the current
+/// one and a muted `Played` note for members with any play session.
+class _EpisodePicker extends ConsumerWidget {
+  const _EpisodePicker({required this.game, required this.group});
+
+  final Game game;
+  final GameGroup group;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final games = ref.watch(libraryProvider).value?.library.games ?? const [];
+    final byId = {for (final g in games) g.id: g};
+    final members = [
+      for (final id in group.memberIds)
+        if (byId[id] != null) byId[id]!,
+    ];
+    if (members.isEmpty) return const SizedBox.shrink();
+    final index = members.indexWhere((m) => m.id == game.id);
+    final short = memberShortName(group, game, byId);
+    return PopupMenuButton<String>(
+      tooltip: 'Choose episode',
+      padding: EdgeInsets.zero,
+      onSelected: (memberId) => ref
+          .read(gameEditorProvider)
+          .pickGroupMember(group.id, memberId, context: context),
+      itemBuilder: (context) => [
+        for (final m in members)
+          PopupMenuItem(
+            value: m.id,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: 8,
+              children: [
+                SizedBox(
+                  width: 20,
+                  child: m.id == game.id
+                      ? const Icon(Icons.check_rounded, size: 18)
+                      : null,
+                ),
+                Flexible(child: Text(memberShortName(group, m, byId))),
+                if (m.playSessions.isNotEmpty)
+                  Text(
+                    'Played',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 12,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(11),
+          color: ArtOverlay.button,
+          border: Border.all(color: ArtOverlay.badgeRing),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          spacing: 6,
+          children: [
+            const Icon(
+              Icons.collections_bookmark_outlined,
+              size: 16,
+              color: OnImage.text,
+            ),
+            Flexible(
+              child: Text(
+                '$short · ${index >= 0 ? index + 1 : 1} of ${members.length}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: OnImage.text,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.arrow_drop_down_rounded,
+              size: 18,
+              color: OnImage.text,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _HeroButton extends StatefulWidget {
   const _HeroButton({required this.icon, this.tooltip, this.onPressed});
 
@@ -441,9 +545,10 @@ class _HeroButtonState extends State<_HeroButton> {
 }
 
 class _HeroControls extends ConsumerWidget {
-  const _HeroControls({required this.game});
+  const _HeroControls({required this.game, required this.group});
 
   final Game game;
+  final GameGroup? group;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

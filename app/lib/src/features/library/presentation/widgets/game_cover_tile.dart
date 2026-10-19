@@ -20,9 +20,24 @@ import 'art_overlay.dart';
 import 'game_cover_grid_delegate.dart';
 
 class GameCoverTile extends ConsumerStatefulWidget {
-  const GameCoverTile({super.key, required this.game});
+  const GameCoverTile({
+    super.key,
+    required this.game,
+    this.titleOverride,
+    this.badgeCount,
+    this.selectId,
+  });
 
   final Game game;
+
+  /// Group tiles show the group name instead of the cover member's title.
+  final String? titleOverride;
+
+  /// Group tiles show a count badge with this many members.
+  final int? badgeCount;
+
+  /// Group tiles select this id (the group) instead of the game's id.
+  final String? selectId;
 
   @override
   ConsumerState<GameCoverTile> createState() => _GameCoverTileState();
@@ -67,7 +82,8 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
     final settled = ref.watch(settledCoverWidthProvider);
     final settledPhysical = settled * MediaQuery.devicePixelRatioOf(context);
     final source = coverSourceFor(game, dir, settledPhysical, exists);
-    final selected = ref.watch(selectedGameIdProvider) == game.id;
+    final selectId = widget.selectId ?? game.id;
+    final selected = ref.watch(selectedGameIdProvider) == selectId;
     final colorScheme = Theme.of(context).colorScheme;
     const coverRadius = BorderRadius.all(Radius.circular(10));
     final keyboardFocus =
@@ -88,7 +104,7 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
         if (selected) {
           selection.clear();
         } else {
-          selection.select(game.id);
+          selection.select(selectId);
         }
       },
       onHover: (hovered) => setState(() => _hovered = hovered),
@@ -118,7 +134,13 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
                 fit: StackFit.expand,
                 children: [
                   _cover(source, settledPhysical, version),
-                  if (game.favourite)
+                  if (widget.badgeCount != null)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: _CountBadge(count: widget.badgeCount!),
+                    )
+                  else if (game.favourite)
                     const Positioned(
                       top: 8,
                       right: 8,
@@ -130,7 +152,10 @@ class _GameCoverTileState extends ConsumerState<GameCoverTile> {
           ),
           SizedBox(
             height: gameTitleBlockHeight(context),
-            child: _TitleBlock(game: game, selected: selected),
+            child: _TitleBlock(
+              title: widget.titleOverride ?? game.title,
+              selected: selected,
+            ),
           ),
         ],
       ),
@@ -194,10 +219,51 @@ class _FavouriteBadge extends StatelessWidget {
   }
 }
 
-class _TitleBlock extends StatelessWidget {
-  const _TitleBlock({required this.game, required this.selected});
+/// Member-count pill for a group tile: an 11 px-radius pill on the pane
+/// button fill with the badge ring, a stacked-pages icon and the count in
+/// 12 px semibold on-image text.
+class _CountBadge extends StatelessWidget {
+  const _CountBadge({required this.count});
 
-  final Game game;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(11),
+        color: ArtOverlay.button,
+        border: Border.all(color: ArtOverlay.badgeRing),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: 4,
+        children: [
+          const Icon(
+            Icons.collections_bookmark_outlined,
+            size: 14,
+            color: Colors.white,
+          ),
+          Text(
+            '$count',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              height: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TitleBlock extends StatelessWidget {
+  const _TitleBlock({required this.title, required this.selected});
+
+  final String title;
   final bool selected;
 
   @override
@@ -206,7 +272,7 @@ class _TitleBlock extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Text(
-        game.title,
+        title,
         overflow: TextOverflow.ellipsis,
         maxLines: 2,
         style: TextStyle(

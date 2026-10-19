@@ -113,9 +113,10 @@ class DeveloperFilter extends _$DeveloperFilter {
   void set(Developer? value) => state = value;
 }
 
-/// `applyQuery` over the loaded library and every toolbar preference.
+/// `applyGroupedQuery` over the loaded library and every toolbar
+/// preference: group members collapse into one tile per group.
 @riverpod
-List<Game> visibleGames(Ref ref) {
+List<LibraryTile> visibleTiles(Ref ref) {
   final loaded = ref.watch(libraryProvider).value;
   final query = LibraryQuery(
     search: ref.watch(librarySearchProvider),
@@ -127,5 +128,5 @@ List<Game> visibleGames(Ref ref) {
     ascending: ref.watch(sortAscendingProvider),
   );
   if (loaded == null) return const [];
-  return applyQuery(loaded.library.games, query);
+  return applyGroupedQuery(loaded.library, query);
 }

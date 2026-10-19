@@ -60,7 +60,7 @@ class LibraryScreen extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final libraryAsync = ref.watch(libraryProvider);
-    final games = ref.watch(visibleGamesProvider);
+    final tiles = ref.watch(visibleTilesProvider);
     final kicked = useState(false);
     useEffect(() {
       if (kicked.value || !libraryAsync.hasValue) return null;
@@ -95,6 +95,7 @@ class LibraryScreen extends HookConsumerWidget {
       return null;
     }, [libraryAsync.hasValue]);
     final selected = ref.watch(selectedGameProvider);
+    final selectedGroup = ref.watch(selectedGroupProvider);
     final platform = ref.watch(hostPlatformProvider);
     final onLinux = platform.isLinux;
     final umuMissing = ref.watch(umuRunPathProvider) == null;
@@ -136,7 +137,7 @@ class LibraryScreen extends HookConsumerWidget {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Expanded(child: LibraryGrid(games: games)),
+                          Expanded(child: LibraryGrid(tiles: tiles)),
                           if (selected != null)
                             Container(
                               width: _kPaneWidth,
@@ -157,6 +158,7 @@ class LibraryScreen extends HookConsumerWidget {
                               child: GameDetailPane(
                                 key: ValueKey(selected.id),
                                 game: selected,
+                                group: selectedGroup,
                               ),
                             ),
                         ],
