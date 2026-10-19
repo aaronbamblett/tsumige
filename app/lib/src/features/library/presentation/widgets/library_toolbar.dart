@@ -78,10 +78,7 @@ const double kMacOSTrafficLightsInset = 80;
 /// Pixel width of the brand group (logo + gap + name) in [context]'s theme.
 double brandGroupWidth(BuildContext context) {
   final text = TextPainter(
-    text: TextSpan(
-      text: 'Tsumige',
-      style: Theme.of(context).textTheme.labelMedium,
-    ),
+    text: TextSpan(text: 'Tsumige', style: brandNameStyle(context)),
     textDirection: TextDirection.ltr,
   )..layout();
   return kBrandLogoSize + kBrandGap + text.width;

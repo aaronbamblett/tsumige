@@ -127,6 +127,19 @@ void main() {
     expect(gridTop, moreOrLessEquals(64, epsilon: 1.0));
   });
 
+  testWidgets('merged bar shows the enlarged brand', (tester) async {
+    await _pumpApp(tester, _games(), size: const Size(1280, 800));
+
+    expect(tester.getSize(find.byType(TsumigeLogo)), const Size(28, 28));
+    final name = tester.widget<Text>(find.text('Tsumige'));
+    expect(name.style?.fontSize, 16);
+    expect(name.style?.fontWeight, FontWeight.w600);
+    expect(
+      name.style?.color,
+      Theme.of(tester.element(find.text('Tsumige'))).colorScheme.onSurface,
+    );
+  });
+
   testWidgets('at 1000 wide the title bar and toolbar stack as before',
       (tester) async {
     await _pumpApp(tester, _games(), size: const Size(1000, 640));

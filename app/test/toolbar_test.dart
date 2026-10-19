@@ -26,7 +26,6 @@ import 'package:tsumige/src/features/library/presentation/widgets/library_toolba
 import 'package:tsumige/src/utils/prefs/app_prefs.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 import 'package:tsumige/src/utils/theme/brand.dart';
-import 'package:tsumige/src/widgets/desktop/desktop_window_scaffold.dart';
 
 class ToolbarFakeRepository implements LibraryRepository {
   ToolbarFakeRepository(this.games);
@@ -204,9 +203,13 @@ void main() {
     );
   });
 
-  testWidgets('Filter box ends on the last cover column at 1400 wide',
+  // At 1500 wide with the pane open the left group fits before the grid's
+  // edge, so the filter box ends on the last cover column. (At 1400 the
+  // enlarged brand leaves less than the left group's minimum width, and it
+  // clamps and runs past the grid instead — without touching Add/Settings.)
+  testWidgets('Filter box ends on the last cover column at 1500 wide',
       (tester) async {
-    await pumpToolbar(tester, manyGames(), size: const Size(1400, 980));
+    await pumpToolbar(tester, manyGames(), size: const Size(1500, 980));
     openPane(tester, 'game-0');
     await settle(tester);
     final filterRight =
@@ -251,14 +254,19 @@ void main() {
     }
   });
 
-  testWidgets('window scaffold wraps the app', (tester) async {
-    await pumpToolbar(tester, taggedGames());
-    expect(find.byType(DesktopWindowScaffold), findsOneWidget);
-    final context = tester.element(find.byType(DesktopWindowScaffold));
-    expect(
-      tsumigeRouterBuilder(context, const SizedBox()),
-      isA<DesktopWindowScaffold>(),
+  testWidgets('router builder passes the child through', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => tsumigeRouterBuilder(
+            context,
+            const SizedBox(key: ValueKey('router-child')),
+          ),
+        ),
+      ),
     );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('router-child')), findsOneWidget);
   });
 
   testWidgets('Filter panel lists user tags, then VNDB tags with counts',

@@ -16,8 +16,19 @@ const double kDesktopTitleBarHeight = 40;
 
 /// Logo size and logo-to-name gap shared by the title bar and the merged
 /// library bar, so the brand measures the same in both.
-const double kBrandLogoSize = 18;
-const double kBrandGap = 6;
+const double kBrandLogoSize = 28;
+const double kBrandGap = 8;
+
+/// The brand name style, shared by [DesktopBrandTitle] and the breakpoint
+/// math in the library toolbar so both measure the same text.
+TextStyle? brandNameStyle(BuildContext context) {
+  final theme = Theme.of(context);
+  return theme.textTheme.labelMedium?.copyWith(
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+    color: theme.colorScheme.onSurface,
+  );
+}
 
 /// The brand mark: logo plus the muted app name. The name is a literal, not
 /// localized, so the bar never depends on Localizations being in scope at the
@@ -27,19 +38,12 @@ class DesktopBrandTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         const TsumigeLogo(size: kBrandLogoSize),
         const SizedBox(width: kBrandGap),
-        Text(
-          'Tsumige',
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: scheme.onSurface.withValues(alpha: 0.7),
-          ),
-        ),
+        Text('Tsumige', style: brandNameStyle(context)),
       ],
     );
   }

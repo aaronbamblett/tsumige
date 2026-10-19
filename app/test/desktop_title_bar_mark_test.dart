@@ -68,12 +68,12 @@ void main() {
   for (final appTheme in [AppTheme.royal, AppTheme.plum]) {
     for (final brightness in [Brightness.dark, Brightness.light]) {
       testWidgets(
-        'title bar shows the Tsumige logo at 18 under ${appTheme.name} ${brightness.name}',
+        'title bar shows the Tsumige logo at 28 under ${appTheme.name} ${brightness.name}',
         (tester) async {
           await pumpBar(tester, appTheme, brightness);
 
           expect(find.byType(TsumigeLogo), findsOneWidget);
-          expect(tester.getSize(find.byType(TsumigeLogo)), const Size(18, 18));
+          expect(tester.getSize(find.byType(TsumigeLogo)), const Size(28, 28));
         },
       );
     }
