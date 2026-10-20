@@ -26,13 +26,14 @@ import 'running_games.dart';
 
 part 'launch_actions.g.dart';
 
-/// `umu-run` resolved from PATH. A seam so tests can force it missing.
+/// `umu-run` resolved from PATH, on the host when inside a Flatpak. A seam so
+/// tests can force it missing.
 @riverpod
-String? umuRunPath(Ref ref) => findOnPath(
-      'umu-run',
-      Platform.environment,
-      platform: ref.watch(hostPlatformProvider),
-    );
+String? umuRunPath(Ref ref) {
+  final platform = ref.watch(hostPlatformProvider);
+  if (platform.inFlatpak) return findOnHostPath('umu-run');
+  return findOnPath('umu-run', Platform.environment, platform: platform);
+}
 
 /// The real game runner, wired to the data folder and the repository.
 /// Tests override this with a fake that never starts a process.

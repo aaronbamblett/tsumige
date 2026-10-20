@@ -4,6 +4,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tsumige/src/core/launch/launch_command.dart';
 import 'package:tsumige/src/core/model.dart';
@@ -368,6 +370,55 @@ void main() {
             isExecutable: (_) => false),
         isNull);
     expect(findOnPath('umu-run', const {}), isNull);
+  });
+
+  group('findOnHostPath', () {
+    test('returns the trimmed path the host shell reports', () {
+      late String executable;
+      late List<String> arguments;
+      final found = findOnHostPath(
+        'umu-run',
+        runProcess: (exe, args) {
+          executable = exe;
+          arguments = args;
+          return ProcessResult(1, 0, '/usr/bin/umu-run\n', '');
+        },
+      );
+      expect(found, '/usr/bin/umu-run');
+      expect(executable, 'flatpak-spawn');
+      expect(arguments, ['--host', 'sh', '-c', 'command -v umu-run']);
+    });
+
+    test('returns null when the host shell exits non-zero', () {
+      expect(
+        findOnHostPath(
+          'umu-run',
+          runProcess: (_, _) => ProcessResult(1, 1, '', ''),
+        ),
+        isNull,
+      );
+    });
+
+    test('returns null when the host shell prints nothing', () {
+      expect(
+        findOnHostPath(
+          'umu-run',
+          runProcess: (_, _) => ProcessResult(1, 0, '\n', ''),
+        ),
+        isNull,
+      );
+    });
+
+    test('returns null when the process cannot start', () {
+      expect(
+        findOnHostPath(
+          'umu-run',
+          runProcess: (_, _) =>
+              throw const ProcessException('flatpak-spawn', []),
+        ),
+        isNull,
+      );
+    });
   });
 
   test('launch commands compare by value', () {
