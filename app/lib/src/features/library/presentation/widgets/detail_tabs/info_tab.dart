@@ -785,17 +785,22 @@ class _ExpandToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: expanded ? 'Show less' : 'Show more',
-      child: InkWell(
-        onTap: onPressed,
-        child: Padding(
-          padding: const EdgeInsets.only(top: 2, bottom: 6),
-          child: Center(
-            child: Icon(
-              expanded
-                  ? Icons.keyboard_arrow_up_rounded
-                  : Icons.keyboard_arrow_down_rounded,
+    final label = expanded ? 'Show less' : 'Show more';
+    return Semantics(
+      button: true,
+      label: label,
+      child: Tooltip(
+        message: label,
+        child: InkWell(
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 2, bottom: 6),
+            child: Center(
+              child: Icon(
+                expanded
+                    ? Icons.keyboard_arrow_up_rounded
+                    : Icons.keyboard_arrow_down_rounded,
+              ),
             ),
           ),
         ),

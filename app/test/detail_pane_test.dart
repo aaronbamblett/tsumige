@@ -1151,9 +1151,29 @@ void main() {
       ),
     ], height: 1200);
     await openPane(tester, 'Alpha');
+    final semantics = tester.ensureSemantics();
+    expect(
+        tester.getSemantics(find.bySemanticsLabel('Show more')),
+        matchesSemantics(
+            label: 'Show more',
+            isButton: true,
+            hasTapAction: true,
+            hasFocusAction: true,
+            isFocusable: true));
     await tester.tap(find.descendant(
         of: find.byTooltip('Show more'), matching: find.byType(InkWell)));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byTooltip('Show less'));
+    await tester.pumpAndSettle();
+    expect(
+        tester.getSemantics(find.bySemanticsLabel('Show less')),
+        matchesSemantics(
+            label: 'Show less',
+            isButton: true,
+            hasTapAction: true,
+            hasFocusAction: true,
+            isFocusable: true));
+    semantics.dispose();
     expect(find.byTooltip('Show less'), findsOneWidget);
     expect(find.byTooltip('Show more'), findsNothing);
     expect(descriptionFade(), findsNothing);
