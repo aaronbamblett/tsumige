@@ -771,8 +771,11 @@ class _MarkupSection extends ConsumerStatefulWidget {
   ConsumerState<_MarkupSection> createState() => _MarkupSectionState();
 }
 
-/// Four lines of description at 14 px with a 1.5 line height.
-const double _kDescriptionCollapsedHeight = 4 * 14 * 1.5;
+/// One line of description at 14 px with a 1.5 line height.
+const double _kDescriptionLineHeight = 14 * 1.5;
+
+/// Four lines of description.
+const double _kDescriptionCollapsedHeight = 4 * _kDescriptionLineHeight;
 
 class _ExpandToggle extends StatelessWidget {
   const _ExpandToggle({required this.expanded, required this.onPressed});
@@ -782,13 +785,25 @@ class _ExpandToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: IconButton(
-        tooltip: expanded ? 'Show less' : 'Show more',
-        icon: Icon(
-          expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+    final label = expanded ? 'Show less' : 'Show more';
+    return Semantics(
+      button: true,
+      label: label,
+      child: Tooltip(
+        message: label,
+        child: InkWell(
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 2, bottom: 6),
+            child: Center(
+              child: Icon(
+                expanded
+                    ? Icons.keyboard_arrow_up_rounded
+                    : Icons.keyboard_arrow_down_rounded,
+              ),
+            ),
+          ),
         ),
-        onPressed: onPressed,
       ),
     );
   }
@@ -923,13 +938,12 @@ class _MarkupSectionState extends ConsumerState<_MarkupSection> {
                 );
                 return LayoutBuilder(
                   builder: (context, constraints) {
+                    final direction = Directionality.of(context);
+                    final plain = vndbPlainText(value);
                     final painter = TextPainter(
-                      text: TextSpan(
-                        text: vndbPlainText(value),
-                        style: style,
-                      ),
+                      text: TextSpan(text: plain, style: style),
                       maxLines: 4,
-                      textDirection: Directionality.of(context),
+                      textDirection: direction,
                     )..layout(maxWidth: constraints.maxWidth);
                     final overflows = painter.didExceedMaxLines;
                     painter.dispose();
@@ -946,17 +960,58 @@ class _MarkupSectionState extends ConsumerState<_MarkupSection> {
                         ],
                       );
                     }
+                    var collapsedHeight = _kDescriptionCollapsedHeight;
+                    var cutMidParagraph = true;
+                    final paragraphs = plain.trim().split('\n\n');
+                    if (paragraphs.length > 1) {
+                      final first = TextPainter(
+                        text: TextSpan(text: paragraphs.first, style: style),
+                        maxLines: 4,
+                        textDirection: direction,
+                      )..layout(maxWidth: constraints.maxWidth);
+                      if (!first.didExceedMaxLines) {
+                        collapsedHeight = first.height;
+                        cutMidParagraph = false;
+                      }
+                      first.dispose();
+                    }
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         SizedBox(
-                          height: _kDescriptionCollapsedHeight,
-                          child: ClipRect(
-                            child: OverflowBox(
-                              alignment: Alignment.topLeft,
-                              maxHeight: double.infinity,
-                              child: text,
-                            ),
+                          height: collapsedHeight,
+                          child: Stack(
+                            children: [
+                              ClipRect(
+                                child: OverflowBox(
+                                  alignment: Alignment.topLeft,
+                                  maxHeight: double.infinity,
+                                  child: text,
+                                ),
+                              ),
+                              if (cutMidParagraph)
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  height: _kDescriptionLineHeight,
+                                  child: IgnorePointer(
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topCenter,
+                                          end: Alignment.bottomCenter,
+                                          colors: [
+                                            theme.colorScheme.surfaceContainer
+                                                .withValues(alpha: 0),
+                                            theme.colorScheme.surfaceContainer,
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                         _ExpandToggle(
