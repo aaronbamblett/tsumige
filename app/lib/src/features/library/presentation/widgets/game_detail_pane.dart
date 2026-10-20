@@ -181,6 +181,7 @@ class GameDetailPane extends HookConsumerWidget {
             ),
             Expanded(
               child: TabBarView(
+                physics: const NeverScrollableScrollPhysics(),
                 children: [
                   _TabBody(
                     controller: infoScroll,

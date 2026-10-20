@@ -7,6 +7,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -314,6 +315,26 @@ void main() {
     for (final bar in bars) {
       expect(bar.thumbVisibility, isTrue);
     }
+  });
+
+  testWidgets('a mouse drag across the tab body does not change tabs',
+      (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openPane(tester, 'Alpha');
+    await tester.drag(find.byType(TabBarView), const Offset(-300, 0),
+        kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    expect(
+        DefaultTabController.of(tester.element(find.byType(TabBar))).index, 0);
+  });
+
+  testWidgets('tapping Launch in the tab bar switches to Launch',
+      (tester) async {
+    await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
+    await openPane(tester, 'Alpha');
+    await openTab(tester, 'Launch');
+    expect(
+        DefaultTabController.of(tester.element(find.byType(TabBar))).index, 1);
   });
 
   testWidgets('hero is 340 px tall with or without a cover', (tester) async {
