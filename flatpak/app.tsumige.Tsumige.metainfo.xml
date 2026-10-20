@@ -12,12 +12,38 @@
     <p>
       Tsumige keeps your visual novel library in one place and launches each
       game with the runner you choose: Proton, Wine, native, or Steam.
+      Covers, descriptions and tags come from VNDB, and everything stays on
+      your computer.
     </p>
+    <p>
+      Point Tsumige at a folder of games or import your installed Steam games,
+      check every VNDB match, and play. Your library is a JSON file in your
+      data folder: no account, no server.
+    </p>
+    <ul>
+      <li>Folder and Steam import with VNDB matching you review first</li>
+      <li>Episode groups that keep chapters and volumes of one game on a shared tile</li>
+      <li>Your own titles, developers and release dates, kept when VNDB data refreshes</li>
+      <li>SteamGridDB covers and backgrounds with your own free API key</li>
+      <li>Per-game runners: Proton through umu-run, Wine, native and Steam</li>
+      <li>Playtime recorded for every session, with per-game totals and history</li>
+    </ul>
   </description>
   <launchable type="desktop-id">app.tsumige.Tsumige.desktop</launchable>
-  <url type="homepage">https://github.com/aaronbamblett/tsumige</url>
+  <url type="homepage">https://tsumige.app</url>
   <url type="bugtracker">https://github.com/aaronbamblett/tsumige/issues</url>
+  <url type="vcs-browser">https://github.com/aaronbamblett/tsumige</url>
+  <url type="help">https://tsumige.app/docs/faq/</url>
   <content_rating type="oars-1.1"/>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/aaronbamblett/tsumige/main/assets/screenshots/library.png</image>
+      <caption>Tsumige library with the detail pane open</caption>
+    </screenshot>
+  </screenshots>
   <releases>
+    <release version="0.1.0" date="2026-10-19">
+      <url type="details">https://github.com/aaronbamblett/tsumige/releases/tag/v0.1.0</url>
+    </release>
   </releases>
 </component>
