@@ -330,3 +330,25 @@ String? findOnPath(
   }
   return null;
 }
+
+/// Looks [name] up on the host PATH from inside a Flatpak, where the sandbox
+/// PATH does not list host tools. Null when the host shell cannot find it.
+String? findOnHostPath(
+  String name, {
+  ProcessResult Function(String, List<String>)? runProcess,
+}) {
+  final run = runProcess ?? Process.runSync;
+  try {
+    final result = run('flatpak-spawn', [
+      '--host',
+      'sh',
+      '-c',
+      'command -v $name',
+    ]);
+    if (result.exitCode != 0) return null;
+    final path = (result.stdout as String).trim();
+    return path.isEmpty ? null : path;
+  } catch (_) {
+    return null;
+  }
+}
