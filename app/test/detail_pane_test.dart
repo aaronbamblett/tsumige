@@ -1070,6 +1070,95 @@ void main() {
     expect(find.byTooltip('Show more'), findsOneWidget);
   });
 
+  Finder collapsedDescriptionBox() => find.descendant(
+        of: find.byType(GameDetailPane),
+        matching: find.byWidgetPredicate(
+            (w) => w is SizedBox && w.child is Stack),
+      );
+
+  Finder descriptionFade() => find.descendant(
+        of: collapsedDescriptionBox(),
+        matching: find.byWidgetPredicate((w) =>
+            w is DecoratedBox &&
+            w.decoration is BoxDecoration &&
+            (w.decoration as BoxDecoration).gradient is LinearGradient),
+      );
+
+  testWidgets('collapsed description stops after a short first paragraph',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        description: '${List.filled(3, 'A long sentence of story.').join(' ')}'
+            '\n\nSecond paragraph of the story.',
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(find.byTooltip('Show more'), findsOneWidget);
+    expect(collapsedDescriptionBox(), findsOneWidget);
+    final height = tester.widget<SizedBox>(collapsedDescriptionBox()).height!;
+    expect(height, lessThan(4 * 14 * 1.5));
+    expect(height, closeTo(3 * 14 * 1.5, 0.5));
+    expect(descriptionFade(), findsNothing);
+  });
+
+  testWidgets('a single long paragraph collapses to four lines with a fade',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        description: List.filled(40, 'A long sentence of story.').join(' '),
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    expect(tester.widget<SizedBox>(collapsedDescriptionBox()).height,
+        4 * 14 * 1.5);
+    expect(descriptionFade(), findsOneWidget);
+    final decoration = tester
+        .widget<DecoratedBox>(find.descendant(
+            of: collapsedDescriptionBox(), matching: descriptionFade()))
+        .decoration as BoxDecoration;
+    final gradient = decoration.gradient as LinearGradient;
+    final surface = Theme.of(tester.element(find.byType(GameDetailPane)))
+        .colorScheme
+        .surfaceContainer;
+    expect(gradient.colors.last, surface);
+  });
+
+  testWidgets('expand toggle hit area is under 40 px tall', (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        description: List.filled(40, 'A long sentence of story.').join(' '),
+      ),
+    ]);
+    await openPane(tester, 'Alpha');
+    final hit = find.descendant(
+        of: find.byTooltip('Show more'), matching: find.byType(InkWell));
+    expect(tester.getSize(hit).height, lessThan(40));
+  });
+
+  testWidgets('tapping the description toggle expands it to show less',
+      (tester) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        description: List.filled(40, 'A long sentence of story.').join(' '),
+      ),
+    ], height: 1200);
+    await openPane(tester, 'Alpha');
+    await tester.tap(find.descendant(
+        of: find.byTooltip('Show more'), matching: find.byType(InkWell)));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Show less'), findsOneWidget);
+    expect(find.byTooltip('Show more'), findsNothing);
+    expect(descriptionFade(), findsNothing);
+  });
+
   testWidgets('empty game shows description and notes placeholders',
       (tester) async {
     await pumpLibrary(tester, [core.Game(id: 'g1', title: 'Alpha')]);
