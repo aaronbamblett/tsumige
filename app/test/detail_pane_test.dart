@@ -7,6 +7,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -335,6 +336,33 @@ void main() {
     await openTab(tester, 'Launch');
     expect(
         DefaultTabController.of(tester.element(find.byType(TabBar))).index, 1);
+  });
+
+  testWidgets('dragging the Info scrollbar thumb scrolls the tab down',
+      (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    try {
+      await pumpLibrary(tester, [
+        core.Game(
+          id: 'g1',
+          title: 'Alpha',
+          description: List.filled(40, 'A long sentence of story.').join(' '),
+        ),
+      ], height: 640);
+      await openPane(tester, 'Alpha');
+      await tester.pump(const Duration(seconds: 1));
+      final bar = find.descendant(
+          of: find.byType(GameDetailPane), matching: find.byType(Scrollbar));
+      final controller = tester.widget<Scrollbar>(bar.first).controller!;
+      final rect = tester.getRect(bar.first);
+      await tester.dragFrom(Offset(rect.right - 4, rect.top + 20),
+          const Offset(0, 100),
+          kind: PointerDeviceKind.mouse);
+      await tester.pumpAndSettle();
+      expect(controller.offset, greaterThan(0));
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 
   testWidgets('hero is 340 px tall with or without a cover', (tester) async {

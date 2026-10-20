@@ -279,6 +279,7 @@ class _TabBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PrimaryScrollController(
+      automaticallyInheritForPlatforms: TargetPlatform.values.toSet(),
       controller: controller,
       child: Scrollbar(
         controller: controller,
