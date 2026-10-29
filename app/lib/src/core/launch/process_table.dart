@@ -33,8 +33,7 @@ class ProcProcessTable implements ProcessTable {
     for (final entry in entries) {
       if (int.tryParse(p.basename(entry.path)) == null) continue;
       try {
-        final bytes =
-            await File(p.join(entry.path, 'environ')).readAsBytes();
+        final bytes = await File(p.join(entry.path, 'environ')).readAsBytes();
         if (_environHas(bytes, needle)) {
           found.add(int.parse(p.basename(entry.path)));
         }
@@ -43,6 +42,47 @@ class ProcProcessTable implements ProcessTable {
       }
     }
     return found;
+  }
+}
+
+/// The sandbox has a private PID namespace, so the scan runs on the host.
+class FlatpakHostProcessTable implements ProcessTable {
+  FlatpakHostProcessTable([
+    Future<ProcessResult> Function(String executable, List<String> args)?
+    runner,
+  ]) : _runner = runner ?? Process.run;
+
+  final Future<ProcessResult> Function(String executable, List<String> args)
+  _runner;
+
+  static const _script = r'grep -lszxF -- "$1=$2" /proc/[0-9]*/environ; exit 0';
+
+  static final _environPath = RegExp(r'^/proc/(\d+)/environ$');
+
+  @override
+  Future<List<int>> pidsWithEnv(String key, String value) async {
+    try {
+      final result = await _runner('flatpak-spawn', [
+        '--host',
+        'sh',
+        '-c',
+        _script,
+        'scan',
+        key,
+        value,
+      ]);
+      if (result.exitCode != 0) return [];
+      final found = <int>[];
+      for (final line in (result.stdout as String).split('\n')) {
+        final match = _environPath.firstMatch(line);
+        if (match == null) continue;
+        final pid = int.parse(match.group(1)!);
+        if (!found.contains(pid)) found.add(pid);
+      }
+      return found;
+    } catch (_) {
+      return [];
+    }
   }
 }
 

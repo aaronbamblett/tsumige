@@ -75,14 +75,18 @@ Future<void> recordSession(
 
 Directory runningDir(DataDir dir) => Directory(p.join(dir.root, 'running'));
 
-/// Writes `running/<gameId>.json` with `{started_at, last_seen}`.
+/// Writes `running/<gameId>.json` with `{started_at, last_seen, seen}`.
+/// `seen` records whether the game process was ever observed: Steam waits
+/// start unseen and flip it on the first sighting.
 Future<void> writeRunningMarker(
-    DataDir dir, String gameId, DateTime startedAt, DateTime lastSeen) async {
+    DataDir dir, String gameId, DateTime startedAt, DateTime lastSeen,
+    {bool seen = true}) async {
   final folder = runningDir(dir);
   await folder.create(recursive: true);
   final payload = jsonEncode({
     'started_at': startedAt.toUtc().toIso8601String(),
     'last_seen': lastSeen.toUtc().toIso8601String(),
+    'seen': seen,
   });
   await File(p.join(folder.path, '$gameId.json')).writeAsString(payload);
 }
@@ -115,14 +119,22 @@ Future<int> recoverSessions(
     final gameId = p.basenameWithoutExtension(file.path);
     DateTime startedAt;
     DateTime lastSeen;
+    bool seen;
     try {
       final data = jsonDecode(await file.readAsString());
       if (data is! Map) throw const FormatException('marker is not an object');
       startedAt = DateTime.parse('${data['started_at']}');
       lastSeen = DateTime.parse('${data['last_seen']}');
+      seen = data['seen'] != false;
     } catch (e) {
       _report(log, 'tsumige: ignoring unreadable running marker '
           'for $gameId: $e');
+      try {
+        await file.delete();
+      } catch (_) {}
+      continue;
+    }
+    if (!seen) {
       try {
         await file.delete();
       } catch (_) {}
