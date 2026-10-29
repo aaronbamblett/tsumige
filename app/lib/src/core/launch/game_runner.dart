@@ -222,21 +222,31 @@ class GameRunner {
       if (effectiveLaunchMode(game, platform) != LaunchMode.steam) {
         emit(LaunchPhase.running);
       }
-      await writeRunningMarker(dir, game.id, startedAt, startedAt);
-      heartbeat =
-          _RunningHeartbeat(dir, game.id, startedAt, clock, heartbeatInterval);
+      final isSteam =
+          effectiveLaunchMode(game, platform) == LaunchMode.steam;
+      await writeRunningMarker(dir, game.id, startedAt, startedAt,
+          seen: !isSteam);
+      heartbeat = _RunningHeartbeat(
+          dir, game.id, startedAt, clock, heartbeatInterval,
+          seen: !isSteam);
       if (effectiveLaunchMode(game, platform) == LaunchMode.steam) {
         // Timing `steam -applaunch` itself would be wrong: it exits at once.
         process.exitCode.then((_) {}, onError: (_) {});
+        Future<void>? seenWrite;
         final session = await _steamSession(
           game.launch.steamAppId!,
-          onFirstSeen: () => emit(LaunchPhase.running),
+          onFirstSeen: (firstSeen) {
+            seenWrite = heartbeat?.markSeen(firstSeen);
+            emit(LaunchPhase.running);
+          },
         );
+        await seenWrite;
         if (session != null) {
           await recordSession(store, game.id, session.start, session.seconds);
         }
         await process.logClosed;
         await updateLatestLog(dir, logFile);
+        await heartbeat.stop();
         await deleteRunningMarker(dir, game.id);
         return LaunchResult(
           logFile: logFile,
@@ -260,6 +270,7 @@ class GameRunner {
       }
       await process.logClosed;
       await updateLatestLog(dir, logFile);
+      await heartbeat.stop();
       await deleteRunningMarker(dir, game.id);
       return LaunchResult(
         logFile: logFile,
@@ -279,14 +290,14 @@ class GameRunner {
   /// show it as running. It never fires when no process appears.
   Future<_SteamSession?> _steamSession(
     int appId, {
-    void Function()? onFirstSeen,
+    void Function(DateTime firstSeen)? onFirstSeen,
   }) async {
     DateTime? firstSeen;
     final deadline = clock().add(steamAppearTimeout);
     while (firstSeen == null) {
       if (await _steamRunning(appId)) {
         firstSeen = clock();
-        onFirstSeen?.call();
+        onFirstSeen?.call(firstSeen);
         break;
       }
       if (!clock().isBefore(deadline)) return null;
@@ -323,26 +334,40 @@ class GameRunner {
 /// heartbeat and recovery turns it into a session on the next start.
 class _RunningHeartbeat {
   _RunningHeartbeat(
-      this.dir, this.gameId, this.startedAt, this.clock, this.interval) {
+      this.dir, this.gameId, this.startedAt, this.clock, this.interval,
+      {this.seen = true}) {
     _timer = Timer.periodic(interval, (_) => unawaited(_tick()));
   }
 
   final DataDir dir;
   final String gameId;
-  final DateTime startedAt;
+  DateTime startedAt;
+  bool seen;
   final DateTime Function() clock;
   final Duration interval;
   late final Timer _timer;
   var _inFlight = 0;
+  var _chain = Future<void>.value();
 
-  Future<void> _tick() async {
+  Future<void> markSeen(DateTime at) {
+    startedAt = at;
+    seen = true;
+    return _write(startedAt, true, clock());
+  }
+
+  Future<void> _tick() => _write(startedAt, seen, clock());
+
+  Future<void> _write(DateTime started, bool wasSeen, DateTime lastSeen) {
     _inFlight++;
-    try {
-      await writeRunningMarker(dir, gameId, startedAt, clock());
-    } catch (_) {
-    } finally {
+    _chain = _chain.then((_) async {
+      try {
+        await writeRunningMarker(dir, gameId, started, lastSeen,
+            seen: wasSeen);
+      } catch (_) {}
+    }).whenComplete(() {
       _inFlight--;
-    }
+    });
+    return _chain;
   }
 
   Future<void> stop() async {

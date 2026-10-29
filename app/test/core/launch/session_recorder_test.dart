@@ -125,6 +125,40 @@ void main() {
         File(p.join(folder.path, 'bad.json')).existsSync(), isFalse);
   });
 
+  test('recovery drops a marker whose game was never seen', () async {
+    final dir = DataDir(temp.path);
+    final store = FakeStore(LoadedLibrary(
+        library: Library(games: [Game(id: 'g1', title: 'Alpha')])));
+    final started = DateTime.utc(2026, 10, 17, 12);
+    await writeRunningMarker(dir, 'g1', started,
+        started.add(const Duration(seconds: 300)),
+        seen: false);
+    expect(await recoverSessions(dir, store), 0);
+    expect(store.current.library.games.single.playSessions, isEmpty);
+    expect(
+        File(p.join(temp.path, 'running', 'g1.json')).existsSync(), isFalse);
+  });
+
+  test('recovery still recovers a marker without the seen key', () async {
+    final dir = DataDir(temp.path);
+    final store = FakeStore(LoadedLibrary(
+        library: Library(games: [Game(id: 'g1', title: 'Alpha')])));
+    final started = DateTime.utc(2026, 10, 17, 12);
+    final folder = Directory(p.join(temp.path, 'running'))
+      ..createSync(recursive: true);
+    File(p.join(folder.path, 'g1.json')).writeAsStringSync(jsonEncode({
+      'started_at': started.toIso8601String(),
+      'last_seen':
+          started.add(const Duration(seconds: 300)).toIso8601String(),
+    }));
+    expect(await recoverSessions(dir, store), 1);
+    final sessions = store.current.library.games.single.playSessions;
+    expect(sessions, hasLength(1));
+    expect(sessions.single.startedAt, started);
+    expect(sessions.single.durationSeconds, 300);
+    expect(File(p.join(folder.path, 'g1.json')).existsSync(), isFalse);
+  });
+
   test('marker round-trips started_at and last_seen', () async {
     final dir = DataDir(temp.path);
     final started = DateTime.utc(2026, 10, 17, 12);
@@ -134,6 +168,7 @@ void main() {
         await File(p.join(temp.path, 'running', 'g1.json')).readAsString());
     expect(DateTime.parse(data['started_at'] as String), started);
     expect(DateTime.parse(data['last_seen'] as String), seen);
+    expect(data['seen'], isTrue);
     await deleteRunningMarker(dir, 'g1');
     expect(
         File(p.join(temp.path, 'running', 'g1.json')).existsSync(), isFalse);

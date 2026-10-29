@@ -44,7 +44,8 @@ GameRunner gameRunner(Ref ref) {
     dir: ref.watch(dataDirProvider),
     store: ref.watch(sessionStoreProvider),
     starter: IoProcessStarter(platform: platform),
-    processTable: ProcProcessTable(),
+    processTable:
+        platform.inFlatpak ? FlatpakHostProcessTable() : ProcProcessTable(),
     platform: platform,
   );
 }

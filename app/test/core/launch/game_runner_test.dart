@@ -96,6 +96,15 @@ class FakeTable implements ProcessTable {
       present() ? [4242] : [];
 }
 
+class ScriptedTable implements ProcessTable {
+  ScriptedTable(this.onPoll);
+
+  final Future<List<int>> Function() onPoll;
+
+  @override
+  Future<List<int>> pidsWithEnv(String key, String value) => onPoll();
+}
+
 const defaults = LaunchDefaults(
   prefix: '/p',
   locale: '',
@@ -409,6 +418,58 @@ void main() {
     expect(latestFile().existsSync(), isTrue);
   });
 
+  test('steam flips the marker to seen at the sighting time', () async {
+    final store = storeWith(steamGame());
+    final starter = FakeStarter((command, log) async =>
+        FakeStartedProcess(pid: 7, exitCode: Future.value(0)));
+    var calls = 0;
+    Map<String, dynamic>? seenMarker;
+    Future<List<int>> onPoll() async {
+      calls++;
+      if (calls >= 4 && seenMarker == null) {
+        for (var i = 0; i < 200; i++) {
+          final file = markerFile();
+          if (file.existsSync()) {
+            try {
+              final decoded =
+                  jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+              if (decoded['seen'] == true) {
+                seenMarker = decoded;
+                break;
+              }
+            } catch (_) {}
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      }
+      return calls >= 3 && calls <= 8 ? [4242] : <int>[];
+    }
+
+    final gameRunner = GameRunner(
+      dir: dir,
+      store: store,
+      starter: starter,
+      processTable: ScriptedTable(onPoll),
+      hostEnv: const {},
+      platform: const HostPlatform(HostOs.linux),
+      clock: () => now,
+      sleep: (d) async {
+        now = now.add(d);
+      },
+    );
+    final result = await gameRunner.launch(steamGame(), defaults);
+    expect(seenMarker, isNotNull);
+    expect(seenMarker!['seen'], isTrue);
+    expect(DateTime.parse(seenMarker!['started_at'] as String),
+        t0.add(const Duration(seconds: 10)));
+    expect(result.sessionSeconds, 30);
+    final sessions = store.current.library.games.single.playSessions;
+    expect(sessions, hasLength(1));
+    expect(sessions.single.startedAt, t0.add(const Duration(seconds: 10)));
+    expect(sessions.single.durationSeconds, 30);
+    expect(markerFile().existsSync(), isFalse);
+  });
+
   test('the heartbeat refreshes last_seen while the game runs', () async {
     final store = storeWith(nativeGame());
     final exit = Completer<int>();
@@ -431,6 +492,7 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 100));
     final data = await markerFile().readAsString();
     expect(data, contains('started_at'));
+    expect(data, contains('"seen":true'));
     final seen = (await logStartedAndSeen(markerFile())).$2;
     expect(seen, now);
     now = now.add(const Duration(seconds: 10));
