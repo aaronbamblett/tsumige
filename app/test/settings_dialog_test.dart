@@ -235,7 +235,7 @@ void main() {
     await openSection(tester, 'advanced');
     expect(find.text('UMU game ID'), findsOneWidget);
     await openSection(tester, 'about');
-    expect(find.text('Version 0.1.0'), findsOneWidget);
+    expect(find.text('Version 0.1.1'), findsOneWidget);
     expect(find.text('MPL-2.0'), findsOneWidget);
   });
 
