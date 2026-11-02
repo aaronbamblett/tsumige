@@ -33,6 +33,7 @@ import 'package:tsumige/src/features/library/presentation/widgets/detail_tabs/re
 import 'package:tsumige/src/features/library/presentation/widgets/game_cover_tile.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/game_detail_pane.dart';
 import 'package:tsumige/src/widgets/clamped_wrap.dart';
+import 'package:tsumige/src/utils/prefs/app_prefs.dart';
 import 'package:tsumige/src/utils/prefs/prefs_mixin.dart';
 import 'package:tsumige/src/utils/theme/brand.dart';
 
@@ -2129,6 +2130,60 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Beta'), findsNothing);
+  });
+
+  testWidgets('clicking a VNDB tag adds it to the include filter', (
+    tester,
+  ) async {
+    await pumpLibrary(tester, [
+      core.Game(
+        id: 'g1',
+        title: 'Alpha',
+        vndbTags: const [
+          core.VndbTag(
+            name: 'Romance',
+            rating: 2.5,
+            spoiler: 0,
+            category: 'cont',
+          ),
+        ],
+      ),
+      core.Game(id: 'g2', title: 'Beta'),
+    ]);
+    await openPane(tester, 'Alpha');
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(GameDetailPane)),
+    );
+    final chip = paneText(tester, 'Romance');
+
+    await tester.ensureVisible(chip);
+    await tester.tap(chip);
+    await tester.pumpAndSettle();
+    expect(container.read(tagIncludeProvider), ['vndb:Romance']);
+    expect(container.read(tagExcludeProvider), isEmpty);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('toolbar-filter')),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Beta'), findsNothing);
+
+    container.read(tagExcludeProvider.notifier).set(['vndb:Romance']);
+    container.read(tagIncludeProvider.notifier).set(const []);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(chip);
+    await tester.tap(chip);
+    await tester.pumpAndSettle();
+    expect(container.read(tagIncludeProvider), ['vndb:Romance']);
+    expect(container.read(tagExcludeProvider), isEmpty);
+
+    await tester.ensureVisible(chip);
+    await tester.tap(chip);
+    await tester.pumpAndSettle();
+    expect(container.read(tagIncludeProvider), ['vndb:Romance']);
+    expect(container.read(tagExcludeProvider), isEmpty);
   });
 
   testWidgets('related tab orders sequels and prequels first', (tester) async {

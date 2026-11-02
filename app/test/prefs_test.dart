@@ -132,6 +132,38 @@ void main() {
     expect(rebuilt.read(dismissedSuggestionNoticeProvider), {'a1,a2'});
   });
 
+  test('tag include and exclude round-trip', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final container = containerFor(prefs);
+    addTearDown(container.dispose);
+
+    container.read(tagIncludeProvider.notifier).set(['horror', 'vndb:Romance']);
+    container.read(tagExcludeProvider.notifier).set(['gore']);
+
+    final rebuilt = containerFor(prefs);
+    addTearDown(rebuilt.dispose);
+    expect(rebuilt.read(tagIncludeProvider), ['horror', 'vndb:Romance']);
+    expect(rebuilt.read(tagExcludeProvider), ['gore']);
+  });
+
+  test('old single tag filter migrates into include', () async {
+    SharedPreferences.setMockInitialValues({
+      keys.PrefKey.tagFilter.key: 'Romance',
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final container = containerFor(prefs);
+    addTearDown(container.dispose);
+
+    expect(container.read(tagIncludeProvider), ['Romance']);
+    expect(prefs.getString(keys.PrefKey.tagFilter.key), isNull);
+    expect(prefs.getStringList(keys.PrefKey.tagInclude.key), ['Romance']);
+
+    final rebuilt = containerFor(prefs);
+    addTearDown(rebuilt.dispose);
+    expect(rebuilt.read(tagIncludeProvider), ['Romance']);
+  });
+
   test('launch defaults read back', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();

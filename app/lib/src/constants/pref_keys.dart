@@ -39,7 +39,11 @@ enum PrefKey {
   sortAscending('library.sortAscending', true),
   favouritesOnly('library.favouritesOnly', false),
   adultFilter('library.adultFilter', 0),
+
+  /// Legacy single-tag filter, migrated into [tagInclude] on load.
   tagFilter('library.tagFilter', null),
+  tagInclude('library.tagInclude', null),
+  tagExclude('library.tagExclude', null),
   dismissedSuggestionNotice('library.dismissedSuggestionNotice', null),
   launchPrefix('launch.prefix', '~/Games/tsumige/prefix'),
   launchRunner('launch.runner', null),

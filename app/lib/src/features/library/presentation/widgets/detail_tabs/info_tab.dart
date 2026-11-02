@@ -14,7 +14,7 @@ import '../../../../../constants/pref_keys.dart' as keys;
 import '../../../../../core/format.dart';
 import '../../../../../core/model.dart';
 import '../../../../../utils/prefs/app_prefs.dart'
-    show detailFieldsProvider, tagFilterProvider;
+    show detailFieldsProvider, tagIncludeProvider;
 import '../../../../../utils/theme/brand.dart';
 import '../../../../../widgets/clamped_wrap.dart';
 import '../../../domain/cover_source.dart';
@@ -385,8 +385,9 @@ class _VndbTagChip extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
     return InkWell(
       borderRadius: _kChipRadius,
-      onTap: () =>
-          ref.read(tagFilterProvider.notifier).set(vndbTagFilter(tag.name)),
+      onTap: () => ref
+          .read(tagIncludeProvider.notifier)
+          .include(vndbTagFilter(tag.name)),
       child: Container(
         height: _kChipHeight,
         padding: const EdgeInsets.symmetric(horizontal: 11),
@@ -578,10 +579,18 @@ final _chipDecoration = BoxDecoration(
 );
 
 class TagChip extends StatelessWidget {
-  const TagChip({super.key, required this.label, required this.onRemove});
+  const TagChip({
+    super.key,
+    required this.label,
+    required this.onRemove,
+    this.icon,
+    this.iconColor,
+  });
 
   final String label;
   final VoidCallback onRemove;
+  final IconData? icon;
+  final Color? iconColor;
 
   @override
   Widget build(BuildContext context) {
@@ -593,6 +602,10 @@ class TagChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (icon != null) ...[
+            Icon(icon, size: 14, color: iconColor ?? scheme.onSurfaceVariant),
+            const SizedBox(width: 4),
+          ],
           Text(
             label,
             style: TextStyle(fontSize: 12.5, color: scheme.onSurface),

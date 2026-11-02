@@ -105,9 +105,8 @@ double sortBoxWidth(BuildContext context) {
 /// and the outer padding, measured at runtime. The badge slot is always
 /// reserved (an empty box while no filter is set), so the width never
 /// shifts when a filter turns on. The badge itself is a fixed 18 px circle;
-/// the widest count the code can show is 3 (one each for tag, adult and
-/// developer), formatted as '$count', so a single digit that always fits
-/// the circle.
+/// every selected tag counts, so the number can reach several digits and the
+/// badge shrinks the text with a [FittedBox] to keep it inside.
 double filterBoxWidth(BuildContext context) {
   return (_kFilterPadLeft +
           _kRowIconSize +
@@ -617,7 +616,8 @@ class _FilterButtonState extends ConsumerState<_FilterButton> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final count = activeFilterCount(
-      ref.watch(tagFilterProvider),
+      ref.watch(tagIncludeProvider),
+      ref.watch(tagExcludeProvider),
       ref.watch(adultFilterProvider),
       ref.watch(developerFilterProvider),
     );
@@ -666,12 +666,15 @@ class _FilterButtonState extends ConsumerState<_FilterButton> {
                         shape: BoxShape.circle,
                         color: scheme.primary,
                       ),
-                      child: Text(
-                        '$count',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: scheme.onPrimary,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '$count',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: scheme.onPrimary,
+                          ),
                         ),
                       ),
                     )
@@ -689,18 +692,22 @@ class _FilterButtonState extends ConsumerState<_FilterButton> {
   }
 }
 
-/// Number of filters in use: a tag, a non-All adult setting and a developer.
+/// Number of filters in use: each included and excluded tag, a non-All adult
+/// setting and a developer.
 int activeFilterCount(
-  String? tag,
+  List<String> includeTags,
+  List<String> excludeTags,
   keys.AdultFilter adult,
   Developer? developer,
 ) =>
-    (tag != null ? 1 : 0) +
+    includeTags.length +
+    excludeTags.length +
     (adult != keys.AdultFilter.all ? 1 : 0) +
     (developer != null ? 1 : 0);
 
 void clearAllFilters(WidgetRef ref) {
-  ref.read(tagFilterProvider.notifier).set(null);
+  ref.read(tagIncludeProvider.notifier).set(const []);
+  ref.read(tagExcludeProvider.notifier).set(const []);
   ref.read(adultFilterProvider.notifier).set(keys.AdultFilter.all);
   ref.read(developerFilterProvider.notifier).set(null);
 }
@@ -710,10 +717,14 @@ class ActiveFilterChips extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tag = ref.watch(tagFilterProvider);
+    final includeTags = ref.watch(tagIncludeProvider);
+    final excludeTags = ref.watch(tagExcludeProvider);
     final adult = ref.watch(adultFilterProvider);
     final developer = ref.watch(developerFilterProvider);
-    if (tag == null && adult == keys.AdultFilter.all && developer == null) {
+    if (includeTags.isEmpty &&
+        excludeTags.isEmpty &&
+        adult == keys.AdultFilter.all &&
+        developer == null) {
       return const SizedBox.shrink();
     }
     final scheme = Theme.of(context).colorScheme;
@@ -735,13 +746,25 @@ class ActiveFilterChips extends ConsumerWidget {
               onRemove: () =>
                   ref.read(developerFilterProvider.notifier).set(null),
             ),
-          if (tag != null)
+          for (final tag in includeTags)
             TagChip(
-              // Stored VNDB filters carry a `vndb:` prefix; show the bare name.
-              label: tag.startsWith(vndbTagPrefix)
-                  ? tag.substring(vndbTagPrefix.length)
-                  : tag,
-              onRemove: () => ref.read(tagFilterProvider.notifier).set(null),
+              label: _tagLabel(tag),
+              icon: Icons.check_box_rounded,
+              iconColor: scheme.primary,
+              onRemove: () => ref.read(tagIncludeProvider.notifier).set([
+                for (final t in includeTags)
+                  if (t != tag) t,
+              ]),
+            ),
+          for (final tag in excludeTags)
+            TagChip(
+              label: _tagLabel(tag),
+              icon: Icons.disabled_by_default_rounded,
+              iconColor: scheme.error,
+              onRemove: () => ref.read(tagExcludeProvider.notifier).set([
+                for (final t in excludeTags)
+                  if (t != tag) t,
+              ]),
             ),
           if (adult != keys.AdultFilter.all)
             TagChip(
@@ -761,6 +784,10 @@ class ActiveFilterChips extends ConsumerWidget {
     );
   }
 }
+
+/// Stored VNDB filters carry a `vndb:` prefix; show the bare name.
+String _tagLabel(String tag) =>
+    tag.startsWith(vndbTagPrefix) ? tag.substring(vndbTagPrefix.length) : tag;
 
 class _FilterPanelOverlay extends StatelessWidget {
   const _FilterPanelOverlay({required this.link, required this.onClose});
@@ -832,7 +859,8 @@ class _FilterPanelState extends ConsumerState<_FilterPanel> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final games = ref.watch(libraryProvider).value?.library.games ?? [];
-    final tagFilter = ref.watch(tagFilterProvider);
+    final includeTags = ref.watch(tagIncludeProvider);
+    final excludeTags = ref.watch(tagExcludeProvider);
     final adult = ref.watch(adultFilterProvider);
     final developer = ref.watch(developerFilterProvider);
     final needle = _query.trim().toLowerCase();
@@ -847,7 +875,12 @@ class _FilterPanelState extends ConsumerState<_FilterPanel> {
             for (final t in allVndb)
               if (t.$1.toLowerCase().contains(needle)) t,
           ];
-    final activeCount = activeFilterCount(tagFilter, adult, developer);
+    final activeCount = activeFilterCount(
+      includeTags,
+      excludeTags,
+      adult,
+      developer,
+    );
     return Material(
       color: scheme.surfaceContainer,
       shape: RoundedRectangleBorder(
@@ -959,18 +992,13 @@ class _FilterPanelState extends ConsumerState<_FilterPanel> {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          _TagOption(
-                            label: 'All tags',
-                            selected: tagFilter == null,
-                            onTap: () =>
-                                ref.read(tagFilterProvider.notifier).set(null),
-                          ),
                           for (final tag in userTags)
                             _TagOption(
                               label: tag,
-                              selected: tag == tagFilter,
-                              onTap: () =>
-                                  ref.read(tagFilterProvider.notifier).set(tag),
+                              state: _tagState(tag, includeTags, excludeTags),
+                              onTap: () => ref
+                                  .read(tagIncludeProvider.notifier)
+                                  .cycle(tag),
                             ),
                           if (vndbTags.isNotEmpty) ...[
                             Padding(
@@ -988,10 +1016,14 @@ class _FilterPanelState extends ConsumerState<_FilterPanel> {
                               _TagOption(
                                 label: name,
                                 count: count,
-                                selected: vndbTagFilter(name) == tagFilter,
+                                state: _tagState(
+                                  vndbTagFilter(name),
+                                  includeTags,
+                                  excludeTags,
+                                ),
                                 onTap: () => ref
-                                    .read(tagFilterProvider.notifier)
-                                    .set(vndbTagFilter(name)),
+                                    .read(tagIncludeProvider.notifier)
+                                    .cycle(vndbTagFilter(name)),
                               ),
                           ],
                         ],
@@ -1058,24 +1090,46 @@ class _PanelDivider extends StatelessWidget {
   }
 }
 
-/// One row of the Tags list: a check for the selected tag, its name and an
-/// optional game count.
+/// One row of the Tags list: a tri-state icon for the tag, its name and an
+/// optional game count. Clicking cycles off, include, exclude, off.
 class _TagOption extends StatelessWidget {
   const _TagOption({
     required this.label,
-    required this.selected,
+    required this.state,
     required this.onTap,
     this.count,
   });
 
   final String label;
-  final bool selected;
+  final _TagState state;
   final VoidCallback onTap;
   final int? count;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final icon = switch (state) {
+      _TagState.off => Icon(
+        Icons.check_box_outline_blank_rounded,
+        size: 18,
+        color: Theme.of(context).unselectedWidgetColor,
+      ),
+      _TagState.include => Icon(
+        Icons.check_box_rounded,
+        size: 18,
+        color: scheme.primary,
+      ),
+      _TagState.exclude => Icon(
+        Icons.disabled_by_default_rounded,
+        size: 18,
+        color: scheme.error,
+      ),
+    };
+    final labelColor = switch (state) {
+      _TagState.off => scheme.onSurface,
+      _TagState.include => scheme.primary,
+      _TagState.exclude => scheme.error,
+    };
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: onTap,
@@ -1083,22 +1137,14 @@ class _TagOption extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Row(
           children: [
-            SizedBox(
-              width: 18,
-              child: selected
-                  ? Icon(Icons.check_rounded, size: 18, color: scheme.primary)
-                  : null,
-            ),
+            SizedBox(width: 18, child: icon),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13.5,
-                  color: selected ? scheme.primary : scheme.onSurface,
-                ),
+                style: TextStyle(fontSize: 13.5, color: labelColor),
               ),
             ),
             if (count != null)
@@ -1114,6 +1160,18 @@ class _TagOption extends StatelessWidget {
       ),
     );
   }
+}
+
+enum _TagState { off, include, exclude }
+
+_TagState _tagState(
+  String tag,
+  List<String> includeTags,
+  List<String> excludeTags,
+) {
+  if (excludeTags.contains(tag)) return _TagState.exclude;
+  if (includeTags.contains(tag)) return _TagState.include;
+  return _TagState.off;
 }
 
 class ToolbarSegment extends StatelessWidget {

@@ -299,56 +299,123 @@ abstract class _$AdultFilter extends $Notifier<keys.AdultFilter> {
   }
 }
 
-/// Tag filter; null means no filter.
+/// Tags the library is filtered to; a game matches when it carries any of
+/// them. Empty means no include filter.
 
-@ProviderFor(TagFilter)
-final tagFilterProvider = TagFilterProvider._();
+@ProviderFor(TagInclude)
+final tagIncludeProvider = TagIncludeProvider._();
 
-/// Tag filter; null means no filter.
-final class TagFilterProvider extends $NotifierProvider<TagFilter, String?> {
-  /// Tag filter; null means no filter.
-  TagFilterProvider._()
+/// Tags the library is filtered to; a game matches when it carries any of
+/// them. Empty means no include filter.
+final class TagIncludeProvider
+    extends $NotifierProvider<TagInclude, List<String>> {
+  /// Tags the library is filtered to; a game matches when it carries any of
+  /// them. Empty means no include filter.
+  TagIncludeProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
-        name: r'tagFilterProvider',
+        name: r'tagIncludeProvider',
         isAutoDispose: true,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
 
   @override
-  String debugGetCreateSourceHash() => _$tagFilterHash();
+  String debugGetCreateSourceHash() => _$tagIncludeHash();
 
   @$internal
   @override
-  TagFilter create() => TagFilter();
+  TagInclude create() => TagInclude();
 
   /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(String? value) {
+  Override overrideWithValue(List<String> value) {
     return $ProviderOverride(
       origin: this,
-      providerOverride: $SyncValueProvider<String?>(value),
+      providerOverride: $SyncValueProvider<List<String>>(value),
     );
   }
 }
 
-String _$tagFilterHash() => r'75e0390e8154bea090d7b13f7234fc456dbb32bf';
+String _$tagIncludeHash() => r'ad6ffee1c297d7715059bdc9f9b7f05126c209ce';
 
-/// Tag filter; null means no filter.
+/// Tags the library is filtered to; a game matches when it carries any of
+/// them. Empty means no include filter.
 
-abstract class _$TagFilter extends $Notifier<String?> {
-  String? build();
+abstract class _$TagInclude extends $Notifier<List<String>> {
+  List<String> build();
   @$mustCallSuper
   @override
   WhenComplete runBuild() {
-    final ref = this.ref as $Ref<String?, String?>;
+    final ref = this.ref as $Ref<List<String>, List<String>>;
     final element =
         ref.element
             as $ClassProviderElement<
-              AnyNotifier<String?, String?>,
-              String?,
+              AnyNotifier<List<String>, List<String>>,
+              List<String>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
+/// Tags that remove a game from the library even when it matches an include
+/// tag. A tag is never in both lists.
+
+@ProviderFor(TagExclude)
+final tagExcludeProvider = TagExcludeProvider._();
+
+/// Tags that remove a game from the library even when it matches an include
+/// tag. A tag is never in both lists.
+final class TagExcludeProvider
+    extends $NotifierProvider<TagExclude, List<String>> {
+  /// Tags that remove a game from the library even when it matches an include
+  /// tag. A tag is never in both lists.
+  TagExcludeProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'tagExcludeProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$tagExcludeHash();
+
+  @$internal
+  @override
+  TagExclude create() => TagExclude();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(List<String> value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<List<String>>(value),
+    );
+  }
+}
+
+String _$tagExcludeHash() => r'14ff7c58f43d97ef297867f82044a4768a4b541a';
+
+/// Tags that remove a game from the library even when it matches an include
+/// tag. A tag is never in both lists.
+
+abstract class _$TagExclude extends $Notifier<List<String>> {
+  List<String> build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<List<String>, List<String>>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<List<String>, List<String>>,
+              List<String>,
               Object?,
               Object?
             >;

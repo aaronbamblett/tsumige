@@ -56,7 +56,7 @@ void main() {
       games,
       LibraryQuery(
         favouritesOnly: true,
-        tag: 'horror',
+        includeTags: {'horror'},
         field: SortField.title,
         ascending: true,
       ),
@@ -129,9 +129,90 @@ void main() {
     final mine = Game(id: 'c', title: 'C', tags: ['Romance']);
     final found = applyQuery(
       [strong, weak, mine],
-      const LibraryQuery(tag: 'vndb:Romance'),
+      const LibraryQuery(includeTags: {'vndb:Romance'}),
     );
     expect(found.map((g) => g.id), ['a']);
+  });
+
+  test('include matches any included tag', () {
+    final games = [
+      game('a', 'A', tags: ['horror']),
+      game('b', 'B', tags: ['comedy']),
+      game('c', 'C', tags: ['drama']),
+    ];
+    final found = applyQuery(
+      games,
+      const LibraryQuery(includeTags: {'horror', 'comedy'}),
+    );
+    expect(found.map((g) => g.id), ['a', 'b']);
+  });
+
+  test('exclude wins over include', () {
+    final games = [
+      game('a', 'A', tags: ['horror', 'gore']),
+      game('b', 'B', tags: ['horror']),
+    ];
+    final found = applyQuery(
+      games,
+      const LibraryQuery(includeTags: {'horror'}, excludeTags: {'gore'}),
+    );
+    expect(found.map((g) => g.id), ['b']);
+  });
+
+  test('user and vndb tags mix in one include list', () {
+    final games = [
+      game('a', 'A', tags: ['horror']),
+      Game(
+        id: 'b',
+        title: 'B',
+        vndbTags: const [
+          VndbTag(name: 'Romance', rating: 2.0, spoiler: 0, category: 'cont'),
+        ],
+      ),
+      game('c', 'C', tags: ['comedy']),
+    ];
+    final found = applyQuery(
+      games,
+      const LibraryQuery(includeTags: {'horror', 'vndb:Romance'}),
+    );
+    expect(found.map((g) => g.id), ['a', 'b']);
+  });
+
+  test('vndb rating threshold applies to both include and exclude', () {
+    final strong = Game(
+      id: 'a',
+      title: 'A',
+      vndbTags: const [
+        VndbTag(name: 'Romance', rating: 2.0, spoiler: 0, category: 'cont'),
+      ],
+    );
+    final weak = Game(
+      id: 'b',
+      title: 'B',
+      vndbTags: const [
+        VndbTag(name: 'Romance', rating: 0.5, spoiler: 0, category: 'cont'),
+      ],
+    );
+    final included = applyQuery([
+      strong,
+      weak,
+    ], const LibraryQuery(includeTags: {'vndb:Romance'}));
+    expect(included.map((g) => g.id), ['a']);
+
+    final excludedWeak = applyQuery([
+      strong,
+      weak,
+    ], const LibraryQuery(excludeTags: {'vndb:Romance'}));
+    expect(excludedWeak.map((g) => g.id), ['b']);
+  });
+
+  test('empty include and exclude lists filter nothing', () {
+    final games = [
+      game('a', 'A', tags: ['horror']),
+      game('b', 'B', tags: ['comedy']),
+    ];
+    final found = applyQuery(games, const LibraryQuery());
+    expect(found.map((g) => g.id), ['a', 'b']);
   });
 
   test('vndbTagCounts counts non-spoiler tags at rating 2.0 and up', () {

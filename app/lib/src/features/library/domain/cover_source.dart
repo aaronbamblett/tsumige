@@ -121,7 +121,8 @@ List<LibraryTile> visibleTiles(Ref ref) {
   final query = LibraryQuery(
     search: ref.watch(librarySearchProvider),
     favouritesOnly: ref.watch(favouritesOnlyProvider),
-    tag: ref.watch(tagFilterProvider),
+    includeTags: ref.watch(tagIncludeProvider).toSet(),
+    excludeTags: ref.watch(tagExcludeProvider).toSet(),
     developerId: ref.watch(developerFilterProvider)?.id,
     adult: ref.watch(adultFilterProvider),
     field: ref.watch(sortFieldProvider),

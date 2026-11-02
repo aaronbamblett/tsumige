@@ -17,7 +17,8 @@ class LibraryQuery {
   const LibraryQuery({
     this.search = '',
     this.favouritesOnly = false,
-    this.tag,
+    this.includeTags = const {},
+    this.excludeTags = const {},
     this.developerId,
     this.adult = AdultFilter.all,
     this.field = SortField.added,
@@ -26,7 +27,8 @@ class LibraryQuery {
 
   final String search;
   final bool favouritesOnly;
-  final String? tag;
+  final Set<String> includeTags;
+  final Set<String> excludeTags;
   final String? developerId;
   final AdultFilter adult;
   final SortField field;
@@ -84,22 +86,26 @@ class GroupTile extends LibraryTile {
   String get title => group.name;
 }
 
+/// Whether [entry] (a user tag, or a `vndb:` tag name) matches [g].
+bool _matchesTag(Game g, String entry) {
+  final tag = entry.toLowerCase();
+  if (tag.startsWith(vndbTagPrefix)) {
+    final name = tag.substring(vndbTagPrefix.length);
+    return g.vndbTags.any(
+      (t) => t.rating >= 1.0 && t.name.toLowerCase() == name,
+    );
+  }
+  return g.tags.any((t) => t.toLowerCase() == tag);
+}
+
 bool _matches(Game g, String needle, LibraryQuery q) {
   if (needle.isNotEmpty && !g.title.toLowerCase().contains(needle)) {
     return false;
   }
   if (q.favouritesOnly && !g.favourite) return false;
-  final tag = q.tag?.toLowerCase();
-  if (tag != null && tag.startsWith(vndbTagPrefix)) {
-    final name = tag.substring(vndbTagPrefix.length);
-    if (!g.vndbTags.any(
-      (t) => t.rating >= 1.0 && t.name.toLowerCase() == name,
-    )) {
-      return false;
-    }
-  } else if (tag != null &&
-      tag.isNotEmpty &&
-      !g.tags.any((t) => t.toLowerCase() == tag)) {
+  if (q.excludeTags.any((t) => _matchesTag(g, t))) return false;
+  if (q.includeTags.isNotEmpty &&
+      !q.includeTags.any((t) => _matchesTag(g, t))) {
     return false;
   }
   if (q.developerId != null &&

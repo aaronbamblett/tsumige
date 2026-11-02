@@ -23,6 +23,8 @@ import 'package:tsumige/src/features/library/data/library_repository.dart';
 import 'package:tsumige/src/features/library/domain/cover_source.dart';
 import 'package:tsumige/src/features/library/domain/launch_actions.dart';
 import 'package:tsumige/src/features/library/domain/selection.dart';
+import 'package:tsumige/src/features/library/presentation/widgets/detail_tabs/info_tab.dart'
+    show TagChip;
 import 'package:tsumige/src/features/library/presentation/widgets/game_cover_tile.dart';
 import 'package:tsumige/src/features/library/presentation/widgets/library_toolbar.dart';
 import 'package:tsumige/src/utils/desktop/desktop_window.dart';
@@ -159,20 +161,93 @@ void main() {
     expect(find.text('Title'), findsOneWidget);
   });
 
-  testWidgets('a tag chosen in the Filter panel filters; All tags clears',
-      (tester) async {
+  testWidgets('a tag row cycles off, include, exclude, off', (tester) async {
     await pumpToolbar(tester, taggedGames());
     final container = ProviderScope.containerOf(
-        tester.element(find.byType(LibraryTopBar)));
+      tester.element(find.byType(LibraryTopBar)),
+    );
     await openFilter(tester);
-    await tester.tap(find.text('Romance'));
+    final row = find.widgetWithText(InkWell, 'Romance');
+
+    Icon icon() => tester.widget<Icon>(
+      find.descendant(of: row, matching: find.byType(Icon)),
+    );
+
+    expect(icon().icon, Icons.check_box_outline_blank_rounded);
+    await tester.tap(row);
     await tester.pumpAndSettle();
-    expect(container.read(tagFilterProvider), 'Romance');
-    expect(filterBadge(tester), findsOneWidget);
-    await tester.tap(find.text('All tags'));
+    expect(container.read(tagIncludeProvider), ['Romance']);
+    expect(container.read(tagExcludeProvider), isEmpty);
+    expect(icon().icon, Icons.check_box_rounded);
+    expect(icon().color, Theme.of(tester.element(row)).colorScheme.primary);
+
+    await tester.tap(row);
     await tester.pumpAndSettle();
-    expect(container.read(tagFilterProvider), isNull);
+    expect(container.read(tagIncludeProvider), isEmpty);
+    expect(container.read(tagExcludeProvider), ['Romance']);
+    expect(icon().icon, Icons.disabled_by_default_rounded);
+    expect(icon().color, Theme.of(tester.element(row)).colorScheme.error);
+
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    expect(container.read(tagIncludeProvider), isEmpty);
+    expect(container.read(tagExcludeProvider), isEmpty);
+    expect(icon().icon, Icons.check_box_outline_blank_rounded);
     expect(filterBadge(tester), findsNothing);
+  });
+
+  testWidgets('two tags give badge count 2 and two chips', (tester) async {
+    await pumpToolbar(tester, taggedGames());
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(LibraryTopBar)),
+    );
+    await openFilter(tester);
+    await tester.tap(find.widgetWithText(InkWell, 'Romance'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(InkWell, 'Action'));
+    await tester.pumpAndSettle();
+    expect(container.read(tagIncludeProvider), ['Romance', 'Action']);
+    expect(filterBadge(tester, '2'), findsOneWidget);
+    expect(find.byType(TagChip), findsNWidgets(2));
+    expect(find.byTooltip('Remove Romance'), findsOneWidget);
+    expect(find.byTooltip('Remove Action'), findsOneWidget);
+  });
+
+  testWidgets('a chip removes only its tag', (tester) async {
+    await pumpToolbar(tester, taggedGames());
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(LibraryTopBar)),
+    );
+    container.read(tagIncludeProvider.notifier).set(['Romance', 'Action']);
+    await tester.pumpAndSettle();
+    expect(find.byType(TagChip), findsNWidgets(2));
+
+    await tester.tap(find.byTooltip('Remove Romance'));
+    await tester.pumpAndSettle();
+    expect(container.read(tagIncludeProvider), ['Action']);
+    expect(find.byType(TagChip), findsOneWidget);
+    expect(find.text('Romance'), findsNothing);
+    expect(filterBadge(tester), findsOneWidget);
+  });
+
+  testWidgets('Clear all above the grid empties both tag lists', (
+    tester,
+  ) async {
+    await pumpToolbar(tester, taggedGames());
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(LibraryTopBar)),
+    );
+    container.read(tagIncludeProvider.notifier).set(['Romance']);
+    container.read(tagExcludeProvider.notifier).set(['Action']);
+    await tester.pumpAndSettle();
+    expect(filterBadge(tester, '2'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('active-filters-clear')));
+    await tester.pumpAndSettle();
+    expect(container.read(tagIncludeProvider), isEmpty);
+    expect(container.read(tagExcludeProvider), isEmpty);
+    expect(filterBadge(tester), findsNothing);
+    expect(find.text('Clear all'), findsNothing);
   });
 
   testWidgets('add is a glass brand button', (tester) async {
@@ -327,7 +402,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Romance'));
     await tester.pumpAndSettle();
-    expect(container.read(tagFilterProvider), 'vndb:Romance');
+    expect(container.read(tagIncludeProvider), ['vndb:Romance']);
     expect(find.text('Gamma'), findsNothing);
     expect(find.text('Alpha'), findsOneWidget);
     expect(find.text('Beta'), findsOneWidget);
@@ -366,7 +441,7 @@ void main() {
     await pumpToolbar(tester, taggedGames());
     final container = ProviderScope.containerOf(
         tester.element(find.byType(LibraryTopBar)));
-    container.read(tagFilterProvider.notifier).set('Romance');
+    container.read(tagIncludeProvider.notifier).set(['Romance']);
     container.read(adultFilterProvider.notifier).set(keys.AdultFilter.hide);
     container
         .read(developerFilterProvider.notifier)
@@ -409,7 +484,8 @@ void main() {
     expect(filterBadge(tester, '3'), findsOneWidget);
     await tester.tap(find.widgetWithText(BrandGlassButton, 'Clear all'));
     await tester.pumpAndSettle();
-    expect(container.read(tagFilterProvider), isNull);
+    expect(container.read(tagIncludeProvider), isEmpty);
+    expect(container.read(tagExcludeProvider), isEmpty);
     expect(container.read(adultFilterProvider), keys.AdultFilter.all);
     expect(container.read(developerFilterProvider), isNull);
     expect(filterBadge(tester), findsNothing);
@@ -436,13 +512,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Adult'), findsNothing);
     expect(container.read(selectedGameIdProvider), isNull);
-    expect(container.read(tagFilterProvider), isNull);
+    expect(container.read(tagIncludeProvider), isEmpty);
+    expect(container.read(tagExcludeProvider), isEmpty);
   });
 
   // The sort and Filter boxes are measured at runtime from the ambient
   // style, so they fit every label in the test font too. Every sort field
-  // and the widest badge the code can show (count 3: tag + adult +
-  // developer) must render with no overflow, with its label untruncated
+  // and a count-3 badge (one tag + adult + developer) must render with no
+  // overflow, with its label untruncated
   // (painted as wide as its intrinsic width), fully inside its box, and
   // without moving either box.
   testWidgets('sort and Filter boxes fit their longest content',
@@ -520,7 +597,7 @@ void main() {
       moreOrLessEquals(intrinsicWidth('Filter'), epsilon: 1.0),
       reason: 'Filter',
     );
-    container.read(tagFilterProvider.notifier).set('Romance');
+    container.read(tagIncludeProvider.notifier).set(['Romance']);
     container.read(adultFilterProvider.notifier).set(keys.AdultFilter.hide);
     container
         .read(developerFilterProvider.notifier)
@@ -591,7 +668,7 @@ void main() {
     await pumpToolbar(tester, taggedGames());
     final container = ProviderScope.containerOf(
         tester.element(find.byType(LibraryTopBar)));
-    container.read(tagFilterProvider.notifier).set('Romance');
+    container.read(tagIncludeProvider.notifier).set(['Romance']);
     container.read(adultFilterProvider.notifier).set(keys.AdultFilter.hide);
     await tester.pumpAndSettle();
     expect(find.text('Romance'), findsOneWidget);
@@ -603,7 +680,7 @@ void main() {
     await pumpToolbar(tester, taggedGames());
     final container = ProviderScope.containerOf(
         tester.element(find.byType(LibraryTopBar)));
-    container.read(tagFilterProvider.notifier).set('Romance');
+    container.read(tagIncludeProvider.notifier).set(['Romance']);
     container.read(adultFilterProvider.notifier).set(keys.AdultFilter.hide);
     container
         .read(developerFilterProvider.notifier)
@@ -613,7 +690,8 @@ void main() {
     expect(find.text('Clear all'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('active-filters-clear')));
     await tester.pumpAndSettle();
-    expect(container.read(tagFilterProvider), isNull);
+    expect(container.read(tagIncludeProvider), isEmpty);
+    expect(container.read(tagExcludeProvider), isEmpty);
     expect(container.read(adultFilterProvider), keys.AdultFilter.all);
     expect(container.read(developerFilterProvider), isNull);
     expect(find.text('Clear all'), findsNothing);
