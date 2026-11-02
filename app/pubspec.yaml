@@ -54,7 +54,7 @@ dependencies:
   fluttertoast: ^10.0.0
   url_launcher: ^6.3.3
   uuid: ^4.6.0
-  window_manager: ^0.5.2
+  window_manager: ^0.6.0
   desktop_drop: ^0.8.4
 
 dev_dependencies:
